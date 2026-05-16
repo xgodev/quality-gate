@@ -1,0 +1,16 @@
+# Ruleset canonico Quality Gate -- Go (golangci-lint).
+# Imposto pelo QG via golangci-lint run -c. Config do projeto e IGNORADA.
+# Defaults da comunidade; calibracao fina em V2.
+run:
+  timeout: 5m
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

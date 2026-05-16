@@ -1,0 +1,525 @@
+#!/usr/bin/env bash
+# QG_CONTRACT_VERSION=1
+#
+# {{LANGUAGE_SLUG}}/qg.sh — Quality Gate para {{LANGUAGE_NAME}}
+#
+# Cumpre o contrato em docs/contract.md (versao 1.x). Compara as 6 metricas
+# reservadas (fmt, lint, build, test, complexity, coverage) entre o estado
+# atual e uma base ref. Falha somente se PR piora alguma metrica.
+#
+# TODO(template): Remover este comentario apos preencher LANGUAGE_SLUG
+# e LANGUAGE_NAME. Linha 2 (QG_CONTRACT_VERSION) e LITERAL — nao adicione
+# texto antes nem depois nessa linha; validador faz match exato.
+
+set -uo pipefail
+
+QG_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/measure.sh
+source "$QG_SCRIPT_DIR/lib/measure.sh"
+# shellcheck source=lib/output.sh
+source "$QG_SCRIPT_DIR/lib/output.sh"
+
+show_help() {
+  cat <<'EOF'
+Uso: {{LANGUAGE_SLUG}}/qg.sh [--base <git-ref>] [opcoes]
+     {{LANGUAGE_SLUG}}/qg.sh --detect
+
+Opcoes:
+  --detect              Detecta se a linguagem existe na raiz; imprime slug
+                        + exit 0 se sim, exit 1 se nao. Curto-circuita tudo.
+  --base <ref>          Ref a comparar (ex: origin/main). Ausente -> modo absoluto.
+  --baseline-dir <dir>  Path de baseline ja preparado.
+  --cov-margin <pp>     Tolerancia de coverage em pp. Default: 1.0
+  --log-dir <dir>       Onde gravar logs. Default: target/qg-logs
+  --refresh-baseline    Re-extrai baseline mesmo se cache existir.
+  --force-full          Pula fast-path.
+  --format text|json    Formato de output. Default: text.
+  -h, --help            Esta mensagem.
+
+Variaveis de ambiente equivalentes: QG_BASE_REF, QG_BASELINE_DIR, QG_COV_MARGIN,
+QG_LOG_DIR, QG_REFRESH_BASELINE, QG_FORCE_FULL, QG_FORMAT, QG_BYPASS_REASON.
+
+Mais detalhes: docs/contract.md
+EOF
+}
+
+# Defaults a partir de env vars
+QG_BASE_REF_ARG="${QG_BASE_REF:-}"
+QG_BASELINE_DIR_ARG="${QG_BASELINE_DIR:-}"
+QG_COV_MARGIN_ARG="${QG_COV_MARGIN:-1.0}"
+QG_LOG_DIR_ARG="${QG_LOG_DIR:-target/qg-logs}"
+QG_REFRESH_BASELINE_ARG="${QG_REFRESH_BASELINE:-0}"
+QG_FORCE_FULL_ARG="${QG_FORCE_FULL:-0}"
+QG_FORMAT_ARG="${QG_FORMAT:-text}"
+QG_DETECT_ARG=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --detect)
+      QG_DETECT_ARG=1
+      shift
+      ;;
+    --base)
+      QG_BASE_REF_ARG="${2:-}"
+      shift 2
+      ;;
+    --baseline-dir)
+      QG_BASELINE_DIR_ARG="${2:-}"
+      shift 2
+      ;;
+    --cov-margin)
+      QG_COV_MARGIN_ARG="${2:-}"
+      shift 2
+      ;;
+    --log-dir)
+      QG_LOG_DIR_ARG="${2:-}"
+      shift 2
+      ;;
+    --refresh-baseline)
+      QG_REFRESH_BASELINE_ARG=1
+      shift
+      ;;
+    --force-full)
+      QG_FORCE_FULL_ARG=1
+      shift
+      ;;
+    --format)
+      QG_FORMAT_ARG="${2:-}"
+      shift 2
+      ;;
+    -h|--help)
+      show_help
+      exit 0
+      ;;
+    *)
+      echo "::error::argumento desconhecido: $1" >&2
+      show_help >&2
+      exit 2
+      ;;
+  esac
+done
+
+# --detect: curto-circuita ANTES de qualquer validacao/pre-req.
+# qg_lang_present DEVE estar em lib/measure.sh (mesma sentinela do baseline).
+if [ "$QG_DETECT_ARG" = "1" ]; then
+  qg_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+  if qg_lang_present "$qg_root"; then
+    echo "{{LANGUAGE_SLUG}}"
+    exit 0
+  fi
+  exit 1
+fi
+
+# --base ausente (e sem QG_BASE_REF) -> MODO ABSOLUTO (nao eh erro, nao exit 2).
+QG_ABSOLUTE_MODE=0
+if [ -z "$QG_BASE_REF_ARG" ]; then
+  QG_ABSOLUTE_MODE=1
+fi
+
+case "$QG_FORMAT_ARG" in
+  text|json) ;;
+  *)
+    echo "::error::--format deve ser 'text' ou 'json' (recebido: '$QG_FORMAT_ARG')" >&2
+    exit 2
+    ;;
+esac
+
+if ! awk -v m="$QG_COV_MARGIN_ARG" 'BEGIN { exit !(m+0 == m) }' 2>/dev/null; then
+  echo "::error::--cov-margin deve ser numerico (recebido: '$QG_COV_MARGIN_ARG')" >&2
+  exit 2
+fi
+
+# TODO(template): pre-req check.
+# Adicione UMA linha por ferramenta obrigatoria. Use a forma "command -v <bin>".
+# Para ferramentas que dependem de outra (ex: cargo-llvm-cov depende de cargo),
+# proteja o sub-check com if que valida o binario raiz primeiro.
+# Para ferramentas que exigem env var de auth (ex: SONAR_TOKEN para SonarQube),
+# valide a env var TAMBEM aqui — mesmo erro se faltar (exit 2).
+#
+# LEI (ver docs/contract.md): TODA msg de ferramenta ausente DEVE ensinar a
+# instalar em Linux E macOS, no formato:
+#   <causa> -- instale: '<cmd linux>' (Linux) / '<cmd macOS>' (macOS) (<consequencia>)
+check_prereqs() {
+  local missing=()
+  command -v {{PRIMARY_BUILD_TOOL}} >/dev/null 2>&1 || missing+=("{{PRIMARY_BUILD_TOOL}} -- instale: '{{PRIMARY_BUILD_TOOL_INSTALL_LINUX}}' (Linux) / '{{PRIMARY_BUILD_TOOL_INSTALL_MACOS}}' (macOS) ({{PRIMARY_BUILD_TOOL_CONSEQUENCE}})")
+  command -v jq >/dev/null 2>&1 || missing+=("jq (parser JSON) -- instale: 'apt install jq' (Linux) / 'brew install jq' (macOS) (sem jq o gate nao parseia metricas)")
+  command -v git >/dev/null 2>&1 || missing+=("git -- instale: 'apt install git' (Linux) / 'brew install git' (macOS) (sem git nao ha baseline/diff)")
+  command -v awk >/dev/null 2>&1 || missing+=("awk -- instale: 'apt install gawk' (Linux) / 'brew install gawk' (macOS) (sem awk o parsing numerico quebra)")
+  command -v tar >/dev/null 2>&1 || missing+=("tar -- instale: 'apt install tar' (Linux) / preinstalado (macOS) (sem tar nao ha extracao de baseline)")
+
+  # TODO(template): adicionar pre-reqs especificos da linguagem aqui.
+  # Exemplo (Rust): cargo llvm-cov --version >/dev/null 2>&1 || missing+=("cargo-llvm-cov")
+  # Exemplo (Java/Sonar): [ -n "${SONAR_TOKEN:-}" ] || missing+=("SONAR_TOKEN env var")
+  {{EXTRA_PREREQ_CHECKS}}
+
+  if [ ${#missing[@]} -gt 0 ]; then
+    for tool in "${missing[@]}"; do
+      echo "::error::ferramenta faltando: $tool" >&2
+    done
+    exit 2
+  fi
+}
+
+check_prereqs
+
+mkdir -p "$QG_LOG_DIR_ARG"
+
+# Bypass governado — NAO REMOVER. NAO ADICIONAR codigo que seta QG_BYPASS_REASON.
+# Bypass eh decisao do usuario humano, nunca da skill nem do gate.
+handle_bypass() {
+  local reason="$1"
+  local fmt="$2"
+  local log_dir="$3"
+  local branch
+  branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "<detached>")
+  local user
+  user=$(git config user.email 2>/dev/null || echo "<unknown>")
+  local ts
+  ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+  printf '%s\tbranch=%s\tuser=%s\treason=%s\n' "$ts" "$branch" "$user" "$reason" \
+    >> "$log_dir/bypass.log"
+
+  if [ "$fmt" = "json" ]; then
+    cat <<EOF
+{
+  "schema_version": "1.1",
+  "mode": "comparative",
+  "language": "{{LANGUAGE_SLUG}}",
+  "branch": "$branch",
+  "base_ref": "$QG_BASE_REF_ARG",
+  "started_at": "$ts",
+  "duration_seconds": 0,
+  "verdict": "bypassed",
+  "bypass_reason": "$reason",
+  "metrics": []
+}
+EOF
+  else
+    cat <<EOF
+=== Quality Gate — {{LANGUAGE_SLUG}} ===
+  branch:        $branch
+  base ref:      $QG_BASE_REF_ARG
+
+::warning::QG bypass ativo — motivo: $reason
+::warning::Esta execucao nao validou metricas. Audit log: $log_dir/bypass.log
+EOF
+  fi
+  exit 0
+}
+
+if [ -n "${QG_BYPASS_REASON:-}" ]; then
+  handle_bypass "$QG_BYPASS_REASON" "$QG_FORMAT_ARG" "$QG_LOG_DIR_ARG"
+fi
+
+# .qg.yaml opcional — schema fechado, mesma logica de rust/qg.sh.
+# TODO(template): copiar bloco de parse de .qg.yaml de rust/qg.sh sem mudancas,
+# INCLUINDO o sub-bloco de absolute_thresholds (parseia QG_ABS_THRESHOLDS_RAW;
+# chaves permitidas = metricas reservadas que ESTA linguagem mede + extras).
+# (Bloco eh agnostico de linguagem; mantido identico em todos os gates.)
+QG_YAML_FILE="${QG_YAML_FILE:-.qg.yaml}"
+QG_YAML_EXTRA_FAST_PATH=""
+QG_YAML_SKIP_METRICS_RAW=""
+QG_ABS_THRESHOLDS_RAW=""
+# {{QG_YAML_PARSE_BLOCK}}
+
+# Lookup de threshold absoluto por nome de metrica. Vazio = nao definido.
+qg_abs_threshold() {
+  local name="$1"
+  printf '%s' "$QG_ABS_THRESHOLDS_RAW" | grep -E "^${name}=" | head -1 | sed -E "s/^${name}=//"
+}
+
+# --- MODO ABSOLUTO -----------------------------------------------------------
+# Pula baseline, fast-path e check de linguagem-ausente. Mede . uma vez.
+# TODO(template): copiar o bloco "if [ \"$QG_ABSOLUTE_MODE\" = \"1\" ]" de
+# rust/qg.sh (ou de uma binding ja migrada para v1.1), AJUSTANDO o slug nas
+# mensagens, a lista de metricas medidas (omitir as que a linguagem nao mede,
+# ex: Swift sem complexity) e chamando qg_resolve_deps "." antes de medir.
+# render_absolute_json/render_absolute_text vivem em lib/output.sh.
+if [ "$QG_ABSOLUTE_MODE" = "1" ]; then
+  mkdir -p "$QG_LOG_DIR_ARG"
+  if ! qg_resolve_deps "." "$QG_LOG_DIR_ARG/abs-deps.log"; then
+    echo "::error::falha ao resolver dependencias de {{LANGUAGE_SLUG}} -- ver $QG_LOG_DIR_ARG/abs-deps.log" >&2
+    exit 2
+  fi
+  echo "-- medindo (sem baseline) --" >&2
+  abs_fmt=$(count_fmt_errors "." "$QG_LOG_DIR_ARG/abs-fmt.log")
+  abs_lint=$(count_lint_errors "." "$QG_LOG_DIR_ARG/abs-lint.log")
+  abs_build=$(count_build_errors "." "$QG_LOG_DIR_ARG/abs-build.log")
+  abs_test=$(count_test_failures "." "$QG_LOG_DIR_ARG/abs-test.log")
+  abs_complex=$(count_complexity "." "$QG_LOG_DIR_ARG/abs-complex.log")
+  abs_cov=$(measure_coverage "." "$QG_LOG_DIR_ARG/abs-cov.json")
+
+  branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "<detached>")
+  started_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  duration=$SECONDS
+
+  t_fmt=$(qg_abs_threshold fmt)
+  t_lint=$(qg_abs_threshold lint)
+  t_build=$(qg_abs_threshold build)
+  t_test=$(qg_abs_threshold test)
+  t_complex=$(qg_abs_threshold complexity)
+  t_cov=$(qg_abs_threshold coverage)
+
+  if [ "$QG_FORMAT_ARG" = "json" ]; then
+    render_absolute_json "$branch" "$started_at" "$duration" \
+      fmt "$abs_fmt" "$t_fmt" count \
+      lint "$abs_lint" "$t_lint" count \
+      build "$abs_build" "$t_build" count \
+      test "$abs_test" "$t_test" count \
+      complexity "$abs_complex" "$t_complex" count \
+      coverage "$abs_cov" "$t_cov" cov
+    exit $?
+  else
+    render_absolute_text "$branch" "$started_at" "$duration" "$QG_LOG_DIR_ARG" \
+      "fmt" "$abs_fmt" "$t_fmt" count \
+      "lint" "$abs_lint" "$t_lint" count \
+      "build" "$abs_build" "$t_build" count \
+      "test fails" "$abs_test" "$t_test" count \
+      "complexity" "$abs_complex" "$t_complex" count \
+      "coverage" "$abs_cov" "$t_cov" cov
+    exit $?
+  fi
+fi
+
+# TODO(template): regex de fast-path — arquivos-fonte da SUA linguagem.
+# Exemplo (Rust): '\.rs$|^Cargo\.|build\.rs$|^rust-toolchain'
+# Exemplo (Go):   '\.go$|^go\.(mod|sum)$'
+# Exemplo (Java): '\.java$|^pom\.xml$|^build\.gradle(\.kts)?$|^settings\.gradle(\.kts)?$'
+LANG_PATH_RE='{{FAST_PATH_REGEX}}'
+
+if [ -n "$QG_YAML_EXTRA_FAST_PATH" ]; then
+  PATH_RE_EXTRA="${LANG_PATH_RE}${QG_YAML_EXTRA_FAST_PATH}"
+else
+  PATH_RE_EXTRA="$LANG_PATH_RE"
+fi
+
+if [ "$QG_FORCE_FULL_ARG" != "1" ]; then
+  git fetch origin --quiet 2>/dev/null || true
+  committed_files=$(git diff --name-only "$QG_BASE_REF_ARG...HEAD" 2>/dev/null || true)
+  staged_files=$(git diff --cached --name-only 2>/dev/null || true)
+  worktree_files=$(git diff --name-only 2>/dev/null || true)
+  changed_files=$(printf '%s\n%s\n%s\n' "$committed_files" "$staged_files" "$worktree_files" \
+                  | sort -u | sed '/^$/d')
+
+  if [ -n "$changed_files" ] && ! echo "$changed_files" | grep -qE "$PATH_RE_EXTRA"; then
+    branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "<detached>")
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    if [ "$QG_FORMAT_ARG" = "json" ]; then
+      cat <<EOF
+{
+  "schema_version": "1.1",
+  "mode": "comparative",
+  "language": "{{LANGUAGE_SLUG}}",
+  "branch": "$branch",
+  "base_ref": "$QG_BASE_REF_ARG",
+  "started_at": "$ts",
+  "duration_seconds": 1,
+  "verdict": "passed",
+  "bypass_reason": null,
+  "metrics": []
+}
+EOF
+    else
+      cat <<EOF
+=== Quality Gate (fast-path) ===
+  branch:        $branch
+  base ref:      $QG_BASE_REF_ARG
+  scope:         nenhum arquivo {{LANGUAGE_NAME}} tocado — pulando gates pesados
+  override:      QG_FORCE_FULL=1 para rodar gate completo
+
+-- arquivos modificados --
+$(echo "$changed_files" | sed 's/^/  /')
+
+OK fast-path passed (nenhum {{LANGUAGE_NAME}} para medir)
+EOF
+    fi
+
+    # Sintaxe check de scripts shell modificados (catch barato e cross-language)
+    shell_files=$(echo "$changed_files" | grep -E '\.sh$' || true)
+    if [ -n "$shell_files" ]; then
+      while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        [ ! -f "$f" ] && continue
+        if ! bash -n "$f" 2>&1; then
+          echo "::error::syntax error in $f" >&2
+          exit 1
+        fi
+      done <<< "$shell_files"
+    fi
+
+    exit 0
+  fi
+fi
+
+prepare_baseline() {
+  local target="$1"
+  rm -rf "$target"
+  mkdir -p "$target"
+  git fetch origin --quiet 2>/dev/null || true
+  if ! git archive "$QG_BASE_REF_ARG" 2>/dev/null | tar -xC "$target"; then
+    echo "::error::falhou extrair '$QG_BASE_REF_ARG' via git archive — tente 'git fetch origin'" >&2
+    return 1
+  fi
+}
+
+if [ -z "$QG_BASELINE_DIR_ARG" ]; then
+  QG_BASELINE_DIR_ARG="/tmp/qg-baseline-{{LANGUAGE_SLUG}}"
+  if [ ! -d "$QG_BASELINE_DIR_ARG" ] || [ "$QG_REFRESH_BASELINE_ARG" = "1" ]; then
+    prepare_baseline "$QG_BASELINE_DIR_ARG" || exit 2
+  fi
+elif [ ! -d "$QG_BASELINE_DIR_ARG" ]; then
+  echo "::error::--baseline-dir '$QG_BASELINE_DIR_ARG' nao existe" >&2
+  exit 2
+fi
+
+QG_BASELINE_DIR_ARG=$(cd "$QG_BASELINE_DIR_ARG" && pwd)
+
+# TODO(template): sentinela ASCII na raiz que confirma que a linguagem existe
+# no baseline. Exemplos:
+#   Rust:   Cargo.toml
+#   Go:     go.mod
+#   Python: pyproject.toml
+#   Java:   pom.xml (Maven) OU build.gradle (Gradle)
+#   Node:   package.json
+# Se a linguagem nao existe no baseline, gate emite warning + exit 0.
+# NAO tenta medir num baseline vazio.
+if [ ! -f "$QG_BASELINE_DIR_ARG/{{BASELINE_SENTINEL_FILE}}" ]; then
+  branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "<detached>")
+  ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  if [ "$QG_FORMAT_ARG" = "json" ]; then
+    cat <<EOF
+{
+  "schema_version": "1.1",
+  "mode": "comparative",
+  "language": "{{LANGUAGE_SLUG}}",
+  "branch": "$branch",
+  "base_ref": "$QG_BASE_REF_ARG",
+  "started_at": "$ts",
+  "duration_seconds": 0,
+  "verdict": "passed",
+  "bypass_reason": null,
+  "metrics": []
+}
+EOF
+  else
+    echo "::warning::linguagem ausente no baseline ({{BASELINE_SENTINEL_FILE}} nao encontrado em $QG_BASELINE_DIR_ARG) — gate skipped" >&2
+  fi
+  exit 0
+fi
+
+mkdir -p "$QG_LOG_DIR_ARG"
+
+# TODO(template): bloco de medicoes.
+#
+# TAMPER-RESISTANCE (LEI 0.2 da skill add-quality-gate, contrato secao
+# "Tamper-resistance"): este gate impoe o PROPRIO ruleset. ANTES de mexer
+# aqui, garanta que:
+#  - existe <lang>/rules/ com a config canonica da(s) ferramenta(s);
+#  - lib/measure.sh define qg_ruleset_dir() retornando
+#    ${QG_RULESET_DIR:-<base absoluta capturada em source-time>/rules};
+#  - cada count_* invoca a ferramenta com --config/CLIPPY_CONF_DIR/-c/etc.
+#    apontando pro $(qg_ruleset_dir) E com a flag que ignora config local
+#    (ex: --no-config-lookup, --isolated nao-aplicavel a todas, --config
+#    com arquivo explicito). NUNCA deixe a ferramenta descobrir config do
+#    projeto-alvo. QG_RULESET_DIR so vem de env externa, nunca de .qg.yaml.
+#  Validar com fixture de config afrouxada (passo 17e do checklist).
+#
+# IGNORE CANONICO (LEI 0.2.1 da skill, contrato LEI "fmt/lint/complexity
+# medem CODIGO-FONTE"): fmt/lint/complexity medem FONTE, nunca artefato
+# gerado/vendored. Se count_fmt/count_lint/count_complexity varre arquivos
+# por path (glob ./**/*, find, ferramenta sem escopo de build-system),
+# EXCLUA o ignore canonico do QG (tamper-proof: NUNCA .eslintignore/
+# .prettierignore/.gitignore/.qg.yaml do projeto): node_modules dist build
+# out .next .nuxt .expo coverage .turbo .cache (+ .venv/venv Python,
+# vendor Go) e *.min.js *.min.css *.bundle.js *.chunk.js *-lock.json *.map.
+# Mecanismo: bloco `ignores` global (eslint), --ignore-path .prettierignore,
+# extend-exclude (ruff), -i/-e/-ignore (radon/gocyclo) ou filtro de
+# output + prune no find helper. Ferramenta JA scope de build-system
+# (cargo, mvn-pmd -d src, ktlint src/**, detekt --input src) ou que ja
+# exclui o gerado (swift .build/): SEM anti-pattern, nao gold-plate.
+# Validar com fixture build/ minificado + src/ limpo (passo 17e-bis).
+#
+# DISPATCHER (LEI 0.3): exit codes deste script sao 0|1|2. exit 3 e
+# exclusivo do dispatcher `qg` da raiz (nenhuma linguagem detectada) —
+# NUNCA emita exit 3 daqui. --detect imprime slug+exit 0 / nada+exit 1.
+#
+# REGRAS:
+# - Cada count_* retorna inteiro >= 0 em stdout. measure_coverage retorna decimal.
+# - Se a ferramenta da LINGUAGEM falha por motivo dela (segfault, OOM, panic):
+#   funcao emite ::error:: para stderr E o script principal faz exit 2.
+#   Tool error NUNCA vira regressao (que seria exit 1).
+# - Se a metrica eh OMITIDA (ferramenta nao existe na linguagem):
+#   - REMOVER a linha de medicao (base_X e pr_X) abaixo.
+#   - REMOVER o argumento correspondente em render_text/render_json.
+#   - NAO setar como 0 ou null. Omissao eh literal.
+# - Se voce ADICIONA metrica extra: adicione var base_X / pr_X aqui e
+#   passe para render_*. Nome em snake_case ASCII unico.
+# - Bug 1 (contrato): se a linguagem tem gerenciador de deps, qg_resolve_deps
+#   (em lib/measure.sh) DEVE rodar para baseline E PR ANTES de medir. Falha
+#   de resolucao = tool-error exit 2, NUNCA build regredido. Linguagens sem
+#   resolucao explicita (rust/cargo, swift/SwiftPM) mantem qg_resolve_deps
+#   como no-op de simetria.
+# - LEI toolchain/build-system declarado e autoritativo (contrato secao
+#   "Toolchain/build-system declarado e autoritativo (LEI)"): qg_resolve_deps
+#   (em lib/measure.sh) DEVE detectar o build-system/manager/toolchain que o
+#   projeto declara (lockfile, build-system file, wrapper como ./mvnw/
+#   ./gradlew, diretiva de versao pinada como go.mod toolchain /
+#   rust-toolchain.toml / swift-tools-version). Se o gate NAO suporta esse
+#   build-system OU nao consegue honra-lo exatamente (ferramenta ausente,
+#   versao pinada nao satisfazivel) => tool-error: escreve no $log
+#   "::error::<causa> -- <acao do usuario> (substituicao silenciosa
+#   produziria resultado incorreto)" e return 1. NUNCA fallback silencioso
+#   para outra ferramenta/versao/manager. Padrao de referencia:
+#   nodejs/lib/measure.sh qg_resolve_deps(). Validar com fixture (passo 17g).
+
+# Bug 1: resolve dependencias de baseline E PR antes de medir build/test.
+if ! qg_resolve_deps "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-deps.log"; then
+  echo "::error::falha ao resolver dependencias de {{LANGUAGE_SLUG}} (baseline) -- ver $QG_LOG_DIR_ARG/base-deps.log" >&2
+  exit 2
+fi
+if ! qg_resolve_deps "." "$QG_LOG_DIR_ARG/pr-deps.log"; then
+  echo "::error::falha ao resolver dependencias de {{LANGUAGE_SLUG}} (PR) -- ver $QG_LOG_DIR_ARG/pr-deps.log" >&2
+  exit 2
+fi
+
+echo "-- medindo base --" >&2
+base_fmt=$(count_fmt_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-fmt.log")
+base_lint=$(count_lint_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-lint.log")
+base_build=$(count_build_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-build.log")
+base_test=$(count_test_failures "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-test.log")
+base_complex=$(count_complexity "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-complex.log")
+base_cov=$(measure_coverage "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-cov.json")
+
+echo "-- medindo PR --" >&2
+pr_fmt=$(count_fmt_errors "." "$QG_LOG_DIR_ARG/pr-fmt.log")
+pr_lint=$(count_lint_errors "." "$QG_LOG_DIR_ARG/pr-lint.log")
+pr_build=$(count_build_errors "." "$QG_LOG_DIR_ARG/pr-build.log")
+pr_test=$(count_test_failures "." "$QG_LOG_DIR_ARG/pr-test.log")
+pr_complex=$(count_complexity "." "$QG_LOG_DIR_ARG/pr-complex.log")
+pr_cov=$(measure_coverage "." "$QG_LOG_DIR_ARG/pr-cov.json")
+
+branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "<detached>")
+started_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+duration=$SECONDS
+
+if [ "$QG_FORMAT_ARG" = "json" ]; then
+  render_json "$branch" "$QG_BASE_REF_ARG" "$started_at" "$duration" \
+    "$base_fmt" "$pr_fmt" \
+    "$base_lint" "$pr_lint" \
+    "$base_build" "$pr_build" \
+    "$base_test" "$pr_test" \
+    "$base_complex" "$pr_complex" \
+    "$base_cov" "$pr_cov" "$QG_COV_MARGIN_ARG"
+  exit $?
+else
+  render_text "$branch" "$QG_BASE_REF_ARG" "$QG_BASELINE_DIR_ARG" "$QG_COV_MARGIN_ARG" "$QG_LOG_DIR_ARG" \
+    "$base_fmt" "$pr_fmt" \
+    "$base_lint" "$pr_lint" \
+    "$base_build" "$pr_build" \
+    "$base_test" "$pr_test" \
+    "$base_complex" "$pr_complex" \
+    "$base_cov" "$pr_cov"
+  exit $?
+fi

@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/xgodev/quality-gate/contract-v1.schema.json",
+  "title": "Quality Gate Output v1 (cobre schema_version 1.0 e 1.1; single ou array de monorepo)",
+  "oneOf": [
+    { "$ref": "#/$defs/singleResult" },
+    { "$ref": "#/$defs/monorepoResult" }
+  ],
+  "$defs": {
+    "monorepoResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "aggregate_verdict", "results"],
+      "properties": {
+        "schema_version": { "enum": ["1.0", "1.1"] },
+        "aggregate_verdict": { "enum": ["passed", "regressed", "failed", "bypassed"] },
+        "results": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/singleResult" }
+        }
+      }
+    },
+    "singleResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "language", "branch", "base_ref", "started_at", "duration_seconds", "verdict", "bypass_reason", "metrics"],
+      "properties": {
+        "schema_version": { "enum": ["1.0", "1.1"] },
+        "mode": { "enum": ["comparative", "absolute"] },
+        "language": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },
+        "branch": { "type": "string" },
+        "base_ref": { "type": ["string", "null"] },
+        "started_at": { "type": "string", "format": "date-time" },
+        "duration_seconds": { "type": "integer", "minimum": 0 },
+        "verdict": { "enum": ["passed", "regressed", "failed", "bypassed"] },
+        "bypass_reason": { "type": ["string", "null"] },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+              "base": { "type": "number", "minimum": 0 },
+              "pr": { "type": "number", "minimum": 0 },
+              "delta": { "type": "number" },
+              "margin": { "type": "number", "minimum": 0 },
+              "value": { "type": "number", "minimum": 0 },
+              "threshold": { "type": ["number", "null"], "minimum": 0 },
+              "verdict": { "enum": ["same", "improved", "regressed", "ok", "violated", "reported"] }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "comment": "mode ausente OU comparative => metricas comparativas {name,base,pr,delta,verdict}",
+          "if": {
+            "not": {
+              "properties": { "mode": { "const": "absolute" } },
+              "required": ["mode"]
+            }
+          },
+          "then": {
+            "properties": {
+              "verdict": { "enum": ["passed", "regressed", "bypassed"] },
+              "metrics": {
+                "items": {
+                  "required": ["name", "base", "pr", "delta", "verdict"],
+                  "properties": {
+                    "verdict": { "enum": ["same", "improved", "regressed"] }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "comment": "mode absolute => metricas absolutas {name,value,threshold,verdict}, base_ref null, verdict global passed|failed|bypassed",
+          "if": {
+            "properties": { "mode": { "const": "absolute" } },
+            "required": ["mode"]
+          },
+          "then": {
+            "properties": {
+              "base_ref": { "type": "null" },
+              "verdict": { "enum": ["passed", "failed", "bypassed"] },
+              "metrics": {
+                "items": {
+                  "required": ["name", "value", "threshold", "verdict"],
+                  "properties": {
+                    "verdict": { "enum": ["ok", "violated", "reported"] }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "verdict": { "const": "bypassed" } } },
+          "then": {
+            "properties": {
+              "bypass_reason": { "type": "string", "minLength": 1 },
+              "metrics": { "maxItems": 0 }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

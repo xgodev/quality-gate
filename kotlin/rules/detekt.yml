@@ -1,0 +1,29 @@
+# Ruleset canonico Quality Gate -- Kotlin (detekt).
+# Imposto pelo QG via detekt -c <este>. Config do projeto-alvo e IGNORADA.
+# Defaults da comunidade; calibracao fina em V2.
+build:
+  maxIssues: 0
+
+complexity:
+  active: true
+  CyclomaticComplexMethod:
+    active: true
+    threshold: 15
+  LongMethod:
+    active: true
+    threshold: 60
+  LongParameterList:
+    active: true
+    functionThreshold: 7
+  NestedBlockDepth:
+    active: true
+    threshold: 4
+  ComplexCondition:
+    active: true
+    threshold: 4
+
+style:
+  active: true
+
+potential-bugs:
+  active: true

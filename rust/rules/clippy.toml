@@ -1,0 +1,7 @@
+# Ruleset canonico Quality Gate -- Rust (clippy).
+# Imposto pelo QG via CLIPPY_CONF_DIR. Config do projeto-alvo e IGNORADA.
+# Defaults da comunidade; calibracao fina em V2.
+cognitive-complexity-threshold = 25
+too-many-arguments-threshold = 7
+too-many-lines-threshold = 100
+type-complexity-threshold = 250

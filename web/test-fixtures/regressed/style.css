@@ -1,0 +1,14 @@
+/* REGRESSION fmt: indentacao inconsistente (prettier vai reformatar) */
+body {
+    margin:0;
+  font-family:sans-serif;
+}
+
+/* REGRESSION lint stylelint: bloco vazio + propriedade duplicada + hex invalido */
+main {
+}
+
+h1 {
+  color: #zzzzzz;
+  color: #0046be;
+}

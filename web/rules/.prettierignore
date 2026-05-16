@@ -1,0 +1,31 @@
+# Ignore canonico do Quality Gate -- web (prettier HTML/CSS/SCSS).
+# Imposto pelo QG via prettier --ignore-path <este>. NUNCA o .prettierignore
+# do projeto-alvo (tamper-proof: o dev nao pode afrouxar a varredura).
+# LEI (docs/contract.md): metricas de fmt/lint/complexity medem CODIGO-FONTE;
+# diretorios gerados/vendored sao excluidos por este ignore canonico.
+node_modules/
+dist/
+build/
+out/
+.next/
+.nuxt/
+.expo/
+coverage/
+.turbo/
+.cache/
+**/node_modules/
+**/dist/
+**/build/
+**/out/
+**/.next/
+**/.nuxt/
+**/.expo/
+**/coverage/
+**/.turbo/
+**/.cache/
+*.min.js
+*.min.css
+*.bundle.js
+*.chunk.js
+*-lock.json
+*.map

@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "lineLength": 120,
+  "indentation": { "spaces": 2 },
+  "lineBreakBeforeEachArgument": false,
+  "rules": {
+    "AlwaysUseLowerCamelCase": true,
+    "NeverForceUnwrap": false
+  }
+}

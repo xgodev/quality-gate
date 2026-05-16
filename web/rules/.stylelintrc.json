@@ -1,0 +1,13 @@
+{
+  "rules": {
+    "no-empty-source": true,
+    "block-no-empty": true,
+    "color-no-invalid-hex": true,
+    "declaration-block-no-duplicate-properties": true,
+    "declaration-block-no-shorthand-property-overrides": true,
+    "no-duplicate-selectors": true,
+    "no-invalid-double-slash-comments": true,
+    "property-no-unknown": true,
+    "unit-no-unknown": true
+  }
+}

@@ -1,0 +1,110 @@
+# Quality Gate — {{LANGUAGE_NAME}}
+
+Documentacao especifica do gate {{LANGUAGE_NAME}}. Para o contrato comum, ver [`../contract.md`](../contract.md).
+
+## Build system
+
+Quality Gate {{LANGUAGE_NAME}} assume **{{BUILD_SYSTEM}}** ({{BUILD_SYSTEM_RATIONALE}}).
+
+<!--
+TODO(template): explique a escolha. Se a linguagem tem multiplos build systems
+(pip vs poetry vs uv; npm vs pnpm vs bun; mvn vs gradle), diga qual foi escolhido
+e por que. V1 NAO suporta multiplos.
+-->
+
+## Pre-requisitos com instalacao
+
+### macOS
+
+```bash
+{{INSTALL_MACOS}}
+```
+
+### Linux (Ubuntu/Debian)
+
+```bash
+{{INSTALL_LINUX}}
+```
+
+<!--
+TODO(template): comandos verificaveis (rode no shell antes de commitar).
+Exemplo (Rust macOS):
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  cargo install cargo-llvm-cov
+  brew install jq
+-->
+
+## Metricas — o que cada uma mede em {{LANGUAGE_NAME}}
+
+{{METRIC_DETAILS}}
+
+<!--
+TODO(template): bloco POR METRICA MEDIDA, nao copia generica.
+Para CADA metrica usar este formato:
+
+### `<nome>` — <descricao curta>
+
+Roda `<comando exato>`. Conta `<o que conta>`.
+
+**Configuracao:** <referencia ao arquivo de config se houver, ou "defaults da ferramenta">
+
+**Como interpretar regressao:** <explicacao + comando de fix sugerido>
+
+Exemplo (Rust, fmt):
+
+### `fmt` — formatacao
+Roda `cargo fmt --all -- --check`. Conta linhas iniciando com `Diff in `.
+**Configuracao:** se o projeto tem `rustfmt.toml`, eh respeitado.
+**Como interpretar regressao:** PR introduziu arquivo desformatado. Solucao: `cargo fmt --all`.
+-->
+
+## Troubleshooting comum
+
+{{TROUBLESHOOTING}}
+
+<!--
+TODO(template): obrigatorio listar OS 3 ERROS MAIS PROVAVEIS + solucao para cada.
+Erros tipicos a considerar:
+- Cache de baseline stale (`--refresh-baseline` ou `rm -rf /tmp/qg-baseline-*`).
+- `git archive` falhando ("not a valid object name") → `git fetch origin`.
+- Ferramenta de coverage muito lenta ou travando → versao especifica conhecida boa.
+- (se aplicavel) auth missing → instrucao de setar env var corretamente.
+- (se aplicavel) tooling diferente entre macOS BSD e Linux GNU.
+-->
+
+## Metricas omitidas
+
+{{OMITTED_METRICS}}
+
+<!--
+TODO(template): se voce omitiu alguma das 6 reservadas (fmt, lint, build, test,
+complexity, coverage), liste AQUI com justificativa por linguagem. Exemplo:
+
+- `coverage`: SQL DDL nao tem conceito de coverage de linhas executadas.
+- `complexity`: bash nao tem ferramenta canonica de complexidade ciclomatica.
+
+Se nao omitiu nada, escreva: "Nenhuma. {{LANGUAGE_NAME}} suporta as 6 metricas
+reservadas com ferramentas oficiais."
+
+LEMBRETE: metrica omitida NAO aparece no JSON nem na tabela texto. Sentinela
+0 ou null eh PROIBIDO.
+-->
+
+## Metricas extras
+
+{{EXTRA_METRICS}}
+
+<!--
+TODO(template): se voce adicionou metrica alem das 6 reservadas, documente:
+- Nome (snake_case ASCII, nao colidir com nomes reservados).
+- Ferramenta usada.
+- Semantica (o que conta exatamente).
+- Como interpretar regressao.
+- Como o usuario faz fix.
+
+Se nao adicionou nada, escreva: "Nenhuma em V1. Candidatos futuros:" e liste.
+
+Exemplo (Rust):
+- `audit` via `cargo audit` — vulnerabilidades em dependencias.
+- `unsafe_count` via `cargo geiger` — uso de blocks `unsafe`.
+-->

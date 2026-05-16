@@ -1,0 +1,11 @@
+# Ruleset canonico Quality Gate -- Kotlin (ktlint).
+# Imposto pelo QG via ktlint --editorconfig=<este>.
+# .editorconfig do projeto-alvo e IGNORADO para o gate.
+root = true
+
+[*.{kt,kts}]
+indent_size = 4
+indent_style = space
+max_line_length = 120
+insert_final_newline = true
+ktlint_standard = enabled

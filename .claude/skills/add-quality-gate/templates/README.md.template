@@ -1,0 +1,60 @@
+# Quality Gate — {{LANGUAGE_NAME}}
+
+Gate de qualidade para projetos {{LANGUAGE_NAME}}. Cumpre o [contrato v1](../docs/contract.md).
+
+## Pre-requisitos
+
+{{PREREQ_LIST}}
+
+<!--
+TODO(template): preencha PREREQ_LIST com bullets, um por ferramenta. Inclua:
+- Comando para verificar versao instalada.
+- One-liner de install para macOS e Linux (Ubuntu/Debian).
+- Se a ferramenta exige token/env var (ex: SONAR_TOKEN), cite aqui.
+Exemplo (Rust):
+- `cargo` (toolchain Rust — instale via [rustup.rs](https://rustup.rs))
+- `cargo-llvm-cov` — `cargo install cargo-llvm-cov`
+- `jq` — `brew install jq` (macOS) ou `apt install jq` (Linux)
+- `git`, `bash 4+`, `awk`, `tar` (sistema)
+-->
+
+## Uso
+
+```bash
+~/.quality-gate/{{LANGUAGE_SLUG}}/qg.sh --base origin/main
+```
+
+Ver [`docs/consume.md`](../docs/consume.md) para uso completo.
+
+## Metricas medidas
+
+{{METRICS_TABLE}}
+
+<!--
+TODO(template): preencha METRICS_TABLE com tabela markdown. Colunas: Metrica | Ferramenta | Conta.
+Lista APENAS as metricas que voce REALMENTE mede. Metricas omitidas vao em
+docs/languages/{{LANGUAGE_SLUG}}.md, secao "Metricas omitidas".
+Exemplo (Rust):
+| Metrica | Ferramenta | Conta |
+|---|---|---|
+| `fmt` | `cargo fmt --check` | linhas `Diff in` |
+| `lint` | `cargo clippy -D warnings` (sem complexity) | linhas `^error` |
+-->
+
+## Estrutura
+
+- [`qg.sh`](qg.sh) — script principal.
+- [`lib/measure.sh`](lib/measure.sh) — funcoes `count_*` e `measure_coverage`.
+- [`lib/output.sh`](lib/output.sh) — render texto e JSON.
+- [`test-fixtures/baseline/`](test-fixtures/baseline/) — projeto {{LANGUAGE_NAME}} limpo.
+- [`test-fixtures/regressed/`](test-fixtures/regressed/) — projeto com regressoes deliberadas em CADA metrica medida.
+
+## Detalhes e troubleshooting
+
+Ver [`docs/languages/{{LANGUAGE_SLUG}}.md`](../docs/languages/{{LANGUAGE_SLUG}}.md).
+
+## Testes do proprio script
+
+```bash
+bats tests/{{LANGUAGE_SLUG}}-qg.bats
+```

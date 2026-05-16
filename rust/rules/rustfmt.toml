@@ -1,0 +1,4 @@
+# Ruleset canonico Quality Gate -- Rust (rustfmt).
+# Imposto pelo QG via cargo fmt -- --config-path. Config do projeto e IGNORADA.
+edition = "2021"
+max_width = 100
