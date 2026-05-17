@@ -1,15 +1,15 @@
-// Ruleset canonico Quality Gate -- Node.js (ESLint flat config).
-// Imposto pelo QG via eslint --no-config-lookup --config <este>.
-// Config do projeto-alvo (.eslintrc*, eslint.config.*) e IGNORADA.
-// Self-contained (sem import de @eslint/js) para nao exigir install extra
-// no ambiente do gate. Defaults da comunidade; calibracao fina em V2.
+// Canonical Quality Gate ruleset -- Node.js (ESLint flat config).
+// Enforced by QG via eslint --no-config-lookup --config <this>.
+// The target project's config (.eslintrc*, eslint.config.*) is IGNORED.
+// Self-contained (no import of @eslint/js) so it does not require an extra
+// install in the gate environment. Community defaults; fine calibration in V2.
 //
-// LEI (docs/contract.md): metricas de fmt/lint/complexity medem CODIGO-FONTE.
-// O bloco `ignores` abaixo e o ignore CANONICO do QG (tamper-proof: nunca lemos
-// .eslintignore do projeto-alvo). Como PRIMEIRO elemento sem outras chaves, vale
-// como ignore GLOBAL do flat config -- aplicado a TODA varredura (lint e
-// complexity, que herda este config). Sem isso, varrer `.` mediria bundles
-// minificados em build/dist (metrica de artefato, nao de fonte).
+// LAW (docs/contract.md): the fmt/lint/complexity metrics measure SOURCE CODE.
+// The `ignores` block below is QG's CANONICAL ignore (tamper-proof: we never
+// read the target project's .eslintignore). As the FIRST element with no other
+// keys, it acts as the GLOBAL ignore of the flat config -- applied to EVERY
+// scan (lint and complexity, which inherits this config). Without it, scanning
+// `.` would measure minified bundles in build/dist (an artifact metric, not source).
 export default [
   {
     ignores: [

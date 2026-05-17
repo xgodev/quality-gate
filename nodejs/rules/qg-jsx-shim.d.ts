@@ -1,15 +1,15 @@
-// QG -- shim ambiente de JSX (tamper-resistance / robustez).
+// QG -- ambient JSX shim (tamper-resistance / robustness).
 //
-// Quando o projeto-alvo NAO instalou tipos de React/React Native
-// (@types/react, etc.) no node_modules, o `tsc` strict do QG cospe
-// TS7026 ("no interface 'JSX.IntrinsicElements' exists") / TS2875 em
-// CADA tag JSX -- centenas de erros fantasma que mascaram erros de tipo
-// reais. Este shim declara um JSX.IntrinsicElements permissivo SO como
-// fallback global: se o projeto fornece @types/react, os tipos reais do
-// React tem precedencia (mesma namespace, declaracao do projeto vence
-// em resolucao de modulo). O shim NAO afrouxa strictness do codigo TS
-// do dev -- so impede ruido de JSX sem tipos. Erros de tipo reais
-// (string -> number, param implicito any, etc.) continuam sendo pegos.
+// When the target project did NOT install React/React Native types
+// (@types/react, etc.) in node_modules, QG's strict `tsc` spits
+// TS7026 ("no interface 'JSX.IntrinsicElements' exists") / TS2875 on
+// EVERY JSX tag -- hundreds of phantom errors that mask real type
+// errors. This shim declares a permissive JSX.IntrinsicElements ONLY as
+// a global fallback: if the project provides @types/react, React's real
+// types take precedence (same namespace, the project's declaration wins
+// in module resolution). The shim does NOT loosen the strictness of the
+// dev's TS code -- it only prevents JSX-without-types noise. Real type
+// errors (string -> number, implicit any param, etc.) are still caught.
 
 declare namespace JSX {
   interface IntrinsicElements {

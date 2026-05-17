@@ -7,7 +7,7 @@ export function multiply(a, b) {
   return a * b;
 }
 
-// REGRESSION lint: variavel declarada e nao usada (eslint no-unused-vars).
+// REGRESSION lint: variavel declarada e unused (eslint no-unused-vars).
 export function unusedDemo() {
   const unused = 42;
   return 100;

@@ -1,5 +1,5 @@
 {
-  "//": "Ruleset canonico QG -- Node.js (tsc). strict TRAVADO. O tsconfig do projeto-alvo e IGNORADO (tamper-resistance). strict porem realista: JSX/React-Native-capaz. jsx: preserve faz o tsc PARSEAR JSX/TSX (sem TS17004/TS6142 fantasma) sem exigir @types/react do projeto-alvo (que evitaria TS7026/TS2875 fantasma quando o projeto nao instalou tipos de React). O dev NAO afrouxa strictness; o gate so conta erros de tipo reais.",
+  "//": "Canonical QG ruleset -- Node.js (tsc). strict LOCKED. The target project's tsconfig is IGNORED (tamper-resistance). strict but realistic: JSX/React-Native-capable. jsx: preserve makes tsc PARSE JSX/TSX (no phantom TS17004/TS6142) without requiring the target project's @types/react (which would avoid phantom TS7026/TS2875 when the project did not install React types). The dev does NOT loosen strictness; the gate only counts real type errors.",
   "compilerOptions": {
     "strict": true,
     "noImplicitAny": true,

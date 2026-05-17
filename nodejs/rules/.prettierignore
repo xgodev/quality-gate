@@ -1,8 +1,8 @@
-# Ignore canonico do Quality Gate -- Node.js (prettier).
-# Imposto pelo QG via prettier --ignore-path <este>. NUNCA o .prettierignore
-# do projeto-alvo (tamper-proof: o dev nao pode afrouxar a varredura).
-# LEI (docs/contract.md): metricas de fmt/lint/complexity medem CODIGO-FONTE;
-# diretorios gerados/vendored sao excluidos por este ignore canonico.
+# Canonical Quality Gate ignore -- Node.js (prettier).
+# Enforced by QG via prettier --ignore-path <this>. NEVER the target project's
+# .prettierignore (tamper-proof: the dev cannot loosen the scan).
+# LAW (docs/contract.md): the fmt/lint/complexity metrics measure SOURCE CODE;
+# generated/vendored directories are excluded by this canonical ignore.
 node_modules/
 dist/
 build/

@@ -8,7 +8,7 @@ setup() {
   qg_clean_env
 }
 
-@test "nodejs/qg.sh --help mostra usage" {
+@test "nodejs/qg.sh --help shows usage" {
   run "$(qg_script_path nodejs)" --help
   [ "$status" -eq 0 ]
   [[ "$output" == *"--base"* ]]
@@ -16,36 +16,36 @@ setup() {
   [[ "$output" == *"--help"* ]]
 }
 
-@test "nodejs/qg.sh -h equivalente a --help" {
+@test "nodejs/qg.sh -h equivalent to --help" {
   run "$(qg_script_path nodejs)" -h
   [ "$status" -eq 0 ]
   [[ "$output" == *"--base"* ]]
 }
 
-@test "nodejs/qg.sh declara QG_CONTRACT_VERSION=1 no header" {
+@test "nodejs/qg.sh declares QG_CONTRACT_VERSION=1 in the header" {
   run grep -E "^# QG_CONTRACT_VERSION=1$" "$(qg_script_path nodejs)"
   [ "$status" -eq 0 ]
 }
 
-@test "nodejs/qg.sh sem --base NAO sai 2 por falta de --base (modo absoluto)" {
+@test "nodejs/qg.sh without --base does NOT exit 2 due to missing --base (absolute mode)" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
   run "$(qg_script_path nodejs)"
-  # Sem package.json/git aqui pode sair por outros motivos, mas NUNCA
+  # Without package.json/git here it may exit for other reasons, but NEVER
   # com a mensagem antiga de "--base obrigatorio".
   [[ "$output" != *"--base eh obrigatorio"* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp"
 }
 
-@test "nodejs/qg.sh respeita QG_BASE_REF env var quando --base ausente" {
+@test "nodejs/qg.sh respects the QG_BASE_REF env var when --base is absent" {
   export QG_BASE_REF="origin/main"
   run "$(qg_script_path nodejs)"
   [[ "$output" != *"--base eh obrigatorio"* ]]
 }
 
-@test "nodejs/qg.sh --detect sem sentinela sai 1" {
+@test "nodejs/qg.sh --detect without a sentinel exits 1" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -56,7 +56,7 @@ setup() {
   rm -rf "$tmp"
 }
 
-@test "nodejs/qg.sh --detect com sentinela imprime slug e sai 0" {
+@test "nodejs/qg.sh --detect with a sentinel prints the slug and exits 0" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -68,7 +68,7 @@ setup() {
   rm -rf "$tmp"
 }
 
-@test "nodejs/qg.sh modo absoluto sem .qg.yaml: exit 0, JSON mode absolute base_ref null" {
+@test "nodejs/qg.sh absolute mode without .qg.yaml: exit 0, JSON mode absolute base_ref null" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path nodejs baseline)"
@@ -83,7 +83,7 @@ setup() {
   rm -rf "$logdir"
 }
 
-@test "nodejs/qg.sh modo absoluto com absolute_thresholds violado: exit 1, metrica violated" {
+@test "nodejs/qg.sh absolute mode with absolute_thresholds violated: exit 1, metric violated" {
   local logdir tmp
   logdir=$(qg_tmp_dir)
   tmp=$(qg_tmp_dir)
@@ -103,12 +103,12 @@ EOF
   rm -rf "$logdir" "$tmp"
 }
 
-@test "Bug 2: coverage indefinida vira 0, JSON valido, gate nao quebra (modo absoluto)" {
+@test "Bug 2: undefined coverage becomes 0, valid JSON, gate does not break (absolute mode)" {
   local logdir tmp
   logdir=$(qg_tmp_dir)
   tmp=$(qg_tmp_dir)
   cd "$tmp"
-  # Projeto node sem testes -> c8 nao gera summary -> coverage indefinida.
+  # node project without tests -> c8 produces no summary -> undefined coverage.
   cat > package.json <<EOF
 { "name": "x", "version": "0.1.0", "private": true }
 EOF
@@ -125,7 +125,7 @@ EOF
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local tmp logdir bindir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir); bindir=$(qg_tmp_dir)
-  # Stub de yarn: grava os args recebidos e sai 0 (nao resolve de verdade).
+  # yarn stub: records the received args and exits 0 (does not actually resolve).
   cat > "$bindir/yarn" <<EOF
 #!/usr/bin/env bash
 echo "ARGS: \$*" > "$logdir/yarn-args"
@@ -141,12 +141,12 @@ EOF
   # node_modules ausente => resolucao necessaria.
   PATH="$bindir:$PATH" run qg_resolve_deps "$tmp" "$logdir/deps.log"
   [ "$status" -eq 0 ]
-  grep -q -- '--immutable' "$logdir/yarn-args" || { echo "esperava --immutable (Berry); got: $(cat "$logdir/yarn-args")"; return 1; }
-  ! grep -q -- '--frozen-lockfile' "$logdir/yarn-args" || { echo "Berry nao deve usar --frozen-lockfile"; return 1; }
+  grep -q -- '--immutable' "$logdir/yarn-args" || { echo "expected --immutable (Berry); got: $(cat "$logdir/yarn-args")"; return 1; }
+  ! grep -q -- '--frozen-lockfile' "$logdir/yarn-args" || { echo "Berry must not use --frozen-lockfile"; return 1; }
   rm -rf "$tmp" "$logdir" "$bindir"
 }
 
-@test "Fix3: yarn.lock sem .yarnrc.yml (classic v1) -> yarn install --frozen-lockfile" {
+@test "Fix3: yarn.lock without .yarnrc.yml (classic v1) -> yarn install --frozen-lockfile" {
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local tmp logdir bindir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir); bindir=$(qg_tmp_dir)
@@ -163,12 +163,12 @@ EOF
   # Sem .yarnrc.yml => Yarn classic v1.
   PATH="$bindir:$PATH" run qg_resolve_deps "$tmp" "$logdir/deps.log"
   [ "$status" -eq 0 ]
-  grep -q -- '--frozen-lockfile' "$logdir/yarn-args" || { echo "esperava --frozen-lockfile (classic); got: $(cat "$logdir/yarn-args")"; return 1; }
-  ! grep -q -- '--immutable' "$logdir/yarn-args" || { echo "classic nao deve usar --immutable"; return 1; }
+  grep -q -- '--frozen-lockfile' "$logdir/yarn-args" || { echo "expected --frozen-lockfile (classic); got: $(cat "$logdir/yarn-args")"; return 1; }
+  ! grep -q -- '--immutable' "$logdir/yarn-args" || { echo "classic must not use --immutable"; return 1; }
   rm -rf "$tmp" "$logdir" "$bindir"
 }
 
-@test "Fix3: yarn.lock + .yarnrc.yml mas yarn ausente -> tool-error (nao fallback npm)" {
+@test "Fix3: yarn.lock + .yarnrc.yml but yarn absent -> tool-error (no npm fallback)" {
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -177,15 +177,15 @@ EOF
 EOF
   : > "$tmp/yarn.lock"
   echo 'nodeLinker: node-modules' > "$tmp/.yarnrc.yml"
-  # PATH minimo sem yarn -> tool-error, NUNCA fallback npm.
+  # Minimal PATH without yarn -> tool-error, NEVER npm fallback.
   PATH="/usr/bin:/bin" run qg_resolve_deps "$tmp" "$logdir/deps.log"
   [ "$status" -eq 1 ]
-  grep -q "yarn.lock presente mas 'yarn' nao encontrado" "$logdir/deps.log"
-  grep -q -- "instale: 'npm i -g yarn' (Linux) / 'brew install yarn' (macOS)" "$logdir/deps.log"
+  grep -q "yarn.lock present but 'yarn' not found" "$logdir/deps.log"
+  grep -q -- "install: 'npm i -g yarn' (Linux) / 'brew install yarn' (macOS)" "$logdir/deps.log"
   rm -rf "$tmp" "$logdir"
 }
 
-@test "Bug 1: nodejs sem node_modules + sem base resolve deps OU classifica tool-error, nunca jq invalido" {
+@test "Bug 1: nodejs without node_modules + no base resolves deps OR classifies tool-error, never invalid jq" {
   local logdir tmp
   logdir=$(qg_tmp_dir)
   tmp=$(qg_tmp_dir)
@@ -206,8 +206,8 @@ EOF
   echo "const _ = require('lodash'); module.exports = _.identity(1);" > index.js
   run --separate-stderr "$(qg_script_path nodejs)" --log-dir "$logdir" --format json
   # Aceito: exit 0 (deps resolvidas, build ok) OU exit 2 (tool-error de
-  # resolucao). NUNCA crash com jq --argjson invalido (que seria status>2
-  # ou stdout nao-JSON).
+  # resolution). NEVER a crash with invalid jq --argjson (which would be status>2
+  # or non-JSON stdout).
   [ "$status" -eq 0 ] || [ "$status" -eq 2 ]
   if [ "$status" -eq 0 ]; then
     echo "$output" | jq -e '.' >/dev/null
@@ -217,26 +217,26 @@ EOF
   rm -rf "$logdir" "$tmp"
 }
 
-@test "nodejs/qg.sh --format invalido sai 2" {
+@test "nodejs/qg.sh --format invalid exits 2" {
   run "$(qg_script_path nodejs)" --base origin/main --format xml
   [ "$status" -eq 2 ]
   [[ "$output" == *"--format"* ]]
 }
 
-@test "nodejs/qg.sh --cov-margin nao-numerico sai 2" {
+@test "nodejs/qg.sh --cov-margin non-numeric exits 2" {
   run "$(qg_script_path nodejs)" --base origin/main --cov-margin abc
   [ "$status" -eq 2 ]
   [[ "$output" == *"--cov-margin"* ]]
 }
 
-@test "nodejs/qg.sh detecta ferramenta faltando e sai 2 com mensagem instalavel" {
+@test "nodejs/qg.sh detects a missing tool and exits 2 with an installable message" {
   run env PATH="/usr/bin:/bin" "$(qg_script_path nodejs)" --base origin/main
   [ "$status" -eq 2 ]
   [[ "$output" == *"node"* ]]
-  [[ "$output" == *"instale"* ]] || [[ "$output" == *"install"* ]]
+  [[ "$output" == *"install"* ]] || [[ "$output" == *"install"* ]]
 }
 
-@test "nodejs/qg.sh com QG_BYPASS_REASON sai 0 e emite warning" {
+@test "nodejs/qg.sh with QG_BYPASS_REASON exits 0 and emits a warning" {
   export QG_BYPASS_REASON="teste de bypass"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -250,7 +250,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "nodejs/qg.sh com QG_BYPASS_REASON --format json retorna verdict bypassed" {
+@test "nodejs/qg.sh with QG_BYPASS_REASON --format json returns verdict bypassed" {
   export QG_BYPASS_REASON="teste"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -262,7 +262,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "nodejs/qg.sh fast-path quando so docs mudaram" {
+@test "nodejs/qg.sh fast-path when only docs changed" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -273,7 +273,7 @@ EOF
   git add README.md
   git commit -qm "initial"
   git checkout -qb feature
-  echo "novo conteudo" >> README.md
+  echo "new content" >> README.md
   git add README.md
   git commit -qm "edit docs"
 
@@ -284,7 +284,7 @@ EOF
   rm -rf "$tmp"
 }
 
-@test "nodejs/qg.sh --force-full pula fast-path" {
+@test "nodejs/qg.sh --force-full skips fast-path" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -305,13 +305,13 @@ EOF
   rm -rf "$tmp"
 }
 
-@test "baseline: --baseline-dir inexistente sai 2" {
-  run "$(qg_script_path nodejs)" --base origin/main --baseline-dir /tmp/qg-node-nao-existe-xyz --force-full
+@test "baseline: --baseline-dir nonexistent exits 2" {
+  run "$(qg_script_path nodejs)" --base origin/main --baseline-dir /tmp/qg-node-does-not-exist-xyz --force-full
   [ "$status" -eq 2 ]
   [[ "$output" == *"baseline"* ]] || [[ "$output" == *"--baseline-dir"* ]]
 }
 
-@test "baseline: linguagem ausente no baseline emite warning + exit 0" {
+@test "baseline: language absent in baseline emits a warning + exit 0" {
   local tmp baseline
   tmp=$(qg_tmp_dir)
   baseline=$(qg_tmp_dir)
@@ -331,12 +331,12 @@ EOF
 
   run "$(qg_script_path nodejs)" --base master --baseline-dir "$baseline"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"linguagem ausente"* ]] || [[ "$output" == *"skipped"* ]]
+  [[ "$output" == *"language absent"* ]] || [[ "$output" == *"skipped"* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp" "$baseline"
 }
 
-@test "count_fmt: 0 no fixture baseline" {
+@test "count_fmt: 0 in the baseline fixture" {
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -345,7 +345,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_fmt: > 0 no fixture regressed" {
+@test "count_fmt: > 0 in the regressed fixture" {
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -354,7 +354,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_lint: 0 no baseline" {
+@test "count_lint: 0 in baseline" {
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -363,7 +363,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_lint: > 0 no regressed" {
+@test "count_lint: > 0 in regressed" {
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -372,7 +372,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_build: 0 no baseline" {
+@test "count_build: 0 in baseline" {
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -381,7 +381,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_test: 0 no baseline" {
+@test "count_test: 0 in baseline" {
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -390,7 +390,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_test: 1 no regressed" {
+@test "count_test: 1 in regressed" {
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -399,7 +399,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_complexity: 0 no baseline" {
+@test "count_complexity: 0 in baseline" {
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -408,7 +408,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_complexity: > 0 no regressed" {
+@test "count_complexity: > 0 in regressed" {
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -417,7 +417,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "measure_coverage: 100% no baseline" {
+@test "measure_coverage: 100% in baseline" {
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -426,7 +426,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "measure_coverage: < 100% no regressed" {
+@test "measure_coverage: < 100% in regressed" {
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -435,7 +435,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "e2e: rodando regressed contra baseline -> exit 1, JSON com verdict regressed" {
+@test "e2e: running regressed against baseline -> exit 1, JSON with verdict regressed" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path nodejs regressed)"
@@ -451,7 +451,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "e2e: rodando baseline contra ele mesmo -> exit 0" {
+@test "e2e: running baseline against itself -> exit 0" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path nodejs baseline)"
@@ -467,7 +467,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "e2e: --format text mostra tabela com colunas esperadas" {
+@test "e2e: --format text shows the table with expected columns" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path nodejs baseline)"
@@ -478,15 +478,15 @@ EOF
     --format text \
     --force-full
   [ "$status" -eq 0 ]
-  [[ "$output" == *"metrica"* ]]
-  [[ "$output" == *"veredito"* ]]
+  [[ "$output" == *"metric"* ]]
+  [[ "$output" == *"verdict"* ]]
   [[ "$output" == *"fmt"* ]]
   [[ "$output" == *"coverage"* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$logdir"
 }
 
-@test "e2e: 10 runs identicas no regressed devem retornar exit 1 todas as vezes" {
+@test "e2e: 10 identical runs in regressed must return exit 1 every time" {
   for i in $(seq 1 10); do
     local logdir
     logdir=$(qg_tmp_dir)
@@ -503,7 +503,7 @@ EOF
   done
 }
 
-@test "Fix1: count_build com TSX valido + 1 erro de tipo real conta 1 (nao TS17004 fantasma)" {
+@test "Fix1: count_build with valid TSX + 1 real type error counts 1 (not phantom TS17004)" {
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -514,7 +514,7 @@ EOF
   cat > "$tmp/tsconfig.json" <<'EOF'
 { "compilerOptions": { "jsx": "react-jsx", "strict": true } }
 EOF
-  # TSX com JSX valido (compila limpo com --jsx) + UM erro de tipo real.
+  # TSX with valid JSX (compiles clean with --jsx) + ONE real type error.
   cat > "$tmp/App.tsx" <<'EOF'
 export function Greeting(props: { name: string }) {
   return <div className="hello">Hi {props.name}</div>;
@@ -526,17 +526,17 @@ export function Bad() {
 EOF
   result=$(count_build_errors "$tmp" "$logdir/build.log")
   # Sem --jsx isso cuspia 4+ TS17004/TS6142. Com tsconfig.base JSX-capaz: so o
-  # erro de tipo real (string -> number). Aceita 1 (estrito) ou poucos (<5),
-  # NUNCA dezenas de erros fantasma de JSX.
-  [ "$result" -ge 1 ] || { echo "esperava >=1 erro real; got $result"; cat "$logdir/build.log"; return 1; }
-  [ "$result" -lt 5 ] || { echo "erros fantasma de JSX (TS17004) -- got $result"; cat "$logdir/build.log"; return 1; }
+  # real type error (string -> number). Accepts 1 (strict) or a few (<5),
+  # NEVER dozens of phantom JSX errors.
+  [ "$result" -ge 1 ] || { echo "expected >=1 real error; got $result"; cat "$logdir/build.log"; return 1; }
+  [ "$result" -lt 5 ] || { echo "phantom JSX errors (TS17004) -- got $result"; cat "$logdir/build.log"; return 1; }
   if grep -qE 'error TS(17004|6142):' "$logdir/build.log"; then
     echo "ainda emite TS17004/TS6142 (faltou --jsx no ruleset do QG)"; cat "$logdir/build.log"; return 1
   fi
   rm -rf "$tmp" "$logdir"
 }
 
-@test "Fix1: TSX 100% valido -> 0 build errors (prova que JSX nao e contado como erro)" {
+@test "Fix1: TSX 100% valid -> 0 build errors (proves JSX is not counted as an error)" {
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -558,11 +558,11 @@ export function Card({ title, count }: Props) {
 }
 EOF
   result=$(count_build_errors "$tmp" "$logdir/build.log")
-  [ "$result" = "0" ] || { echo "TSX valido deveria dar 0; got $result"; cat "$logdir/build.log"; return 1; }
+  [ "$result" = "0" ] || { echo "valid TSX should be 0; got $result"; cat "$logdir/build.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }
 
-@test "Fix1 tamper: tsconfig do projeto com strict:false e IGNORADO -- gate ainda pega erro strict" {
+@test "Fix1 tamper: project tsconfig with strict:false is IGNORED -- gate still catches the strict error" {
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -581,24 +581,24 @@ export function handler(payload) {
 EOF
   result=$(count_build_errors "$tmp" "$logdir/build.log")
   # Gate impoe strict do QG (ignora strict:false do projeto) -> pega TS7006.
-  [ "$result" -ge 1 ] || { echo "esperava >=1 (strict do QG ignora strict:false do projeto); got $result"; cat "$logdir/build.log"; return 1; }
-  grep -qE 'error TS7006:' "$logdir/build.log" || { echo "esperava TS7006 (noImplicitAny travado pelo QG)"; cat "$logdir/build.log"; return 1; }
+  [ "$result" -ge 1 ] || { echo "expected >=1 (QG strict ignores the project strict:false); got $result"; cat "$logdir/build.log"; return 1; }
+  grep -qE 'error TS7006:' "$logdir/build.log" || { echo "expected TS7006 (noImplicitAny locked by QG)"; cat "$logdir/build.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }
 
-@test "Bug build/: lint/complexity/fmt ignoram diretorios gerados (mede fonte, nao artefato)" {
+@test "Bug build/: lint/complexity/fmt ignore generated directories (measures source, not artifact)" {
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
   cat > "$tmp/package.json" <<'EOF'
 { "name": "my-project", "version": "0.1.0", "private": true }
 EOF
-  # src/ real LIMPO: 0 violacoes de lint/complexity, formatado.
+  # real src/ CLEAN: 0 lint/complexity violations, formatted.
   mkdir -p "$tmp/src"
   cat > "$tmp/src/index.js" <<'EOF'
 export const add = (a, b) => a + b;
 EOF
-  # build/android/* GERADO: bundle minificado lixo com dezenas de violacoes
+  # build/android/* GENERATED: junk minified bundle with dozens of violations
   # (no-undef, no-unused-vars, alta complexidade, sem formatacao).
   mkdir -p "$tmp/build/android"
   {
@@ -614,13 +614,13 @@ EOF
   result_fmt=$(count_fmt_errors "$tmp" "$logdir/fmt.log")
 
   # Antes do fix: lint/complexity contavam centenas (100% build/). Depois: 0.
-  [ "$result_lint" = "0" ] || { echo "lint deveria ser 0 (build/ ignorado); got $result_lint"; cat "$logdir/lint.log"; return 1; }
-  [ "$result_cx" = "0" ] || { echo "complexity deveria ser 0 (build/ ignorado); got $result_cx"; cat "$logdir/cx.log"; return 1; }
-  [ "$result_fmt" = "0" ] || { echo "fmt deveria ser 0 (so src/ limpo, build/ ignorado); got $result_fmt"; cat "$logdir/fmt.log"; return 1; }
+  [ "$result_lint" = "0" ] || { echo "lint should be 0 (build/ ignored); got $result_lint"; cat "$logdir/lint.log"; return 1; }
+  [ "$result_cx" = "0" ] || { echo "complexity should be 0 (build/ ignored); got $result_cx"; cat "$logdir/cx.log"; return 1; }
+  [ "$result_fmt" = "0" ] || { echo "fmt should be 0 (only clean src/, build/ ignored); got $result_fmt"; cat "$logdir/fmt.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }
 
-@test "Bug build/: violacoes REAIS em src/ ainda sao contadas (exclusao nao mascara fonte)" {
+@test "Bug build/: REAL violations in src/ are still counted (the exclusion does not mask source)" {
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -628,16 +628,16 @@ EOF
 { "name": "x", "version": "0.1.0", "private": true }
 EOF
   mkdir -p "$tmp/src" "$tmp/build"
-  # src/ com violacao real de lint.
+  # src/ with a real lint violation.
   echo 'export const y = undefinedThing;' > "$tmp/src/bad.js"
-  # build/ ignorado, nao deve somar.
+  # build/ ignored, must not add up.
   echo 'var z=alsoUndefined' > "$tmp/build/bundle.min.js"
   result=$(count_lint_errors "$tmp" "$logdir/lint.log")
-  [ "$result" -gt 0 ] || { echo "esperava >0 (violacao real em src/); got $result"; cat "$logdir/lint.log"; return 1; }
+  [ "$result" -gt 0 ] || { echo "expected >0 (real violation in src/); got $result"; cat "$logdir/lint.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }
 
-@test "Bug build/ tamper: .eslintignore vazio do projeto NAO afrouxa -- QG ignora build/ pelo ignore canonico" {
+@test "Bug build/ tamper: empty project .eslintignore does NOT loosen -- QG ignores build/ via the canonical ignore" {
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -659,12 +659,12 @@ EOF
   result_fmt=$(count_fmt_errors "$tmp" "$logdir/fmt.log")
   # QG ignora o .eslintignore/.prettierignore do projeto e ainda exclui build/
   # pelo ignore canonico embarcado -> 0.
-  [ "$result_lint" = "0" ] || { echo "tamper: lint deveria ser 0 (ignore canonico do QG, nao do projeto); got $result_lint"; cat "$logdir/lint.log"; return 1; }
-  [ "$result_fmt" = "0" ] || { echo "tamper: fmt deveria ser 0; got $result_fmt"; cat "$logdir/fmt.log"; return 1; }
+  [ "$result_lint" = "0" ] || { echo "tamper: lint should be 0 (QG canonical ignore, not the project's); got $result_lint"; cat "$logdir/lint.log"; return 1; }
+  [ "$result_fmt" = "0" ] || { echo "tamper: fmt should be 0; got $result_fmt"; cat "$logdir/fmt.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }
 
-@test "tamper-resistance: eslint ignora .eslintrc afrouxado do projeto (gate usa ruleset do QG)" {
+@test "tamper-resistance: eslint ignores the project's loosened .eslintrc (gate uses QG's ruleset)" {
   source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -678,6 +678,6 @@ EOF
 EOF
   result=$(count_lint_errors "$tmp" "$logdir/lint.log")
   # Gate ignora (--no-config-lookup --config QG) e ainda acusa no-unused-vars.
-  [ "$result" -gt 0 ] || { echo "esperava >0 mesmo com .eslintrc afrouxado; got $result"; cat "$logdir/lint.log"; return 1; }
+  [ "$result" -gt 0 ] || { echo "expected >0 even with a loosened .eslintrc; got $result"; cat "$logdir/lint.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }
