@@ -1,41 +1,41 @@
-# Quality Gate -- web (HTML + CSS estatico puro)
+# Quality Gate -- web (pure static HTML + CSS)
 
-Documentacao especifica do gate `web`. Para o contrato comum, ver
+`web`-specific gate documentation. For the common contract, see
 [`../contract.md`](../contract.md).
 
-## Escopo
+## Scope
 
-O gate `web` cobre **sites estaticos puros**: HTML + CSS/SCSS sem build
-system de front-end. Mede **somente** `fmt` + `lint`.
+The `web` gate covers **pure static sites**: HTML + CSS/SCSS without a
+front-end build system. It measures **only** `fmt` + `lint`.
 
-A sentinela de presenca (`--detect`) eh: existe `*.html` / `*.htm` /
-`*.css` / `*.scss` na raiz do projeto **E NAO existe `package.json`**.
+The presence sentinel (`--detect`) is: there is a `*.html` / `*.htm` /
+`*.css` / `*.scss` at the project root **AND there is NO `package.json`**.
 
-### React / Vue / Angular / Svelte NAO usam este gate
+### React / Vue / Angular / Svelte do NOT use this gate
 
-Projeto com `package.json` (mesmo que seja React, Vue, etc.) **e um
-projeto nodejs** — coberto por [`nodejs/qg.sh`](nodejs.md), que ja roda
-prettier/eslint/tsc sobre HTML/CSS/JSX/TS dele. O gate `web` so dispara
-quando NAO ha `package.json` (estatico puro). Regras especificas de
-framework entram no **ruleset do QG** (`nodejs/rules/`), nunca no config
-do projeto-alvo (tamper-resistance — ver `../contract.md`).
+A project with a `package.json` (even if it is React, Vue, etc.) **is a
+nodejs project** -- covered by [`nodejs/qg.sh`](nodejs.md), which already runs
+prettier/eslint/tsc over its HTML/CSS/JSX/TS. The `web` gate only fires
+when there is NO `package.json` (pure static). Framework-specific rules
+go into the **QG ruleset** (`nodejs/rules/`), never into the target
+project's config (tamper-resistance -- see `../contract.md`).
 
 ## Build system
 
-Nao ha build system. O gate apenas verifica formatacao e lint dos
-arquivos estaticos. Ferramentas via `npx --yes` (nao exige instalacao
-global): `prettier`, `stylelint`, `htmlhint`.
+There is no build system. The gate only checks the formatting and lint of
+the static files. Tools via `npx --yes` (no global install required):
+`prettier`, `stylelint`, `htmlhint`.
 
-A sentinela de baseline-ausente reusa `qg_lang_present` (HTML/CSS na
-raiz E sem `package.json`). Ausente no baseline -> warning + exit 0.
+The baseline-absent sentinel reuses `qg_lang_present` (HTML/CSS at the
+root AND no `package.json`). Absent in the baseline -> warning + exit 0.
 
-## Pre-requisitos com instalacao
+## Prerequisites with install
 
 ### macOS
 
 ```bash
 brew install node jq
-# prettier / stylelint / htmlhint sao baixados sob demanda via 'npx --yes'.
+# prettier / stylelint / htmlhint are downloaded on demand via 'npx --yes'.
 ```
 
 ### Linux (Ubuntu/Debian)
@@ -45,60 +45,60 @@ sudo apt install -y nodejs npm jq
 # prettier / stylelint / htmlhint via 'npx --yes' (Node 18+).
 ```
 
-## Metricas -- o que cada uma mede em web
+## Metrics -- what each one measures in web
 
-| Metrica | Ferramenta | O que conta |
+| Metric | Tool | What it counts |
 |---|---|---|
-| `fmt` | `prettier --check` (HTML+CSS+SCSS) | arquivos cujo estilo diverge do `.prettierrc.json` canonico do QG |
-| `lint` | `stylelint` (CSS/SCSS) + `htmlhint` (HTML) | soma de erros de lint dos dois (regras canonicas do QG) |
+| `fmt` | `prettier --check` (HTML+CSS+SCSS) | files whose style diverges from QG's canonical `.prettierrc.json` |
+| `lint` | `stylelint` (CSS/SCSS) + `htmlhint` (HTML) | sum of lint errors from both (QG canonical rules) |
 
-`fmt`/`lint` seguem a regra de regressao padrao do contrato: PR falha se
+`fmt`/`lint` follow the contract's standard regression rule: the PR fails if
 `pr > base`.
 
-## Metricas omitidas (e por que)
+## Omitted metrics (and why)
 
-| Metrica | Por que omitida |
+| Metric | Why omitted |
 |---|---|
-| `build` | HTML/CSS estatico nao tem etapa de build/compilacao. |
-| `test`  | Nao ha conceito de teste unitario para markup/estilo estatico. |
-| `complexity` | Nao ha metrica canonica de complexidade ciclomatica para HTML/CSS. |
-| `coverage` | Nao ha execucao de codigo -> nao ha cobertura de linhas. |
+| `build` | Static HTML/CSS has no build/compilation step. |
+| `test`  | There is no unit-test concept for static markup/style. |
+| `complexity` | There is no canonical cyclomatic-complexity metric for HTML/CSS. |
+| `coverage` | There is no code execution -> no line coverage. |
 
-Conforme o contrato, metricas omitidas **nao aparecem** na tabela texto
-nem no array `metrics` do JSON (nunca `0`/`null` — isso falsificaria o
-resultado). Mesmo principio do Swift, que omite `complexity`. A linha
-correspondente no `README.md` raiz e marcada com `*`.
+Per the contract, omitted metrics **do not appear** in the text table
+nor in the JSON `metrics` array (never `0`/`null` -- that would falsify the
+result). Same principle as Swift, which omits `complexity`. The
+corresponding line in the root `README.md` is marked with `*`.
 
 ## Tamper-resistance
 
-O gate impoe o PROPRIO ruleset (ver `../contract.md`, secao
+The gate enforces ITS OWN ruleset (see `../contract.md`, section
 "Tamper-resistance"):
 
 - `prettier --config <QG>/web/rules/.prettierrc.json --no-editorconfig`
-  — ignora `.prettierrc`/`.editorconfig` do projeto-alvo.
-- `stylelint --config <QG>/web/rules/.stylelintrc.json` — `--config`
-  com arquivo explicito sobrepoe qualquer `.stylelintrc` do projeto.
-- `htmlhint --config <QG>/web/rules/.htmlhintrc` — ignora `.htmlhintrc`
-  do projeto.
+  -- ignores the target project's `.prettierrc`/`.editorconfig`.
+- `stylelint --config <QG>/web/rules/.stylelintrc.json` -- `--config`
+  with an explicit file overrides any project `.stylelintrc`.
+- `htmlhint --config <QG>/web/rules/.htmlhintrc` -- ignores the project's
+  `.htmlhintrc`.
 
-Override do ruleset **so** via env externa `QG_RULESET_DIR` (setada por
-quem RODA o gate / pipeline), NUNCA lida de `.qg.yaml` ou arquivo do
-projeto-alvo.
+Ruleset override **only** via the external env var `QG_RULESET_DIR` (set by
+whoever RUNS the gate / pipeline), NEVER read from `.qg.yaml` or a target
+project file.
 
 ## Troubleshooting
 
-| Sintoma | Causa provavel | Solucao |
+| Symptom | Likely cause | Fix |
 |---|---|---|
-| `ferramenta faltando: npx` | Node nao instalado | Instale Node 18+ (`brew install node` / `apt install nodejs npm`). |
-| `--detect` sai 1 num site estatico | Existe `package.json` na raiz | Projeto e nodejs — use o gate nodejs. Se for estatico de verdade, remova/realoque o `package.json`. |
-| `fmt` sempre alto e nao reduz | prettier reformataria muitos arquivos | Rode `npx prettier --write` localmente e commite (o gate so verifica, nao corrige). |
+| `missing tool: npx` | Node not installed | Install Node 18+ (`brew install node` / `apt install nodejs npm`). |
+| `--detect` exits 1 on a static site | There is a `package.json` at the root | The project is nodejs -- use the nodejs gate. If it is really static, remove/relocate the `package.json`. |
+| `fmt` always high and does not drop | prettier would reformat many files | Run `npx prettier --write` locally and commit (the gate only checks, it does not fix). |
 
-## Limitacoes conhecidas (V1)
+## Known limitations (V1)
 
-- So estatico puro (sem `package.json`). Sites com bundler (Vite, etc.)
-  sao nodejs, nao web.
-- Conteudo dos `rules/` sao defaults da comunidade; calibracao fina e V2.
-- HTML severamente malformado pode fazer o prettier emitir `[error]`
-  (sintaxe) — isso ainda conta como divergencia de `fmt` quando ha
-  arquivos `[warn]` no mesmo run; htmlhint reporta o problema estrutural
+- Pure static only (no `package.json`). Sites with a bundler (Vite, etc.)
+  are nodejs, not web.
+- The content of `rules/` is community defaults; fine calibration is V2.
+- Severely malformed HTML can make prettier emit `[error]`
+  (syntax) -- this still counts as a `fmt` divergence when there are
+  `[warn]` files in the same run; htmlhint reports the structural problem
   via `lint`.

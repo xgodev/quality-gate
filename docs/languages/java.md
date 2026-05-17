@@ -1,20 +1,20 @@
 # Quality Gate -- Java
 
-Documentacao especifica do gate Java. Para o contrato comum, ver [`../contract.md`](../contract.md).
+Java-specific gate documentation. For the common contract, see [`../contract.md`](../contract.md).
 
 ## Build system
 
-Quality Gate Java assume **Maven (`mvn`) + `pom.xml`** como build canonico em V1. Gradle eh detectado pela sentinela (`build.gradle`/`build.gradle.kts`) -- a sentinela so previne "linguagem ausente", mas as `count_build_errors` e `count_test_failures` rodam `mvn`. Em projeto-alvo Gradle, essas metricas precisam ser adaptadas (futuro).
+Quality Gate Java assumes **Maven (`mvn`) + `pom.xml`** as the canonical build in V1. Gradle is detected by the sentinel (`build.gradle`/`build.gradle.kts`) -- the sentinel only prevents "language absent", but `count_build_errors` and `count_test_failures` run `mvn`. In a Gradle target project, these metrics need to be adapted (future).
 
-A sentinela de presenca eh um destes na raiz: `pom.xml`, `build.gradle` ou `build.gradle.kts`. Se nenhum existir no baseline, gate emite warning e sai 0.
+The presence sentinel is one of these at the root: `pom.xml`, `build.gradle` or `build.gradle.kts`. If none exists in the baseline, the gate emits a warning and exits 0.
 
-## Pre-requisitos com instalacao
+## Prerequisites with install
 
 ### macOS
 
 ```bash
 brew install openjdk@21 maven google-java-format pmd jq
-# Garanta que JAVA_HOME aponta para a JDK instalada.
+# Make sure JAVA_HOME points to the installed JDK.
 ```
 
 ### Linux (Ubuntu/Debian)
@@ -22,7 +22,7 @@ brew install openjdk@21 maven google-java-format pmd jq
 ```bash
 sudo apt install openjdk-17-jdk maven jq
 
-# google-java-format (jar standalone)
+# google-java-format (standalone jar)
 GJF_VERSION=1.22.0
 curl -fsSLO "https://github.com/google/google-java-format/releases/download/v${GJF_VERSION}/google-java-format-${GJF_VERSION}-all-deps.jar"
 echo '#!/bin/sh
@@ -37,67 +37,67 @@ unzip -q pmd-dist-${PMD_VERSION}-bin.zip -d /opt
 sudo ln -sf "/opt/pmd-bin-${PMD_VERSION}/bin/pmd" /usr/local/bin/pmd
 ```
 
-## Metricas -- o que cada uma mede em Java
+## Metrics -- what each one measures in Java
 
-### `fmt` -- formatacao
+### `fmt` -- formatting
 
-Roda `google-java-format --dry-run <file>` em cada `.java` sob `src/`. Conta arquivos cuja saida do `--dry-run` eh nao-vazia (significa que o arquivo precisa ser reformatado).
+Runs `google-java-format --dry-run <file>` on each `.java` under `src/`. Counts files whose `--dry-run` output is non-empty (meaning the file needs to be reformatted).
 
-**Configuracao:** `google-java-format` nao eh configuravel por design (estilo unico). Use `--aosp` se o time prefere AOSP style; o gate atual nao distingue.
+**Configuration:** `google-java-format` is not configurable by design (single style). Use `--aosp` if the team prefers AOSP style; the current gate does not distinguish.
 
-**Como interpretar regressao:** PR introduziu arquivo desformatado. Solucao: `google-java-format -i src/main/java/**/*.java`.
+**How to interpret a regression:** the PR introduced an unformatted file. Fix: `google-java-format -i src/main/java/**/*.java`.
 
 ### `lint` -- pmd errorprone
 
-Roda `pmd check --no-cache --no-progress -R category/java/errorprone.xml -d src/main/java -f text`. Conta linhas no formato `file.java:line: RuleName: msg`.
+Runs `pmd check --no-cache --no-progress -R category/java/errorprone.xml -d src/main/java -f text`. Counts lines in the format `file.java:line: RuleName: msg`.
 
-A categoria `errorprone` foca em bugs reais (NPE, equals/hashCode quebrado, AvoidLiteralsInIfCondition, etc) e raramente gera ruido. Para regras de estilo, use `category/java/codestyle.xml` no `.qg.yaml`/local override.
+The `errorprone` category focuses on real bugs (NPE, broken equals/hashCode, AvoidLiteralsInIfCondition, etc.) and rarely produces noise. For style rules, use `category/java/codestyle.xml` in the `.qg.yaml`/local override.
 
-**Configuracao:** se voce precisa de regras adicionais, mantenha um arquivo `pmd-ruleset.xml` no projeto e ajuste o gate (ou adicione metrica extra).
+**Configuration:** if you need additional rules, keep a `pmd-ruleset.xml` file in the project and adjust the gate (or add an extra metric).
 
-**Como interpretar regressao:** PR introduziu issue que pmd detecta. Solucao: ler `target/qg-logs/pr-lint.log`, identificar regra, fixar codigo. `@SuppressWarnings("PMD.RuleName")` so com causa raiz documentada.
+**How to interpret a regression:** the PR introduced an issue pmd detects. Fix: read `target/qg-logs/pr-lint.log`, identify the rule, fix the code. `@SuppressWarnings("PMD.RuleName")` only with a documented root cause.
 
-### `build` -- compilacao
+### `build` -- compilation
 
-Roda `mvn -q -B -DskipTests compile`. Conta linhas `[ERROR] /path/Foo.java:[L,C]` (formato padrao do compilador via maven). Se o exit code eh 0, retorna 0 sem parsing.
+Runs `mvn -q -B -DskipTests compile`. Counts `[ERROR] /path/Foo.java:[L,C]` lines (the standard compiler format via maven). If the exit code is 0, returns 0 without parsing.
 
-**Como interpretar regressao:** codigo nao compila. Pouco provavel passar pelo dev e chegar no gate; geralmente conflito de merge ou ABI break em dependencia.
+**How to interpret a regression:** the code does not compile. Unlikely to slip past the dev and reach the gate; usually a merge conflict or an ABI break in a dependency.
 
-### `test` -- testes falhando
+### `test` -- failing tests
 
-Roda `mvn -q -B -Dmaven.test.failure.ignore=true test`. Conta `Failures + Errors` do RESUMO FINAL ("Tests run: T, Failures: F, Errors: E, Skipped: S"). O gate descarta linhas intermediarias por classe e usa apenas a ultima ocorrencia (resumo total).
+Runs `mvn -q -B -Dmaven.test.failure.ignore=true test`. Counts `Failures + Errors` from the FINAL SUMMARY ("Tests run: T, Failures: F, Errors: E, Skipped: S"). The gate discards intermediate per-class lines and uses only the last occurrence (total summary).
 
-`-Dmaven.test.failure.ignore=true` eh essencial para nao abortar a build quando um teste falha (queremos o report completo).
+`-Dmaven.test.failure.ignore=true` is essential so the build does not abort when a test fails (we want the full report).
 
-**Tool error vs regressao:** se o surefire trava (OOM, JVM crash), nao gera linha de "Tests run" final -- nao conta como falha de teste. Esses casos sao tool error e o usuario precisa investigar.
+**Tool error vs regression:** if surefire hangs (OOM, JVM crash), it does not produce a final "Tests run" line -- it does not count as a test failure. These cases are a tool error and the user must investigate.
 
-**Como interpretar regressao:** testes que passavam falham agora. Solucao: rodar `mvn test`, ler `target/surefire-reports/`, fixar.
+**How to interpret a regression:** tests that passed now fail. Fix: run `mvn test`, read `target/surefire-reports/`, fix it.
 
-`@Disabled` (JUnit 5) ou `@Ignore` (JUnit 4) eh proibido como mitigacao (ver [`../contract.md#forbidden`](../contract.md#forbidden)).
+`@Disabled` (JUnit 5) or `@Ignore` (JUnit 4) is forbidden as a mitigation (see [`../contract.md#forbidden`](../contract.md#forbidden)).
 
-### `complexity` -- complexidade ciclomatica
+### `complexity` -- cyclomatic complexity
 
-Roda `pmd check -R category/java/design.xml/CyclomaticComplexity -d src/main/java`. Conta matches `CyclomaticComplexity:`.
+Runs `pmd check -R category/java/design.xml/CyclomaticComplexity -d src/main/java`. Counts `CyclomaticComplexity:` matches.
 
-**Threshold:** PMD default eh `methodReportLevel=10` para metodo individual e `classReportLevel=80` para classe. Para customizar, mantenha um ruleset proprio.
+**Threshold:** PMD default is `methodReportLevel=10` for an individual method and `classReportLevel=80` for a class. To customize, keep your own ruleset.
 
-**Como interpretar regressao:** PR introduziu metodo acima do threshold. Solucoes: extrair metodos privados; usar polimorfismo (Strategy pattern) em vez de cadeia `if/else`; usar early-return.
+**How to interpret a regression:** the PR introduced a method above the threshold. Fixes: extract private methods; use polymorphism (Strategy pattern) instead of an `if/else` chain; use early-return.
 
-### `coverage` -- cobertura de linhas
+### `coverage` -- line coverage
 
-Roda o `mvn test` que ja inclui `jacoco:report` (configurado no `pom.xml`) e parsea `target/site/jacoco/jacoco.xml`. Calcula `% covered` do contador raiz `<counter type="LINE" missed="M" covered="C"/>`.
+Runs the `mvn test` that already includes `jacoco:report` (configured in `pom.xml`) and parses `target/site/jacoco/jacoco.xml`. Computes `% covered` from the root counter `<counter type="LINE" missed="M" covered="C"/>`.
 
-**Margem de tolerancia:** default 1.0pp (ver `--cov-margin` ou `.qg.yaml: cov_margin`).
+**Tolerance margin:** default 1.0pp (see `--cov-margin` or `.qg.yaml: cov_margin`).
 
-**Atencao:** jacoco conta o construtor default (linha de declaracao da classe) como linha executavel. Para classes que so tem metodos `static`, isso reduz coverage mesmo quando todos os metodos publicos estao 100% testados. Considere ajustar a margem em `.qg.yaml` para projetos affected.
+**Note:** jacoco counts the default constructor (the class declaration line) as an executable line. For classes that only have `static` methods, this reduces coverage even when all public methods are 100% tested. Consider adjusting the margin in `.qg.yaml` for affected projects.
 
-**Como interpretar regressao:** PR adicionou codigo sem teste correspondente. Solucoes: adicionar teste; ou (com criterio) aumentar margem em `.qg.yaml`.
+**How to interpret a regression:** the PR added code without a corresponding test. Fixes: add a test; or (with discretion) raise the margin in `.qg.yaml`.
 
-## Troubleshooting comum
+## Common troubleshooting
 
-### `jacoco.xml` nao foi gerado apos `mvn test`
+### `jacoco.xml` was not generated after `mvn test`
 
-O projeto-alvo precisa ter `jacoco-maven-plugin` configurado com a goal `report` em alguma fase (`test` recomendado). Exemplo minimo:
+The target project needs `jacoco-maven-plugin` configured with the `report` goal in some phase (`test` recommended). Minimal example:
 
 ```xml
 <plugin>
@@ -111,41 +111,41 @@ O projeto-alvo precisa ter `jacoco-maven-plugin` configurado com a goal `report`
 </plugin>
 ```
 
-Sem isso, `coverage` retorna 0.
+Without this, `coverage` returns 0.
 
-### `mvn` muito lento
+### `mvn` very slow
 
-Caches do Maven (`~/.m2/repository`) nao estao populados. Rode `mvn -q -B dependency:resolve` uma vez para baixar deps; subsequentes sao rapidas.
+The Maven caches (`~/.m2/repository`) are not populated. Run `mvn -q -B dependency:resolve` once to download deps; subsequent runs are fast.
 
-### `pmd` exit nao-zero mas mensagem confusa
+### `pmd` exits non-zero but with a confusing message
 
-PMD 7.x mudou CLI. Use `pmd check` (nao `pmd-cli check`). Se voce instalou pmd 6.x, atualize.
+PMD 7.x changed the CLI. Use `pmd check` (not `pmd-cli check`). If you installed pmd 6.x, update.
 
-### Baseline cache stale apos mudar branch base
+### Stale baseline cache after changing the base branch
 
 ```bash
 ~/.quality-gate/java/qg.sh --base origin/main --refresh-baseline
-# OU
+# OR
 rm -rf /tmp/qg-baseline-java
 ```
 
-### `git archive` falha com "fatal: not a valid object name"
+### `git archive` fails with "fatal: not a valid object name"
 
-A base ref nao existe localmente. Solucao:
+The base ref does not exist locally. Fix:
 
 ```bash
 git fetch origin
 ```
 
-## Metricas omitidas
+## Omitted metrics
 
-Nenhuma. Java suporta as 6 metricas reservadas com ferramentas oficiais (google-java-format, pmd, mvn compile/test, jacoco).
+None. Java supports the 6 reserved metrics with official tools (google-java-format, pmd, mvn compile/test, jacoco).
 
-## Metricas extras
+## Extra metrics
 
-Nenhuma em V1. Candidatos futuros:
-- `vuln` via `dependency-check-maven` -- vulnerabilidades em deps.
-- `spotbugs` -- bugs estaticos (overlap parcial com pmd; usar como complemento).
-- `architecture` via `archunit` -- regras de camadas.
+None in V1. Future candidates:
+- `vuln` via `dependency-check-maven` -- vulnerabilities in deps.
+- `spotbugs` -- static bugs (partial overlap with pmd; use as a complement).
+- `architecture` via `archunit` -- layering rules.
 
-Para adicionar, seguir contrato (secao "Estender") e `.claude/skills/add-quality-gate/`.
+To add, follow the contract (section "Extending") and `skills/add-quality-gate/`.

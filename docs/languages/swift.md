@@ -1,20 +1,20 @@
 # Quality Gate -- Swift
 
-Documentacao especifica do gate Swift. Para o contrato comum, ver [`../contract.md`](../contract.md).
+Swift-specific gate documentation. For the common contract, see [`../contract.md`](../contract.md).
 
 ## Build system
 
-Quality Gate Swift assume **SwiftPM (`swift build`/`swift test`) + `Package.swift`** como build canonico em V1. Xcode-only projects (sem `Package.swift`) NAO sao suportados em V1 -- a sentinela detecta `.xcodeproj`/`.xcworkspace` no fast-path mas `swift build` falha sem `Package.swift`.
+Quality Gate Swift assumes **SwiftPM (`swift build`/`swift test`) + `Package.swift`** as the canonical build in V1. Xcode-only projects (without `Package.swift`) are NOT supported in V1 -- the sentinel detects `.xcodeproj`/`.xcworkspace` in the fast-path but `swift build` fails without `Package.swift`.
 
-A sentinela de presenca eh `Package.swift` na raiz. Se ausente no baseline, gate emite warning e sai 0.
+The presence sentinel is `Package.swift` at the root. If absent in the baseline, the gate emits a warning and exits 0.
 
-## Pre-requisitos com instalacao
+## Prerequisites with install
 
 ### macOS
 
 ```bash
 brew install swift-format swiftlint jq
-# swift + xcrun ja vem com Xcode (ou Command Line Tools: xcode-select --install).
+# swift + xcrun already come with Xcode (or Command Line Tools: xcode-select --install).
 ```
 
 ### Linux (Ubuntu/Debian)
@@ -24,7 +24,7 @@ brew install swift-format swiftlint jq
 curl -fsSL https://download.swift.org/swift-5.10-release/ubuntu2204/swift-5.10-RELEASE/swift-5.10-RELEASE-ubuntu22.04.tar.gz | sudo tar -xz -C /opt
 export PATH=/opt/swift-5.10-RELEASE-ubuntu22.04/usr/bin:$PATH
 
-# swift-format e swiftlint precisam ser compilados do source no Linux:
+# swift-format and swiftlint must be built from source on Linux:
 git clone --depth 1 -b 510.1.0 https://github.com/apple/swift-format.git /tmp/swift-format
 ( cd /tmp/swift-format && swift build -c release && sudo cp .build/release/swift-format /usr/local/bin/ )
 
@@ -34,23 +34,23 @@ git clone --depth 1 -b 0.55.1 https://github.com/realm/SwiftLint.git /tmp/SwiftL
 sudo apt install -y jq
 ```
 
-**Atencao Linux:** o gate usa `xcrun llvm-cov` para coverage. Em Linux, substitua por `llvm-cov` standalone (instale via `apt install llvm`). O gate atual NAO faz essa substituicao automatica.
+**Linux note:** the gate uses `xcrun llvm-cov` for coverage. On Linux, replace it with standalone `llvm-cov` (install via `apt install llvm`). The current gate does NOT do this substitution automatically.
 
-## Metricas -- o que cada uma mede em Swift
+## Metrics -- what each one measures in Swift
 
-### `fmt` -- formatacao
+### `fmt` -- formatting
 
-Roda `swift-format lint --strict <file>` em cada `.swift` sob o diretorio (excluindo `.build`). Conta arquivos cuja saida do `--strict` eh nao-vazia (warnings/errors do swift-format viram exit !=0 com `--strict`).
+Runs `swift-format lint --strict <file>` on each `.swift` under the directory (excluding `.build`). Counts files whose `--strict` output is non-empty (swift-format warnings/errors become exit !=0 with `--strict`).
 
-**Configuracao:** o projeto pode ter `.swift-format` na raiz (JSON com chaves como `lineLength`, `indentation`, `multiElementCollectionTrailingCommas`). Sem ele, defaults do swift-format (que pedem trailing comma -- pode conflitar com swiftlint; recomendado `multiElementCollectionTrailingCommas: false`).
+**Configuration:** the project may have a `.swift-format` at the root (JSON with keys like `lineLength`, `indentation`, `multiElementCollectionTrailingCommas`). Without it, swift-format defaults (which ask for a trailing comma -- may conflict with swiftlint; `multiElementCollectionTrailingCommas: false` recommended).
 
-**Como interpretar regressao:** PR introduziu arquivo desformatado. Solucao: `swift-format format -i Sources/**/*.swift Tests/**/*.swift`.
+**How to interpret a regression:** the PR introduced an unformatted file. Fix: `swift-format format -i Sources/**/*.swift Tests/**/*.swift`.
 
 ### `lint` -- swiftlint
 
-Roda `swiftlint lint --no-cache --quiet`. Conta linhas no formato `path:linha:col: warning|error: msg (rule)`.
+Runs `swiftlint lint --no-cache --quiet`. Counts lines in the format `path:line:col: warning|error: msg (rule)`.
 
-**Configuracao:** o projeto deve ter `.swiftlint.yml` para definir regras desejadas. Os fixtures usam:
+**Configuration:** the project must have a `.swiftlint.yml` to define the desired rules. The fixtures use:
 
 ```yaml
 excluded:
@@ -63,89 +63,89 @@ opt_in_rules:
   - force_unwrapping
 ```
 
-**Como interpretar regressao:** PR introduziu issue que swiftlint detecta. Solucao: ler `target/qg-logs/pr-lint.log`, decidir entre fix de codigo ou `// swiftlint:disable:next <rule>` com causa raiz documentada.
+**How to interpret a regression:** the PR introduced an issue swiftlint detects. Fix: read `target/qg-logs/pr-lint.log`, decide between a code fix or `// swiftlint:disable:next <rule>` with a documented root cause.
 
-### `build` -- compilacao
+### `build` -- compilation
 
-Roda `swift build`. Conta linhas `file:linha:col: error:` no log. Se exit code eh 0, retorna 0.
+Runs `swift build`. Counts `file:line:col: error:` lines in the log. If the exit code is 0, returns 0.
 
-**Como interpretar regressao:** codigo nao compila. Pouco provavel passar pelo dev e chegar no gate.
+**How to interpret a regression:** the code does not compile. Unlikely to slip past the dev and reach the gate.
 
-### `test` -- testes falhando
+### `test` -- failing tests
 
-Roda `swift test --enable-code-coverage`. Conta o numero N do resumo final `Executed N tests, with F failures (UF unexpected)`. O gate pega a ULTIMA ocorrencia de "with X failures" (resumo "All tests").
+Runs `swift test --enable-code-coverage`. Counts the number N from the final summary `Executed N tests, with F failures (UF unexpected)`. The gate takes the LAST occurrence of "with X failures" (the "All tests" summary).
 
-`--enable-code-coverage` nesse passo evita re-buildar quando `measure_coverage` rodar depois (idempotente).
+`--enable-code-coverage` in this step avoids re-building when `measure_coverage` runs later (idempotent).
 
-**Tool error vs regressao:** se `swift test` trava ou crashea o runner antes do summary, nao gera linha "with X failures" -- nao conta como falha de teste. Esses casos sao tool error e o usuario precisa investigar.
+**Tool error vs regression:** if `swift test` hangs or crashes the runner before the summary, it does not produce a "with X failures" line -- it does not count as a test failure. These cases are a tool error and the user must investigate.
 
-**Como interpretar regressao:** testes que passavam falham agora. Solucao: rodar `swift test --filter <NomeTeste>`, ler erro, fixar.
+**How to interpret a regression:** tests that passed now fail. Fix: run `swift test --filter <TestName>`, read the error, fix it.
 
-### `complexity` -- OMITIDA
+### `complexity` -- OMITTED
 
-Swift NAO tem ferramenta canonica estavel para complexidade ciclomatica de funcoes:
+Swift has NO stable canonical tool for function cyclomatic complexity:
 
-- `swiftlint cyclomatic_complexity` existe, mas o threshold (`warning: 10, error: 20` por padrao) e o conjunto de regras que constituem "complexity" variam entre versoes de swiftlint.
-- `swift-format` nao mede complexidade.
-- `lizard` (multi-language) suporta Swift mas eh um pre-req extra que nao faz parte do toolchain padrao.
+- `swiftlint cyclomatic_complexity` exists, but the threshold (`warning: 10, error: 20` by default) and the set of rules that constitute "complexity" vary between swiftlint versions.
+- `swift-format` does not measure complexity.
+- `lizard` (multi-language) supports Swift but is an extra prereq that is not part of the standard toolchain.
 
-**Decisao:** OMITIR `complexity` em V1, conforme documentado em [`../contract.md`](../contract.md) -- linguagem omite metrica reservada documentando aqui o porque, nao aparece no JSON nem na tabela texto.
+**Decision:** OMIT `complexity` in V1, as documented in [`../contract.md`](../contract.md) -- a language omits a reserved metric by documenting the why here; it does not appear in the JSON nor in the text table.
 
-Se voce precisa medir complexity em projeto Swift, considere adicionar como **metrica extra** chamada `cyclomatic` via `swiftlint --enable-rule cyclomatic_complexity` (ver "Metricas extras" abaixo).
+If you need to measure complexity in a Swift project, consider adding it as an **extra metric** named `cyclomatic` via `swiftlint --enable-rule cyclomatic_complexity` (see "Extra metrics" below).
 
-### `coverage` -- cobertura de linhas
+### `coverage` -- line coverage
 
-Roda `swift test --enable-code-coverage` (ja chamado por `count_test_failures`; segunda chamada eh cache hit), depois mescla profraw via `xcrun llvm-profdata merge` e exporta sumario via `xcrun llvm-cov export -summary-only ... <bin> <abs_dir>/Sources`.
+Runs `swift test --enable-code-coverage` (already called by `count_test_failures`; the second call is a cache hit), then merges profraw via `xcrun llvm-profdata merge` and exports a summary via `xcrun llvm-cov export -summary-only ... <bin> <abs_dir>/Sources`.
 
-Filtramos para `Sources/` para excluir codigo de teste -- comparavel com a metrica de outras linguagens. Soma `count` e `covered` de cada binario `.xctest` e calcula percentual.
+We filter to `Sources/` to exclude test code -- comparable with the metric of other languages. Sums `count` and `covered` of each `.xctest` binary and computes the percentage.
 
-**Margem de tolerancia:** default 1.0pp (ver `--cov-margin` ou `.qg.yaml: cov_margin`).
+**Tolerance margin:** default 1.0pp (see `--cov-margin` or `.qg.yaml: cov_margin`).
 
-**Como interpretar regressao:** PR adicionou codigo sem teste correspondente. Solucoes: adicionar teste; ou (com criterio) aumentar margem em `.qg.yaml`.
+**How to interpret a regression:** the PR added code without a corresponding test. Fixes: add a test; or (with discretion) raise the margin in `.qg.yaml`.
 
-## Troubleshooting comum
+## Common troubleshooting
 
 ### `xcrun: error: invalid active developer path`
 
-Voce nao tem Xcode/CLT instalado. Solucao:
+You do not have Xcode/CLT installed. Fix:
 
 ```bash
 xcode-select --install
 ```
 
-### `swift-format` e `swiftlint` em conflito sobre trailing comma
+### `swift-format` and `swiftlint` conflict over trailing comma
 
-Ver fixtures: `.swift-format` desabilita `multiElementCollectionTrailingCommas` para combinar com swiftlint default (que tambem nao quer trailing comma). Sem essa config, voce vai ter um warning constante.
+See the fixtures: `.swift-format` disables `multiElementCollectionTrailingCommas` to match the swiftlint default (which also does not want a trailing comma). Without this config, you will get a constant warning.
 
-### Coverage em Linux
+### Coverage on Linux
 
-`xcrun` nao existe. Substitua chamadas por `llvm-cov` direto (instale `apt install llvm`). O gate atual NAO faz essa substituicao automatica -- contribuicao bem-vinda.
+`xcrun` does not exist. Replace the calls with `llvm-cov` directly (install `apt install llvm`). The current gate does NOT do this substitution automatically -- contributions welcome.
 
-### Baseline cache stale apos mudar branch base
+### Stale baseline cache after changing the base branch
 
 ```bash
 ~/.quality-gate/swift/qg.sh --base origin/main --refresh-baseline
-# OU
+# OR
 rm -rf /tmp/qg-baseline-swift
 ```
 
-### `git archive` falha com "fatal: not a valid object name"
+### `git archive` fails with "fatal: not a valid object name"
 
-A base ref nao existe localmente. Solucao:
+The base ref does not exist locally. Fix:
 
 ```bash
 git fetch origin
 ```
 
-## Metricas omitidas
+## Omitted metrics
 
-- `complexity`: Swift nao tem ferramenta canonica estavel (ver secao acima). Documentado, omitido literalmente do JSON e da tabela texto -- NAO emitido como sentinela 0/null.
+- `complexity`: Swift has no stable canonical tool (see the section above). Documented, literally omitted from the JSON and the text table -- NOT emitted as a 0/null sentinel.
 
-## Metricas extras
+## Extra metrics
 
-Nenhuma em V1. Candidatos futuros:
-- `cyclomatic` via `swiftlint --enable-rule cyclomatic_complexity` (pode ser usado como substituto de `complexity` se aceitarmos os defaults da regra).
-- `xcodebuild` em vez de `swift build` para projetos Xcode-only.
-- `force_unwrap` count via `swiftlint` -- ja entra em `lint`, mas pode ser separado.
+None in V1. Future candidates:
+- `cyclomatic` via `swiftlint --enable-rule cyclomatic_complexity` (could be used as a substitute for `complexity` if we accept the rule's defaults).
+- `xcodebuild` instead of `swift build` for Xcode-only projects.
+- `force_unwrap` count via `swiftlint` -- already part of `lint`, but could be split out.
 
-Para adicionar, seguir contrato (secao "Estender") e `.claude/skills/add-quality-gate/`.
+To add, follow the contract (section "Extending") and `skills/add-quality-gate/`.

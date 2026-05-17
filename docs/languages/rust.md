@@ -1,12 +1,12 @@
-# Quality Gate — Rust
+# Quality Gate -- Rust
 
-Documentação específica do gate Rust. Para o contrato comum, ver [`../contract.md`](../contract.md).
+Rust-specific gate documentation. For the common contract, see [`../contract.md`](../contract.md).
 
 ## Build system
 
-Quality Gate Rust assume **Cargo** (oficial). Não suporta xargo, miri standalone, ou outros.
+Quality Gate Rust assumes **Cargo** (official). It does not support xargo, standalone miri, or others.
 
-## Pré-requisitos com instalação
+## Prerequisites with install
 
 ### macOS
 
@@ -29,96 +29,96 @@ cargo install cargo-llvm-cov
 sudo apt install jq
 ```
 
-## Métricas — o que cada uma mede em Rust
+## Metrics -- what each one measures in Rust
 
-### `fmt` — formatação
+### `fmt` -- formatting
 
-Roda `cargo fmt --all -- --check`. Conta linhas iniciando com `Diff in `, que indicam arquivo divergente da config rustfmt.
+Runs `cargo fmt --all -- --check`. Counts lines starting with `Diff in `, which indicate a file diverging from the rustfmt config.
 
-**Configuração:** se o projeto tem `rustfmt.toml` na raiz, é respeitado. Sem ele, defaults do rustfmt.
+**Configuration:** if the project has a `rustfmt.toml` at the root, it is respected. Without it, rustfmt defaults.
 
-**Como interpretar regressão:** PR introduziu arquivo desformatado. Solução: `cargo fmt --all`.
+**How to interpret a regression:** the PR introduced an unformatted file. Fix: `cargo fmt --all`.
 
-### `lint` — clippy
+### `lint` -- clippy
 
-Roda `cargo clippy --all-targets -- -D warnings -A clippy::cognitive_complexity -A clippy::too_many_lines -A clippy::too_many_arguments -A clippy::type_complexity`. Conta linhas `^error[E0XXX]:` e `^error:`.
+Runs `cargo clippy --all-targets -- -D warnings -A clippy::cognitive_complexity -A clippy::too_many_lines -A clippy::too_many_arguments -A clippy::type_complexity`. Counts `^error[E0XXX]:` and `^error:` lines.
 
-Os 4 lints de complexidade são silenciados aqui (medidos separado em `complexity`).
+The 4 complexity lints are silenced here (measured separately in `complexity`).
 
-**Como interpretar regressão:** PR introduziu warning novo (com `-D warnings`, warning vira error). Solução: ler `target/qg-logs/pr-lint.log`, identificar lint, decidir entre fix de código ou `#[allow(...)]` com causa raiz documentada.
+**How to interpret a regression:** the PR introduced a new warning (with `-D warnings`, a warning becomes an error). Fix: read `target/qg-logs/pr-lint.log`, identify the lint, decide between a code fix or `#[allow(...)]` with a documented root cause.
 
-### `build` — compilação
+### `build` -- compilation
 
-Roda `cargo build --all-targets`. Conta linhas `^error`.
+Runs `cargo build --all-targets`. Counts `^error` lines.
 
-**Como interpretar regressão:** código não compila. Improvável passar pelo dev e chegar no gate; geralmente indica conflict de merge ou refactor incompleto.
+**How to interpret a regression:** the code does not compile. Unlikely to slip past the dev and reach the gate; usually indicates a merge conflict or an incomplete refactor.
 
-### `test` — testes falhando
+### `test` -- failing tests
 
-Roda `cargo test --all-targets --no-fail-fast`. Soma de `failed: N` em todos os binários de teste.
+Runs `cargo test --all-targets --no-fail-fast`. Sum of `failed: N` across all test binaries.
 
-**Como interpretar regressão:** testes que passavam no baseline falham no PR. Solução: rodar localmente `cargo test --workspace --no-fail-fast`, ler erro, fixar.
+**How to interpret a regression:** tests that passed on the baseline fail on the PR. Fix: run locally `cargo test --workspace --no-fail-fast`, read the error, fix it.
 
-`#[ignore]` é proibido como mitigação (ver [`../contract.md#forbidden`](../contract.md#forbidden)).
+`#[ignore]` is forbidden as a mitigation (see [`../contract.md#forbidden`](../contract.md#forbidden)).
 
-### `complexity` — complexidade ciclomática/cognitiva
+### `complexity` -- cyclomatic/cognitive complexity
 
-Roda `cargo clippy --all-targets -- -A clippy::all -W clippy::cognitive_complexity -W clippy::too_many_lines -W clippy::too_many_arguments -W clippy::type_complexity`. Conta matches dos 4 lints.
+Runs `cargo clippy --all-targets -- -A clippy::all -W clippy::cognitive_complexity -W clippy::too_many_lines -W clippy::too_many_arguments -W clippy::type_complexity`. Counts matches of the 4 lints.
 
-**Thresholds (defaults da comunidade clippy, NÃO custom):**
+**Thresholds (clippy community defaults, NOT custom):**
 - `cognitive_complexity`: 25
 - `too_many_lines`: 100
 - `too_many_arguments`: 7
 - `type_complexity`: 250
 
-**Como interpretar regressão:** PR introduziu função acima de algum threshold. Soluções: quebrar em funções menores, extrair structs intermediárias, simplificar branches.
+**How to interpret a regression:** the PR introduced a function above some threshold. Fixes: break it into smaller functions, extract intermediate structs, simplify branches.
 
-### `coverage` — cobertura de linhas
+### `coverage` -- line coverage
 
-Roda `cargo llvm-cov --json --output-path X` e extrai `.data[0].totals.lines.percent` via `jq`.
+Runs `cargo llvm-cov --json --output-path X` and extracts `.data[0].totals.lines.percent` via `jq`.
 
-**Margem de tolerância:** default 1.0pp (ver `--cov-margin` ou `.qg.yaml: cov_margin`).
+**Tolerance margin:** default 1.0pp (see `--cov-margin` or `.qg.yaml: cov_margin`).
 
-**Como interpretar regressão:** PR adicionou código sem teste correspondente. Soluções: adicionar test cobrindo o caminho novo; ou (com critério) aumentar a margem em `.qg.yaml` se for caso justificado.
+**How to interpret a regression:** the PR added code without a corresponding test. Fixes: add a test covering the new path; or (with discretion) raise the margin in `.qg.yaml` if the case is justified.
 
-## Troubleshooting comum
+## Common troubleshooting
 
-### `cargo-llvm-cov` muito lento ou trava
+### `cargo-llvm-cov` very slow or hangs
 
-Versões antigas tinham bugs em monorepo grande. Atualize:
+Old versions had bugs in large monorepos. Update:
 
 ```bash
 cargo install cargo-llvm-cov --force
 ```
 
-### Baseline cache stale após mudar branch base
+### Stale baseline cache after changing the base branch
 
 ```bash
 ~/.quality-gate/rust/qg.sh --base origin/main --refresh-baseline
 ```
 
-ou
+or
 
 ```bash
 rm -rf /tmp/qg-baseline-rust
 ```
 
-### `git archive` falha com "fatal: not a valid object name"
+### `git archive` fails with "fatal: not a valid object name"
 
-A base ref não existe localmente. Solução:
+The base ref does not exist locally. Fix:
 
 ```bash
 git fetch origin
 ```
 
-## Métricas omitidas
+## Omitted metrics
 
-Nenhuma. Rust suporta as 6 métricas reservadas com ferramentas oficiais.
+None. Rust supports the 6 reserved metrics with official tools.
 
-## Métricas extras
+## Extra metrics
 
-Nenhuma em V1. Candidatos futuros:
-- `audit` via `cargo audit` — vulnerabilidades em dependências.
-- `unsafe_count` via `cargo geiger` — uso de blocks `unsafe`.
+None in V1. Future candidates:
+- `audit` via `cargo audit` -- vulnerabilities in dependencies.
+- `unsafe_count` via `cargo geiger` -- use of `unsafe` blocks.
 
-Para adicionar, seguir contrato (seção 4.7) e `.claude/skills/add-quality-gate/`.
+To add, follow the contract (section "Extending") and `skills/add-quality-gate/`.

@@ -1,133 +1,133 @@
-# Contrato do Quality Gate (v1)
+# Quality Gate Contract (v1)
 
-Versão do contrato: **1.x** (`QG_CONTRACT_VERSION=1`). `schema_version` do JSON: `1.1`.
+Contract version: **1.x** (`QG_CONTRACT_VERSION=1`). JSON `schema_version`: `1.1`.
 
-Este documento define o que **todo** `<lang>/qg.sh` precisa cumprir. Mudanças aqui exigem atualização de TODOS os scripts existentes.
+This document defines what **every** `<lang>/qg.sh` must comply with. Changes here require updating ALL existing scripts.
 
-A v1.1 é **aditiva e backward-compatible**: o modo comparativo (com `--base`) não muda. As adições são `--detect`, modo absoluto (`--base` opcional), bloco `.qg.yaml absolute_thresholds`, campo `mode` no JSON e enum de veredito consolidado. `QG_CONTRACT_VERSION` continua `1`.
+v1.1 is **additive and backward-compatible**: comparative mode (with `--base`) does not change. The additions are `--detect`, absolute mode (`--base` optional), the `.qg.yaml absolute_thresholds` block, the `mode` field in the JSON, and the consolidated verdict enum. `QG_CONTRACT_VERSION` stays `1`.
 
 ## CLI
 
 ```
-<lang>/qg.sh [--base <git-ref>] [opções]
+<lang>/qg.sh [--base <git-ref>] [options]
 <lang>/qg.sh --detect
 
-Opções:
-  --detect              Curto-circuita: detecta se a linguagem existe na raiz
-                        do projeto. Imprime o slug + exit 0 se sim, exit 1 se nao.
-  --base <ref>          Ref a comparar (ex: origin/main, develop). Se ausente
-                        (e sem QG_BASE_REF), o gate roda em MODO ABSOLUTO.
-  --baseline-dir <dir>  Path de baseline já preparado. Pula extração via git archive.
-  --cov-margin <pp>     Tolerância de coverage em pp (decimal). Default: 1.0
-  --log-dir <dir>       Onde gravar logs por etapa. Default: target/qg-logs
-  --refresh-baseline    Re-extrai baseline mesmo se cache existir.
-  --force-full          Pula fast-path; mede tudo mesmo se nada mudou.
-  --format text|json    Formato de output em stdout. Default: text.
-  -h, --help            Mostra ajuda.
+Options:
+  --detect              Short-circuits: detect whether the language exists at
+                        the project root. Prints the slug + exit 0 if yes, exit 1 if not.
+  --base <ref>          Ref to compare against (e.g. origin/main, develop). If absent
+                        (and no QG_BASE_REF), the gate runs in ABSOLUTE MODE.
+  --baseline-dir <dir>  Path to an already-prepared baseline. Skips git archive extraction.
+  --cov-margin <pp>     Coverage tolerance in pp (decimal). Default: 1.0
+  --log-dir <dir>       Where to write per-step logs. Default: target/qg-logs
+  --refresh-baseline    Re-extract baseline even if a cache exists.
+  --force-full          Skip fast-path; measure everything even if nothing changed.
+  --format text|json    Output format on stdout. Default: text.
+  -h, --help            Show help.
 ```
 
 ## `--detect`
 
-`<lang>/qg.sh --detect` curto-circuita ANTES de qualquer outra validação (é a primeira coisa após o parse de args, antes do check de `--base`/`--format`/pré-requisitos):
+`<lang>/qg.sh --detect` short-circuits BEFORE any other validation (it is the first thing after arg parsing, before the `--base`/`--format`/prerequisite checks):
 
-- Verifica se a sentinela da linguagem existe na raiz do projeto (`git rev-parse --show-toplevel 2>/dev/null || pwd`).
-- Sentinela presente → imprime o slug da linguagem em stdout (ex: `rust`) e **exit 0**.
-- Ausente → nada em stdout, **exit 1**.
-- Reusa a MESMA sentinela usada no check de "linguagem ausente no baseline" / fast-path. Não duplica regex.
+- Checks whether the language sentinel exists at the project root (`git rev-parse --show-toplevel 2>/dev/null || pwd`).
+- Sentinel present -> prints the language slug to stdout (e.g. `rust`) and **exit 0**.
+- Absent -> nothing on stdout, **exit 1**.
+- Reuses the SAME sentinel used in the "language absent in baseline" / fast-path check. Does not duplicate the regex.
 
-Sentinelas reservadas por linguagem:
+Reserved sentinels per language:
 
-| Linguagem | Sentinela |
+| Language | Sentinel |
 |---|---|
 | rust | `Cargo.toml` |
 | go | `go.mod` |
-| python | `pyproject.toml` ou `setup.py` ou `setup.cfg` ou `requirements*.txt` |
+| python | `pyproject.toml` or `setup.py` or `setup.cfg` or `requirements*.txt` |
 | nodejs | `package.json` |
-| java | `pom.xml` ou `build.gradle` ou `build.gradle.kts` |
+| java | `pom.xml` or `build.gradle` or `build.gradle.kts` |
 | swift | `Package.swift` |
-| kotlin | `build.gradle.kts` ou `settings.gradle.kts` ou `build.gradle` |
+| kotlin | `build.gradle.kts` or `settings.gradle.kts` or `build.gradle` |
 
-Consumidores (skill `quality-gate`) iteram `<lang>/qg.sh --detect`, coletam os que saem 0 e rodam só esses — sem tabela hardcoded de sentinelas.
+Consumers (the `quality-gate` skill) iterate `<lang>/qg.sh --detect`, collect the ones that exit 0 and run only those -- no hardcoded sentinel table.
 
-## Modo absoluto (`--base` opcional)
+## Absolute mode (`--base` optional)
 
-Se `--base` E `QG_BASE_REF` ambos ausentes → **modo absoluto** (não é erro; não sai 2).
+If `--base` AND `QG_BASE_REF` are both absent -> **absolute mode** (not an error; does not exit 2).
 
-- **Pula** provisão de baseline inteiramente (sem `git archive`, sem `--baseline-dir`).
-- **Pula** fast-path (sem base não há diff — sempre mede full).
-- **Pula** check de "linguagem ausente no baseline" (não há baseline).
-- Roda as funções de medição **uma vez**, em `.`.
-- Pass/fail: **exit 0 SEMPRE**, exceto se `.qg.yaml` definir `absolute_thresholds` e alguma métrica medida violar um → **exit 1**.
+- **Skips** baseline provisioning entirely (no `git archive`, no `--baseline-dir`).
+- **Skips** fast-path (with no base there is no diff -- always measures full).
+- **Skips** the "language absent in baseline" check (there is no baseline).
+- Runs the measurement functions **once**, in `.`.
+- Pass/fail: **exit 0 ALWAYS**, except if `.qg.yaml` defines `absolute_thresholds` and some measured metric violates one -> **exit 1**.
 
-`absolute_thresholds` é ignorado em modo comparativo (lá quem manda é a comparação base/PR + `cov_margin`).
+`absolute_thresholds` is ignored in comparative mode (there the base/PR comparison + `cov_margin` is what rules).
 
 ## Exit codes
 
-| Code | Significado |
+| Code | Meaning |
 |---|---|
-| 0 | Sem regressão / sem violação (PASS, fast-path, bypassed, modo absoluto sem violação ou `--detect` com sentinela) |
-| 1 | Modo comparativo: ≥1 métrica regrediu. Modo absoluto: ≥1 `absolute_thresholds` violado. `--detect`: sentinela ausente |
-| 2 | Erro de setup: ferramenta faltando, baseline inválido, `.qg.yaml` inválido, ferramenta de medição quebrou, falha ao resolver dependências |
+| 0 | No regression / no violation (PASS, fast-path, bypassed, absolute mode with no violation or `--detect` with sentinel) |
+| 1 | Comparative mode: >=1 metric regressed. Absolute mode: >=1 `absolute_thresholds` violated. `--detect`: sentinel absent |
+| 2 | Setup error: missing tool, invalid baseline, invalid `.qg.yaml`, measurement tool broke, dependency resolution failed |
 
-`--base` ausente NÃO é mais exit 2 — vira modo absoluto. `--detect` usa exit 1 só para "sentinela ausente" (nunca exit 2).
+`--base` absent is no longer exit 2 -- it becomes absolute mode. `--detect` uses exit 1 only for "sentinel absent" (never exit 2).
 
-**Tool error ≠ regressão.** Segfault de compilador → exit 2, não exit 1. Falha ao resolver dependências (rede, lockfile corrompido, registry privado sem auth) → exit 2, **nunca** `build` regredido.
+**Tool error != regression.** Compiler segfault -> exit 2, not exit 1. Dependency resolution failure (network, corrupted lockfile, private registry without auth) -> exit 2, **never** a regressed `build`.
 
-## Variáveis de ambiente
+## Environment variables
 
-| Nome | Default | Uso |
+| Name | Default | Use |
 |---|---|---|
-| `QG_BYPASS_REASON` | (vazio) | Setada → gate sai 0 + audit log. Ver seção Bypass. |
-| `QG_LOG_DIR` | `target/qg-logs` | Equivalente a `--log-dir`. CLI tem precedência. |
-| `QG_BASE_REF` | (vazio) | Equivalente a `--base`. CLI tem precedência. Vazio + sem `--base` → modo absoluto. |
-| `QG_BASELINE_DIR` | (vazio) | Equivalente a `--baseline-dir`. CLI tem precedência. |
-| `QG_COV_MARGIN` | `1.0` | Equivalente a `--cov-margin`. CLI tem precedência. |
-| `QG_REFRESH_BASELINE` | `0` | `1` equivalente a `--refresh-baseline`. |
-| `QG_FORCE_FULL` | `0` | `1` equivalente a `--force-full`. |
-| `QG_FORMAT` | `text` | Equivalente a `--format`. |
-| `QG_RULESET_DIR` | (vazio) | Override do `rules/` embarcado (tamper-resistance). So honrado se vier do AMBIENTE de quem roda o gate — NUNCA de `.qg.yaml`/arquivo do projeto. Vazio → usa `<QG>/<lang>/rules/`. |
+| `QG_BYPASS_REASON` | (empty) | Set -> gate exits 0 + audit log. See the Bypass section. |
+| `QG_LOG_DIR` | `target/qg-logs` | Equivalent to `--log-dir`. CLI takes precedence. |
+| `QG_BASE_REF` | (empty) | Equivalent to `--base`. CLI takes precedence. Empty + no `--base` -> absolute mode. |
+| `QG_BASELINE_DIR` | (empty) | Equivalent to `--baseline-dir`. CLI takes precedence. |
+| `QG_COV_MARGIN` | `1.0` | Equivalent to `--cov-margin`. CLI takes precedence. |
+| `QG_REFRESH_BASELINE` | `0` | `1` equivalent to `--refresh-baseline`. |
+| `QG_FORCE_FULL` | `0` | `1` equivalent to `--force-full`. |
+| `QG_FORMAT` | `text` | Equivalent to `--format`. |
+| `QG_RULESET_DIR` | (empty) | Override of the bundled `rules/` (tamper-resistance). Only honored if it comes from the ENVIRONMENT of whoever runs the gate -- NEVER from `.qg.yaml`/a project file. Empty -> uses `<QG>/<lang>/rules/`. |
 
-## Output texto (default)
+## Text output (default)
 
-Estrutura fixa em 3 blocos:
+Fixed structure in 3 blocks:
 
 ```
 ═══ Quality Gate — <lang> ═══
-  branch:        <branch atual>
+  branch:        <current branch>
   base ref:      <--base>
   baseline:      <path>
   cov margin:    <pp>pp
   logs:          <dir>/
 
-── medindo base ──
-[silencioso; logs em <log-dir>/base-*.log]
+── measuring base ──
+[silent; logs in <log-dir>/base-*.log]
 
-── medindo PR ──
-[silencioso; logs em <log-dir>/pr-*.log]
+── measuring PR ──
+[silent; logs in <log-dir>/pr-*.log]
 
-métrica       base       pr     veredito
+metric        base       pr     verdict
 ─────────────────────────────────────────
 fmt              0        0    ✅ same
 lint             3        2    ✅ improved
 build            0        0    ✅ same
 test fails       0        1    ❌ regressed
 complexity       7        7    ✅ same
-coverage     82.3%    81.0%   ❌ regressed (margem: 1.0pp)
+coverage     82.3%    81.0%   ❌ regressed (margin: 1.0pp)
 
-::error::PR regrediu test fails, coverage — ver acima.
+::error::PR regressed test fails, coverage -- see above.
 ```
 
-Output em **PT-BR**. Identificadores (`improved`, `same`, `regressed`) em EN ASCII.
+Output in **English**. Identifiers (`improved`, `same`, `regressed`) in EN ASCII.
 
-## Output JSON (`--format json`)
+## JSON output (`--format json`)
 
-Stdout recebe SOMENTE o JSON. Mensagens de progresso vão para stderr; logs detalhados continuam em `--log-dir`.
+Stdout receives ONLY the JSON. Progress messages go to stderr; detailed logs stay in `--log-dir`.
 
-Schema validado contra [`contract-v1.schema.json`](contract-v1.schema.json) (aceita `schema_version` `"1.0"` e `"1.1"`).
+Schema validated against [`contract-v1.schema.json`](contract-v1.schema.json) (accepts `schema_version` `"1.0"` and `"1.1"`).
 
-Campo top-level **`"mode"`**: `"comparative"` | `"absolute"`. Ausente ⇒ tratar como `comparative` legacy 1.0.
+Top-level field **`"mode"`**: `"comparative"` | `"absolute"`. Absent => treat as legacy 1.0 `comparative`.
 
-### Modo comparativo
+### Comparative mode
 
 ```json
 {
@@ -151,9 +151,9 @@ Campo top-level **`"mode"`**: `"comparative"` | `"absolute"`. Ausente ⇒ tratar
 }
 ```
 
-`base_ref` continua string. Métricas continuam `{name, base, pr, delta, verdict}`.
+`base_ref` stays a string. Metrics stay `{name, base, pr, delta, verdict}`.
 
-### Modo absoluto
+### Absolute mode
 
 ```json
 {
@@ -176,176 +176,176 @@ Campo top-level **`"mode"`**: `"comparative"` | `"absolute"`. Ausente ⇒ tratar
 ```
 
 - `base_ref: null`.
-- Cada métrica: `{ "name", "value", "threshold" (number|null), "verdict" }`.
-  - `verdict` por métrica ∈ `"ok"` (threshold definido, não violado) | `"violated"` (threshold violado) | `"reported"` (sem threshold — informativo).
-- `verdict` global ∈ `passed|failed|bypassed`. `failed` = ≥1 métrica `violated`. Sem violação (ou nenhum threshold) → `passed`.
+- Each metric: `{ "name", "value", "threshold" (number|null), "verdict" }`.
+  - Per-metric `verdict` in `"ok"` (threshold defined, not violated) | `"violated"` (threshold violated) | `"reported"` (no threshold -- informational).
+- Global `verdict` in `passed|failed|bypassed`. `failed` = >=1 metric `violated`. No violation (or no threshold) -> `passed`.
 
-### Enum de veredito consolidado
+### Consolidated verdict enum
 
-`verdict` global do schema v1.1: **`passed | regressed | failed | bypassed`**.
-- `regressed` só em modo comparativo.
-- `failed` só em modo absoluto.
-- `passed`/`bypassed` ambos os modos.
+Global schema v1.1 `verdict`: **`passed | regressed | failed | bypassed`**.
+- `regressed` only in comparative mode.
+- `failed` only in absolute mode.
+- `passed`/`bypassed` in both modes.
 
-Métrica `verdict`: comparativo usa `same|improved|regressed`; absoluto usa `ok|violated|reported`. O schema discrimina via `if mode`.
+Metric `verdict`: comparative uses `same|improved|regressed`; absolute uses `ok|violated|reported`. The schema discriminates via `if mode`.
 
-Regras gerais:
+General rules:
 
-- Métrica omitida pela linguagem **não aparece** na lista.
-- Métrica extra (além das 6) aparece com mesmo schema.
+- A metric omitted by the language **does not appear** in the list.
+- An extra metric (beyond the 6) appears with the same schema.
 
-## Bypass governado
+## Governed bypass
 
-Env var `QG_BYPASS_REASON="<motivo>"`:
+Env var `QG_BYPASS_REASON="<reason>"`:
 
-- Setada e não-vazia: gate **sempre** sai 0.
-  - Texto: bloco `::warning::QG bypass ativo — motivo: <motivo>` + linha `::warning::Esta execução não validou métricas. Audit log: <path>`.
-  - JSON: `verdict: "bypassed"`, `bypass_reason: "<motivo>"`, `metrics: []`.
-- Vazia/não-setada: comportamento normal.
+- Set and non-empty: gate **always** exits 0.
+  - Text: a `::warning::QG bypass active -- reason: <reason>` block + a `::warning::This run did not validate metrics. Audit log: <path>` line.
+  - JSON: `verdict: "bypassed"`, `bypass_reason: "<reason>"`, `metrics: []`.
+- Empty/unset: normal behavior.
 
-**Audit log:** `<log-dir>/bypass.log` com timestamp UTC, branch, usuário (`git config user.email`), motivo. V2 centraliza.
+**Audit log:** `<log-dir>/bypass.log` with UTC timestamp, branch, user (`git config user.email`), reason. V2 centralizes.
 
-Sem flag CLI equivalente. Env var fricciona deliberadamente.
+No equivalent CLI flag. The env var adds friction deliberately.
 
-## Dispatcher deterministico (`qg` na raiz)
+## Deterministic dispatcher (`qg` at the root)
 
-A raiz do repo do gate traz um executavel `qg` (`~/.quality-gate/qg`).
-Detecção **100% shell, zero IA**: descobre a(s) linguagem(s) do projeto-alvo via
-`<lang>/qg.sh --detect` e roda o(s) gate(s) correspondente(s). A skill consumer
-SO chama este script — nunca itera `<lang>/qg.sh` por conta propria nem mantem
-tabela hardcoded de sentinelas.
+The root of the gate repo ships a `qg` executable (`~/.quality-gate/qg`).
+**100% shell detection, zero AI**: it discovers the target project's language(s) via
+`<lang>/qg.sh --detect` and runs the matching gate(s). The consumer skill
+ONLY calls this script -- it never iterates `<lang>/qg.sh` on its own nor keeps
+a hardcoded sentinel table.
 
-- **Descoberta de sub-projetos (hibrido):**
-  - Se existe `<target>/.qg.yaml` com bloco `projects:` → usa APENAS essa lista.
-    Cada item: `path:` obrigatorio, `lang:` opcional. Para cada `path`, roda
-    `<lang>/qg.sh --detect` dentro de `<target>/<path>` (se `lang:` dado, so
-    testa esse; senao testa todos).
-  - Senao → detecção na raiz: para cada `<root>/*/qg.sh`, roda
-    `(cd <target> && <s> --detect)`. Coleta os que saem 0.
-- **Execução:**
-  - 0 matches → stderr `::error::nenhuma linguagem suportada detectada`, **exit 3**
-    (codigo determinístico reservado para "nenhuma linguagem").
-  - 1 match → roda `<lang>/qg.sh "$@"` no diretorio certo, repassa exit code.
-  - N matches → roda todos sequencialmente. **Veredito global = pior**: qualquer
-    exit != 0 → exit != 0 (precedencia: `2 > 1 > 3 > 0`). Em `--format json`,
-    emite um array `[{lang,...}, ...]` com campo top-level `aggregate_verdict`.
-- Repassa flags (`--base`, `--format`, `--cov-margin`, `--log-dir`, etc.)
-  intactas para o(s) `<lang>/qg.sh`.
-- `qg --detect` → lista os slugs detectados (um por linha), exit 0 se >= 1,
-  exit 3 se 0.
+- **Sub-project discovery (hybrid):**
+  - If `<target>/.qg.yaml` exists with a `projects:` block -> uses ONLY that list.
+    Each item: `path:` required, `lang:` optional. For each `path`, runs
+    `<lang>/qg.sh --detect` inside `<target>/<path>` (if `lang:` given, tests
+    only that one; otherwise tests all).
+  - Otherwise -> root detection: for each `<root>/*/qg.sh`, runs
+    `(cd <target> && <s> --detect)`. Collects the ones that exit 0.
+- **Execution:**
+  - 0 matches -> stderr `::error::no supported language detected`, **exit 3**
+    (deterministic code reserved for "no language").
+  - 1 match -> runs `<lang>/qg.sh "$@"` in the right directory, forwards the exit code.
+  - N matches -> runs all sequentially. **Global verdict = worst**: any
+    exit != 0 -> exit != 0 (precedence: `2 > 1 > 3 > 0`). With `--format json`,
+    emits an array `[{lang,...}, ...]` with a top-level `aggregate_verdict` field.
+- Forwards flags (`--base`, `--format`, `--cov-margin`, `--log-dir`, etc.)
+  intact to the `<lang>/qg.sh`.
+- `qg --detect` -> lists the detected slugs (one per line), exit 0 if >= 1,
+  exit 3 if 0.
 
-### Exit code 3 reservado
+### Exit code 3 reserved
 
-| Code | Significado |
+| Code | Meaning |
 |---|---|
-| 3 | **Dispatcher:** nenhuma linguagem suportada detectada no projeto-alvo |
+| 3 | **Dispatcher:** no supported language detected in the target project |
 
-Exit 3 e do **dispatcher**, nunca de um `<lang>/qg.sh` individual. Consumidores
-mapeiam: 3 → "linguagem fora do escopo", 2 → tool/setup error, 1 → regressao/
-threshold violado, 0 → verde.
+Exit 3 is the **dispatcher's**, never an individual `<lang>/qg.sh`'s. Consumers
+map: 3 -> "language out of scope", 2 -> tool/setup error, 1 -> regression/
+threshold violated, 0 -> green.
 
-## React/Vue/etc. NAO viram gate proprio
+## React/Vue/etc. do NOT become their own gate
 
-Projeto React, Vue, Svelte, Angular, etc. = **projeto nodejs**, coberto por
-`nodejs/qg.sh` (sentinela `package.json`). Regras especificas de framework entram
-no **ruleset do QG** (ver "Tamper-resistance"), nunca em config do projeto-alvo.
-O gate `web` so cobre HTML/CSS **estatico puro** (sem `package.json`).
+A React, Vue, Svelte, Angular, etc. project = **nodejs project**, covered by
+`nodejs/qg.sh` (sentinel `package.json`). Framework-specific rules go into
+the **QG ruleset** (see "Tamper-resistance"), never into the target project's config.
+The `web` gate only covers **pure static** HTML/CSS (no `package.json`).
 
-## Tamper-resistance — o ruleset e do QG (LEI, todas as linguagens)
+## Tamper-resistance -- the ruleset belongs to QG (LAW, all languages)
 
-**LEI:** o gate **traz e impoe os proprios rulesets**. Configs de qualidade do
-projeto-alvo (`.eslintrc`, `clippy.toml`, `pyproject.toml [tool.ruff]`,
-`.swiftlint.yml`, `detekt.yml`, `.stylelintrc`, etc.) sao **ignoradas por
-padrao**. Senao o dev afrouxa uma regra no proprio repo e o gate vira teatro.
+**LAW:** the gate **ships and enforces its own rulesets**. Quality configs of the
+target project (`.eslintrc`, `clippy.toml`, `pyproject.toml [tool.ruff]`,
+`.swiftlint.yml`, `detekt.yml`, `.stylelintrc`, etc.) are **ignored by
+default**. Otherwise the dev loosens a rule in their own repo and the gate becomes theater.
 
-- Cada `<lang>/` embarca um diretorio `rules/` com a config canonica.
-- `<lang>/qg.sh` (via `lib/measure.sh`) invoca a ferramenta apontando para o
-  `rules/` do QG **e com as flags que ignoram config local**:
+- Each `<lang>/` bundles a `rules/` directory with the canonical config.
+- `<lang>/qg.sh` (via `lib/measure.sh`) invokes the tool pointing at the
+  QG `rules/` **and with the flags that ignore local config**:
 
-| Linguagem | Como o QG forca o proprio ruleset |
+| Language | How QG forces its own ruleset |
 |---|---|
 | rust | `CLIPPY_CONF_DIR=<QG>/rust/rules`; `cargo fmt -- --config-path <QG>/rust/rules/rustfmt.toml` |
-| go | `golangci-lint run -c <QG>/go/rules/.golangci.yml`; `gocyclo` threshold fixo no script. `gofmt` nao tem config → trivialmente tamper-proof |
-| python | `ruff --config <QG>/python/rules/ruff.toml` (`--config` arquivo explicito faz ruff ignorar pyproject/ruff.toml do projeto); `radon` threshold fixo no script |
-| nodejs | `eslint --no-config-lookup --config <QG>/nodejs/rules/eslint.config.mjs`; `prettier --config <QG>/nodejs/rules/.prettierrc.json --no-editorconfig`; `tsc -p <efemero>` que faz `extends` de `<QG>/nodejs/rules/tsconfig.base.json` (strict travado, independente do tsconfig do projeto). O `tsconfig.base.json` do QG e strict porem JSX/React-Native-capaz (`jsx: preserve` + shim `qg-jsx-shim.d.ts`): parseia `.tsx` sem TS17004/TS7026 fantasma, mas o dev NAO afrouxa strictness (regra de tamper continua: ruleset do QG manda) |
-| java | `pmd -R <QG>/java/rules/pmd.xml`; `google-java-format` (estilo fixo, sem config) |
+| go | `golangci-lint run -c <QG>/go/rules/.golangci.yml`; `gocyclo` threshold fixed in the script. `gofmt` has no config -> trivially tamper-proof |
+| python | `ruff --config <QG>/python/rules/ruff.toml` (an explicit `--config` file makes ruff ignore the project's pyproject/ruff.toml); `radon` threshold fixed in the script |
+| nodejs | `eslint --no-config-lookup --config <QG>/nodejs/rules/eslint.config.mjs`; `prettier --config <QG>/nodejs/rules/.prettierrc.json --no-editorconfig`; `tsc -p <ephemeral>` which `extends` `<QG>/nodejs/rules/tsconfig.base.json` (strict locked, independent of the project's tsconfig). QG's `tsconfig.base.json` is strict but JSX/React-Native-capable (`jsx: preserve` + the `qg-jsx-shim.d.ts` shim): parses `.tsx` without phantom TS17004/TS7026, but the dev does NOT loosen strictness (tamper rule still holds: QG's ruleset rules) |
+| java | `pmd -R <QG>/java/rules/pmd.xml`; `google-java-format` (fixed style, no config) |
 | swift | `swiftlint --config <QG>/swift/rules/.swiftlint.yml`; `swift-format --configuration <QG>/swift/rules/.swift-format` |
 | kotlin | `detekt -c <QG>/kotlin/rules/detekt.yml`; `ktlint --editorconfig=<QG>/kotlin/rules/.editorconfig` |
-| web | `stylelint --config <QG>/web/rules/.stylelintrc.json` (arquivo explicito sobrepoe .stylelintrc do projeto); `htmlhint --config <QG>/web/rules/.htmlhintrc`; `prettier --config <QG>/web/rules/.prettierrc.json --no-editorconfig` |
+| web | `stylelint --config <QG>/web/rules/.stylelintrc.json` (an explicit file overrides the project's .stylelintrc); `htmlhint --config <QG>/web/rules/.htmlhintrc`; `prettier --config <QG>/web/rules/.prettierrc.json --no-editorconfig` |
 
-- **Override so externo:** ruleset alternativo so via env `QG_RULESET_DIR=<path>`
-  setada por quem **roda** o gate (pipeline / dev consciente). **NUNCA** lido de
-  arquivo do projeto-alvo (nem de `.qg.yaml`, que o dev controla). Default
-  sempre = `rules/` do QG embarcado.
-- Conteudo dos `rules/`: defaults da comunidade (clippy 25/100/7/250, eslint
-  recommended + prettier, ruff default, etc.). Calibracao fina e V2 — o que o
-  contrato garante e a **mecanica** de nao ler config do projeto.
+- **Override is external only:** an alternative ruleset only via env `QG_RULESET_DIR=<path>`
+  set by whoever **runs** the gate (pipeline / conscious dev). **NEVER** read from
+  a target project file (not even `.qg.yaml`, which the dev controls). Default
+  is always = QG's bundled `rules/`.
+- Content of `rules/`: community defaults (clippy 25/100/7/250, eslint
+  recommended + prettier, ruff default, etc.). Fine calibration is V2 -- what the
+  contract guarantees is the **mechanics** of not reading the project's config.
 
-### LEI: fmt/lint/complexity medem CODIGO-FONTE (ignore canonico do QG)
+### LAW: fmt/lint/complexity measure SOURCE CODE (QG's canonical ignore)
 
-**LEI:** as metricas `fmt`/`lint`/`complexity` medem **CODIGO-FONTE**.
-Diretorios **gerados/vendored** sao excluidos por um **ignore CANONICO
-proprio do QG** (tamper-proof: **NUNCA** lido de `.eslintignore` /
-`.prettierignore` / `.gitignore` / `.qg.yaml` do projeto-alvo — o dev nao
-afrouxa a varredura). Medir artefato (bundle minificado em `build/`, dep em
-`vendor/`) infla o numero e torna a metrica inutil.
+**LAW:** the `fmt`/`lint`/`complexity` metrics measure **SOURCE CODE**.
+**Generated/vendored** directories are excluded by a **CANONICAL ignore
+owned by QG** (tamper-proof: **NEVER** read from the target project's
+`.eslintignore` / `.prettierignore` / `.gitignore` / `.qg.yaml` -- the dev does not
+loosen the scan). Measuring an artifact (a minified bundle in `build/`, a dep in
+`vendor/`) inflates the number and makes the metric useless.
 
-Lista canonica de exclusao (dirs gerados/vendored): `node_modules/`,
+Canonical exclusion list (generated/vendored dirs): `node_modules/`,
 `dist/`, `build/`, `out/`, `.next/`, `.nuxt/`, `.expo/`, `coverage/`,
-`.turbo/`, `.cache/` (+ `.venv/`/`venv/` em Python, `vendor/` em Go) e
-arquivos `*.min.js`, `*.min.css`, `*.bundle.js`, `*.chunk.js`, `*-lock.json`,
-`*.map`. Aplicada em TODA medicao que varre arquivos por path:
+`.turbo/`, `.cache/` (+ `.venv/`/`venv/` in Python, `vendor/` in Go) and
+files `*.min.js`, `*.min.css`, `*.bundle.js`, `*.chunk.js`, `*-lock.json`,
+`*.map`. Applied to EVERY measurement that scans files by path:
 
-| Linguagem | Mecanismo do ignore canonico |
+| Language | Mechanism of the canonical ignore |
 |---|---|
-| nodejs | bloco `ignores` (1o elemento, ignore global) no `eslint.config.mjs` do QG (lint+complexity); `prettier --ignore-path <QG>/nodejs/rules/.prettierignore` (fmt); `_qg_node_sources` exclui os dirs (build) |
-| web | `prettier --ignore-path <QG>/web/rules/.prettierignore`; `_qg_web_css`/`_qg_web_html` prune da lista canonica + lista explicita p/ stylelint/htmlhint |
-| python | `extend-exclude` no `ruff.toml` do QG (independe de respect-gitignore); `radon -i/-e` com a lista canonica |
-| go | `gofmt -l`/`gocyclo` filtrados pela lista canonica (vendor/ classico); `./...` ja e module-scoped |
-| rust/java/kotlin/swift | sem anti-pattern: cargo/mvn-pmd/ktlint-detekt sao scope de crate/`src/`; swift exclui `.build/` |
+| nodejs | `ignores` block (1st element, global ignore) in QG's `eslint.config.mjs` (lint+complexity); `prettier --ignore-path <QG>/nodejs/rules/.prettierignore` (fmt); `_qg_node_sources` excludes the dirs (build) |
+| web | `prettier --ignore-path <QG>/web/rules/.prettierignore`; `_qg_web_css`/`_qg_web_html` prune from the canonical list + an explicit list for stylelint/htmlhint |
+| python | `extend-exclude` in QG's `ruff.toml` (independent of respect-gitignore); `radon -i/-e` with the canonical list |
+| go | `gofmt -l`/`gocyclo` filtered by the canonical list (classic vendor/); `./...` is already module-scoped |
+| rust/java/kotlin/swift | no anti-pattern: cargo/mvn-pmd/ktlint-detekt are crate/`src/`-scoped; swift excludes `.build/` |
 
-Override **so externo** (`QG_RULESET_DIR`), nunca de arquivo do projeto —
-mesma regra de tamper do ruleset.
+Override is **external only** (`QG_RULESET_DIR`), never from a project file --
+same tamper rule as the ruleset.
 
-## Config por repo (`.qg.yaml` opcional)
+## Per-repo config (`.qg.yaml` optional)
 
-Lido da raiz do projeto-alvo se existir. Schema **fechado** — chave desconhecida → exit 2.
+Read from the target project root if it exists. **Closed** schema -- unknown key -> exit 2.
 
 ```yaml
-cov_margin: 2.0                       # override do default 1.0
+cov_margin: 2.0                       # override of the default 1.0
 skip_metrics:
   - metric: complexity
-    reason: "legacy crate, plano em INT-1234"
+    reason: "legacy crate, plan in INT-1234"
     until: "2026-09-01"               # ISO 8601
 extra_fast_path_paths:
   - "^vendor/"
   - "^third_party/"
-projects:                             # monorepo: lista fechada de sub-projetos
+projects:                             # monorepo: closed list of sub-projects
   - path: backend
     lang: go
-  - path: frontend                    # lang omitido -> dispatcher detecta
+  - path: frontend                    # lang omitted -> dispatcher detects
 ```
 
-### Bloco `projects` (monorepo)
+### `projects` block (monorepo)
 
-Lido APENAS pelo dispatcher `qg` da raiz. Schema **fechado** por item: chaves
-permitidas = `path` (obrigatorio), `lang` (opcional). Chave desconhecida → exit 2.
-Se `projects:` existe, o dispatcher **ignora** a detecção na raiz e usa so esta
-lista. `lang:` NAO seleciona ruleset (isso e tamper-surface) — so restringe qual
-`<lang>/qg.sh --detect` testar dentro do `path`.
+Read ONLY by the root `qg` dispatcher. **Closed** schema per item: allowed keys
+= `path` (required), `lang` (optional). Unknown key -> exit 2.
+If `projects:` exists, the dispatcher **ignores** root detection and uses only this
+list. `lang:` does NOT select the ruleset (that is a tamper-surface) -- it only restricts which
+`<lang>/qg.sh --detect` to test inside the `path`.
 
-Schema fechado total do `.qg.yaml`: `cov_margin`, `skip_metrics`,
+Full closed schema of `.qg.yaml`: `cov_margin`, `skip_metrics`,
 `extra_fast_path_paths`, `absolute_thresholds`, `projects`.
 
-Regras:
+Rules:
 
-- `until` no passado → script ignora skip e volta a medir/bloquear (registra `::warning::skip de <metric> expirou em <data>`).
-- `skip_metrics` sem `reason` ou sem `until` → exit 2.
-- Mesmo schema vale para TODA linguagem.
+- `until` in the past -> script ignores the skip and resumes measuring/blocking (logs `::warning::skip of <metric> expired on <date>`).
+- `skip_metrics` without `reason` or without `until` -> exit 2.
+- The same schema applies to EVERY language.
 
-### Bloco `absolute_thresholds` (modo absoluto)
+### `absolute_thresholds` block (absolute mode)
 
-Bloco opcional, lido APENAS em modo absoluto:
+Optional block, read ONLY in absolute mode:
 
 ```yaml
 absolute_thresholds:
@@ -354,142 +354,142 @@ absolute_thresholds:
   build: 0
   test: 0
   complexity: 10
-  coverage: 80      # MINIMO (coverage = maior é melhor)
+  coverage: 80      # MINIMUM (coverage = higher is better)
 ```
 
-- Schema fechado: chaves permitidas sob `absolute_thresholds` = os 6 nomes reservados + qualquer métrica extra que a linguagem declare. Chave desconhecida → exit 2.
-- Contadores (`fmt`/`lint`/`build`/`test`/`complexity` e extras-contador): violação se `valor > threshold`.
-- `coverage` (e extras percentuais): violação se `valor < threshold` (é um mínimo).
-- Qualquer violação → **exit 1**. Nenhum threshold definido, ou sem `.qg.yaml`, ou sem bloco `absolute_thresholds` → **exit 0**, só reporta (`verdict: reported`).
-- Ignorado em modo comparativo.
+- Closed schema: allowed keys under `absolute_thresholds` = the 6 reserved names + any extra metric the language declares. Unknown key -> exit 2.
+- Counters (`fmt`/`lint`/`build`/`test`/`complexity` and counter extras): violation if `value > threshold`.
+- `coverage` (and percentage extras): violation if `value < threshold` (it is a minimum).
+- Any violation -> **exit 1**. No threshold defined, or no `.qg.yaml`, or no `absolute_thresholds` block -> **exit 0**, only reports (`verdict: reported`).
+- Ignored in comparative mode.
 
-## Métricas reservadas
+## Reserved metrics
 
-Estes 6 nomes são reservados — se a linguagem mede a métrica, **usa esse nome exato**:
+These 6 names are reserved -- if the language measures the metric, **use this exact name**:
 
-| Nome | Conta | Falha se |
+| Name | Counts | Fails if |
 |---|---|---|
-| `fmt` | arquivos não-formatados | PR > base |
-| `lint` | erros do linter | PR > base |
-| `build` | erros de build | PR > base |
-| `test` | testes que falharam | PR > base |
-| `complexity` | violações de complexidade | PR > base |
-| `coverage` | % linhas cobertas | PR < base − margem |
+| `fmt` | unformatted files | PR > base |
+| `lint` | linter errors | PR > base |
+| `build` | build errors | PR > base |
+| `test` | failed tests | PR > base |
+| `complexity` | complexity violations | PR > base |
+| `coverage` | % lines covered | PR < base - margin |
 
-**Omitir:** linguagem documenta em `docs/languages/<lang>.md` por que não tem ferramenta. Não imprime linha no texto, omite no JSON.
+**Omitting:** the language documents in `docs/languages/<lang>.md` why it has no tool. Does not print a text line, omits it in the JSON.
 
-**Estender:** métrica extra com nome snake_case ASCII único, mesma regra de regressão.
+**Extending:** an extra metric with a unique snake_case ASCII name, same regression rule.
 
 ## Fast-path
 
-Cada `<lang>/qg.sh` define regex de "arquivos-fonte da linguagem":
+Each `<lang>/qg.sh` defines a regex of "language source files":
 
 - Rust: `\.rs$|^Cargo\.|build\.rs$|^rust-toolchain`
 
-Se `git diff --name-only <base>...HEAD` (+ staged + worktree) não casar nada e `--force-full` não passou:
-1. Imprime header de fast-path (texto) ou `verdict: "passed"` com `metrics: []` (JSON).
-2. Valida sintaxe de scripts shell modificados (`bash -n`).
+If `git diff --name-only <base>...HEAD` (+ staged + worktree) matches nothing and `--force-full` was not passed:
+1. Prints the fast-path header (text) or `verdict: "passed"` with `metrics: []` (JSON).
+2. Validates the syntax of modified shell scripts (`bash -n`).
 3. Exit 0.
 
-`extra_fast_path_paths` do `.qg.yaml` é adicionado ao regex.
+`extra_fast_path_paths` from `.qg.yaml` is added to the regex.
 
 ## Baseline
 
-- Sem `--baseline-dir`: `git archive <base>` em `/tmp/qg-baseline-<lang>` (cacheado; `--refresh-baseline` força re-extração).
-- Com `--baseline-dir`: assume diretório pronto (CI fez checkout em path separado).
-- Linguagem ausente no baseline (ex: PR adiciona `Cargo.toml` pela 1ª vez): `::warning::linguagem ausente no baseline — gate skipped` + exit 0.
+- Without `--baseline-dir`: `git archive <base>` into `/tmp/qg-baseline-<lang>` (cached; `--refresh-baseline` forces re-extraction).
+- With `--baseline-dir`: assumes the directory is ready (CI checked out into a separate path).
+- Language absent in baseline (e.g. PR adds `Cargo.toml` for the 1st time): `::warning::language absent in baseline -- gate skipped` + exit 0.
 
-## Pré-requisitos por linguagem
+## Per-language prerequisites
 
-Cada `<lang>/qg.sh` valida ferramentas no início. Faltando: exit 2 com mensagem clara.
+Each `<lang>/qg.sh` validates tools at the start. Missing: exit 2 with a clear message.
 
-### LEI: toda mensagem de ferramenta ausente ensina a instalar (Linux + macOS)
+### LAW: every missing-tool message teaches how to install it (Linux + macOS)
 
-**LEI:** TODA mensagem `::error::` de ferramenta / gerenciador / build-system /
-toolchain **ausente ou não encontrada** DEVE incluir o comando de instalação
-para **Linux E macOS** e a consequência de ignorar. Vale para:
+**LAW:** EVERY `::error::` message for a missing or not-found tool / manager /
+build-system / toolchain MUST include the install command for
+**Linux AND macOS** and the consequence of ignoring it. Applies to:
 
-- entradas de `check_prereqs` (o array `missing+=(...)` de cada `<lang>/qg.sh`);
-- erros de manager/build-system/toolchain ausente em `<lang>/lib/*.sh` (ex:
-  `yarn.lock` + `yarn` ausente, `poetry.lock` + `poetry` ausente, `pom.xml`
-  sem Maven, channel pinado em `rust-toolchain` não instalado).
+- entries from `check_prereqs` (the `missing+=(...)` array of each `<lang>/qg.sh`);
+- missing manager/build-system/toolchain errors in `<lang>/lib/*.sh` (e.g.
+  `yarn.lock` + `yarn` absent, `poetry.lock` + `poetry` absent, `pom.xml`
+  without Maven, channel pinned in `rust-toolchain` not installed).
 
-Formato canônico (ASCII, `--` nunca em-dash):
+Canonical format (ASCII, `--` never an em-dash):
 
 ```
-::error::<causa> -- instale: '<cmd linux>' (Linux) / '<cmd macOS>' (macOS) (<consequencia se ignorar>)
+::error::<cause> -- install: '<linux cmd>' (Linux) / '<macOS cmd>' (macOS) (<consequence if ignored>)
 ```
 
-Exemplos: `yarn` → `npm i -g yarn` / `brew install yarn`; `pnpm` →
-`npm i -g pnpm` / `brew install pnpm`; `poetry` → `pipx install poetry` /
-`brew install poetry`; `cargo-llvm-cov` → `cargo install cargo-llvm-cov`
-(ambos); `jq` → `apt install jq` / `brew install jq`. Se o tool não é
-trivialmente instalável (ex: build-system não suportado pelo gate), a ação
-correta substitui o `instale:` (`abra issue / add-quality-gate`), mas a
-mensagem continua acionável.
+Examples: `yarn` -> `npm i -g yarn` / `brew install yarn`; `pnpm` ->
+`npm i -g pnpm` / `brew install pnpm`; `poetry` -> `pipx install poetry` /
+`brew install poetry`; `cargo-llvm-cov` -> `cargo install cargo-llvm-cov`
+(both); `jq` -> `apt install jq` / `brew install jq`. If the tool is not
+trivially installable (e.g. a build-system not supported by the gate), the right
+action replaces `install:` (`open an issue / add-quality-gate`), but the
+message stays actionable.
 
-Comuns: `git`, `bash 4+`, `awk`, `tar`, `jq`.
+Common ones: `git`, `bash 4+`, `awk`, `tar`, `jq`.
 
-## Compatibilidade GNU/BSD
+## GNU/BSD compatibility
 
-Scripts rodam em macOS dev (BSD) e Linux CI (GNU). Regras:
+Scripts run on macOS dev (BSD) and Linux CI (GNU). Rules:
 
-- Sem `sed -i` — usar `sed -e ... > tmp && mv tmp arquivo`.
-- Sem `grep -P` (não está em BSD).
-- Sem `awk gensub` — usar `gsub`.
-- Sem `find -regex` — usar `find ... | grep -E`.
+- No `sed -i` -- use `sed -e ... > tmp && mv tmp file`.
+- No `grep -P` (not on BSD).
+- No `awk gensub` -- use `gsub`.
+- No `find -regex` -- use `find ... | grep -E`.
 
-## Resolução de dependências antes de build/test (obrigatório)
+## Dependency resolution before build/test (mandatory)
 
-Antes de medir `build`/`test`/`coverage`, o script DEVE resolver o closure de dependências do diretório medido (tanto PR quanto baseline em modo comparativo; o diretório atual em modo absoluto). Medir build sem `node_modules`/venv/etc resolvido produz falso `build` regredido.
+Before measuring `build`/`test`/`coverage`, the script MUST resolve the dependency closure of the measured directory (both PR and baseline in comparative mode; the current directory in absolute mode). Measuring build without `node_modules`/venv/etc resolved produces a false regressed `build`.
 
-| Linguagem | Resolução de deps antes de build/test |
+| Language | Dependency resolution before build/test |
 |---|---|
-| nodejs | detectar lockfile: `pnpm-lock.yaml`→`pnpm i --frozen-lockfile`; `yarn.lock`→`yarn install --immutable` se `.yarnrc.yml` presente (Yarn Berry v2+), senão `yarn install --frozen-lockfile` (Yarn classic v1); senão `npm ci` (fallback `npm install` se não há `package-lock.json`). Só se `node_modules/` ausente ou lockfile mais novo. |
-| python | se há `requirements*.txt`/`pyproject.toml` e não há venv ativa com deps: criar venv efêmera e `pip install -q -r ...` / `pip install -q .`. |
-| java | `mvn` resolve no `compile`/`test`; garantir `-o` (offline) NÃO usado; se resolução falha → tool-error. |
-| kotlin | `gradle` resolve sozinho; garantir não-offline; se resolução falha → tool-error. |
-| go | `go build`/`go test` resolvem via go modules; garantir `GOFLAGS=-mod=mod`; se download falha → tool-error. |
-| rust | `cargo` resolve sozinho. Sem mudança. |
-| swift | `swift build` resolve SwiftPM. Sem mudança. |
+| nodejs | detect lockfile: `pnpm-lock.yaml`->`pnpm i --frozen-lockfile`; `yarn.lock`->`yarn install --immutable` if `.yarnrc.yml` present (Yarn Berry v2+), else `yarn install --frozen-lockfile` (Yarn classic v1); else `npm ci` (fallback `npm install` if there is no `package-lock.json`). Only if `node_modules/` absent or lockfile newer. |
+| python | if there is `requirements*.txt`/`pyproject.toml` and no active venv with deps: create an ephemeral venv and `pip install -q -r ...` / `pip install -q .`. |
+| java | `mvn` resolves on `compile`/`test`; ensure `-o` (offline) is NOT used; if resolution fails -> tool-error. |
+| kotlin | `gradle` resolves on its own; ensure non-offline; if resolution fails -> tool-error. |
+| go | `go build`/`go test` resolve via go modules; ensure `GOFLAGS=-mod=mod`; if download fails -> tool-error. |
+| rust | `cargo` resolves on its own. No change. |
+| swift | `swift build` resolves SwiftPM. No change. |
 
-### Toolchain/build-system declarado é autoritativo (LEI)
+### The declared toolchain/build-system is authoritative (LAW)
 
-O gate mede o que o projeto **realmente usa**. Se o projeto declara um gerenciador de dependências, build-system ou toolchain específico e o gate **não consegue honrá-lo exatamente** (ferramenta ausente no PATH, versão pinada não satisfazível, build-system não suportado pelo gate da linguagem), isso é **tool-error → exit 2** com mensagem clara no log apontando a causa. **NUNCA** substituir silenciosamente por outra ferramenta/versão/manager que produziria resultado diferente.
+The gate measures what the project **actually uses**. If the project declares a specific dependency manager, build-system or toolchain and the gate **cannot honor it exactly** (tool absent from PATH, pinned version not satisfiable, build-system not supported by the language gate), that is a **tool-error -> exit 2** with a clear message in the log pointing to the cause. **NEVER** silently substitute another tool/version/manager that would produce a different result.
 
-Substituição silenciosa mascara a causa real com erro enganoso e mede um artefato que não corresponde ao que CI/produção vão construir → veredito sem valor. Generaliza a LEI nodejs (`025d8e0`) para todas as linguagens.
+Silent substitution masks the real cause with a misleading error and measures an artifact that does not match what CI/production will build -> a worthless verdict. Generalizes the nodejs LAW (`025d8e0`) to all languages.
 
-Não-objetivo: o gate **não** passa a implementar todo build-system. Build-system não suportado = tool-error honesto (instrução: abrir issue / `add-quality-gate`), não substituição.
+Non-goal: the gate does **not** start implementing every build-system. An unsupported build-system = an honest tool-error (instruction: open an issue / `add-quality-gate`), not substitution.
 
-| Linguagem | Anti-pattern a corrigir | Comportamento correto |
+| Language | Anti-pattern to fix | Correct behavior |
 |---|---|---|
-| **nodejs** | (FEITO em `025d8e0`) lockfile + manager ausente → fallback npm | lockfile autoritativo; manager ausente = tool-error |
-| **java** | `build.gradle`/`build.gradle.kts` (Gradle) presente mas gate roda `mvn` silenciosamente | `pom.xml`→Maven (suportado). Gradle (sem `pom.xml`)→ tool-error: "gate Java suporta apenas Maven hoje — abra issue / add-quality-gate". Se `./mvnw` presente, usar o wrapper (versão pinada), não `mvn` do sistema. |
-| **python** | `poetry.lock`/`pdm.lock`/`uv.lock`/`Pipfile.lock` presente mas gate usa `pip install` (resolver diferente) | Detectar manager pelo lockfile: `poetry.lock`→poetry; `pdm.lock`→pdm; `uv.lock`→uv; `Pipfile.lock`→pipenv; só `requirements*.txt`/`pyproject` sem lock→pip. Manager do lock ausente = tool-error, nunca pip. |
-| **kotlin** | `gradle` do sistema usado ignorando `./gradlew` (versão pinada no wrapper) | Se `./gradlew` presente, usar o wrapper; erro do wrapper que force `gradle` do sistema de versão diferente = tool-error, não substituição. |
-| **go** | `go.mod` com diretiva `toolchain`/`go 1.x` não satisfeita pelo `go` do PATH; build com versão diferente | Respeitar `GOTOOLCHAIN` (default `auto` baixa a pinada). Se download falhar e a versão do PATH divergir da pinada → tool-error, não build com versão errada. |
-| **rust** | `rust-toolchain.toml`/`rust-toolchain` pinando channel não instalado; build com toolchain diferente | `cargo`/rustup honra `rust-toolchain.toml`; script não força `+stable`/override. Channel pinado ausente offline → tool-error, não stable. |
-| **swift** | `Package.swift` declara `swift-tools-version` acima do `swift` do PATH → build degradado | tool-error claro na incompatibilidade de tools-version. |
-| **web** | N/A — sem manager/build-system (estático). Sem mudança. | — |
+| **nodejs** | (DONE in `025d8e0`) lockfile + manager absent -> npm fallback | lockfile authoritative; manager absent = tool-error |
+| **java** | `build.gradle`/`build.gradle.kts` (Gradle) present but the gate silently runs `mvn` | `pom.xml`->Maven (supported). Gradle (no `pom.xml`)-> tool-error: "the Java gate only supports Maven today -- open an issue / add-quality-gate". If `./mvnw` present, use the wrapper (pinned version), not the system `mvn`. |
+| **python** | `poetry.lock`/`pdm.lock`/`uv.lock`/`Pipfile.lock` present but the gate uses `pip install` (a different resolver) | Detect the manager from the lockfile: `poetry.lock`->poetry; `pdm.lock`->pdm; `uv.lock`->uv; `Pipfile.lock`->pipenv; only `requirements*.txt`/`pyproject` without a lock->pip. Lock manager absent = tool-error, never pip. |
+| **kotlin** | system `gradle` used ignoring `./gradlew` (pinned version in the wrapper) | If `./gradlew` present, use the wrapper; a wrapper error that would force a different-version system `gradle` = tool-error, not substitution. |
+| **go** | `go.mod` with a `toolchain`/`go 1.x` directive not satisfied by the PATH `go`; build with a different version | Respect `GOTOOLCHAIN` (default `auto` downloads the pinned one). If download fails and the PATH version diverges from the pinned one -> tool-error, not a build with the wrong version. |
+| **rust** | `rust-toolchain.toml`/`rust-toolchain` pinning a channel not installed; build with a different toolchain | `cargo`/rustup honors `rust-toolchain.toml`; the script does not force `+stable`/override. Pinned channel absent offline -> tool-error, not stable. |
+| **swift** | `Package.swift` declares a `swift-tools-version` above the PATH `swift` -> degraded build | clear tool-error on the tools-version incompatibility. |
+| **web** | N/A -- no manager/build-system (static). No change. | -- |
 
-Formato da mensagem (no `$log` apropriado — `abs-deps.log`/`pr-deps.log`/`abs-build.log` conforme etapa):
+Message format (in the appropriate `$log` -- `abs-deps.log`/`pr-deps.log`/`abs-build.log` depending on the step):
 
 ```
-::error::<causa especifica> -- <acao do usuario> (substituicao silenciosa produziria resultado incorreto)
+::error::<specific cause> -- <user action> (silent substitution would produce an incorrect result)
 ```
 
-O caller já emite `::error::falha ao resolver/medir <lang> -- ver <log>`; a causa detalhada vai no `$log`.
+The caller already emits `::error::failed to resolve/measure <lang> -- see <log>`; the detailed cause goes in the `$log`.
 
-**Lockfile é autoritativo (LEI):** se um lockfile está presente mas o gerenciador correspondente não está no PATH (ex: `yarn.lock` + `yarn` ausente), isso é **tool-error → exit 2** com mensagem clara no log apontando o gerenciador faltante — **NUNCA** fazer fallback para outro gerenciador. Trocar de gerenciador silenciosamente produz resolução incorreta (peer-deps diferentes entre npm/yarn/pnpm) e mascara a causa real com um erro enganoso (ex: `ERESOLVE` do npm num projeto yarn).
+**Lockfile is authoritative (LAW):** if a lockfile is present but the corresponding manager is not on PATH (e.g. `yarn.lock` + `yarn` absent), that is a **tool-error -> exit 2** with a clear message in the log pointing to the missing manager -- **NEVER** fall back to another manager. Switching managers silently produces an incorrect resolution (different peer-deps across npm/yarn/pnpm) and masks the real cause with a misleading error (e.g. npm's `ERESOLVE` in a yarn project).
 
-Se a resolução de dependências **falhar** (rede, lockfile corrompido, registry privado sem auth, gerenciador do lockfile ausente): isso é **tool-error → exit 2** (`::error::falha ao resolver dependências de <lang> — <detalhe>`), **NÃO** `build` regredido.
+If dependency resolution **fails** (network, corrupted lockfile, private registry without auth, lockfile manager absent): that is a **tool-error -> exit 2** (`::error::failed to resolve <lang> dependencies -- <detail>`), **NOT** a regressed `build`.
 
-## Sanitização numérica (`_num`, obrigatório)
+## Numeric sanitization (`_num`, mandatory)
 
-Todo valor que alimenta `jq --argjson` (ou comparação aritmética / `awk`) DEVE ser sanitizado para número antes do uso. Função obrigatória em cada `lib/measure.sh` e `lib/output.sh`:
+Every value that feeds `jq --argjson` (or arithmetic comparison / `awk`) MUST be sanitized to a number before use. Mandatory function in each `lib/measure.sh` and `lib/output.sh`:
 
 ```bash
-# Garante numero; qualquer coisa nao-numerica (vazio, "Unknown", "N/A") -> 0
+# Ensures a number; anything non-numeric (empty, "Unknown", "N/A") -> 0
 _num() {
   local v="${1:-}"
   if printf '%s' "$v" | grep -qE '^-?[0-9]+(\.[0-9]+)?$'; then
@@ -500,28 +500,28 @@ _num() {
 }
 ```
 
-- Contadores sem resultado → `0`.
-- `coverage` sem testes / tool sem output → `0` (nunca `"Unknown"`, nunca vazio). Em modo absoluto, `coverage=0` com threshold definido vira `violated`; sem threshold vira `reported`.
-- Onde a ausência de número indica **tool quebrado** (não "ausência legítima"), preferir tool-error (exit 2) a mascarar com `0`. Ex: `cargo llvm-cov` segfault = exit 2; `0 testes logo sem cobertura` = `coverage 0` + segue.
-- Aplicar `_num` em TODOS os pontos `--argjson`/`awk`/comparação dos `lib/`.
+- Counters with no result -> `0`.
+- `coverage` with no tests / tool with no output -> `0` (never `"Unknown"`, never empty). In absolute mode, `coverage=0` with a defined threshold becomes `violated`; without a threshold becomes `reported`.
+- Where the absence of a number indicates a **broken tool** (not "legitimate absence"), prefer tool-error (exit 2) to masking it with `0`. E.g.: `cargo llvm-cov` segfault = exit 2; `0 tests so no coverage` = `coverage 0` + continue.
+- Apply `_num` at ALL `--argjson`/`awk`/comparison points in `lib/`.
 
 ## Forbidden
 
-Não pode silenciar gate sem fix real:
+You cannot silence the gate without a real fix:
 
-- Subir threshold de complexidade local sem registrar em `.qg.yaml` (com `until`).
-- Marcar testes como ignored para "passar".
-- Allow blanket de lints sem causa raiz.
-- `--no-verify` em hooks git.
+- Raise a local complexity threshold without recording it in `.qg.yaml` (with `until`).
+- Mark tests as ignored just to "pass".
+- Blanket-allow lints without a root cause.
+- `--no-verify` on git hooks.
 
-Causa raiz, ou bypass governado, ou `.qg.yaml` com `until`.
+Root cause, or governed bypass, or `.qg.yaml` with `until`.
 
-## Header obrigatório no script
+## Mandatory header in the script
 
-Linha 2 de cada `<lang>/qg.sh`:
+Line 2 of each `<lang>/qg.sh`:
 
 ```bash
 # QG_CONTRACT_VERSION=1
 ```
 
-Ferramentas de validação leem isso para confirmar compatibilidade.
+Validation tools read this to confirm compatibility.

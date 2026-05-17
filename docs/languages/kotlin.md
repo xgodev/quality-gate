@@ -1,20 +1,20 @@
 # Quality Gate -- Kotlin
 
-Documentacao especifica do gate Kotlin. Para o contrato comum, ver [`../contract.md`](../contract.md).
+Kotlin-specific gate documentation. For the common contract, see [`../contract.md`](../contract.md).
 
 ## Build system
 
-Quality Gate Kotlin assume **Gradle (`gradle`/`gradlew`) + `build.gradle.kts`** como build canonico em V1. A sentinela detecta `build.gradle` (Groovy DSL) tambem mas o gate so foi testado com Kotlin DSL.
+Quality Gate Kotlin assumes **Gradle (`gradle`/`gradlew`) + `build.gradle.kts`** as the canonical build in V1. The sentinel also detects `build.gradle` (Groovy DSL) but the gate has only been tested with the Kotlin DSL.
 
-A sentinela de presenca eh `build.gradle.kts` ou `build.gradle` na raiz. Se nenhum existir no baseline, gate emite warning e sai 0.
+The presence sentinel is `build.gradle.kts` or `build.gradle` at the root. If none exists in the baseline, the gate emits a warning and exits 0.
 
-## Pre-requisitos com instalacao
+## Prerequisites with install
 
 ### macOS
 
 ```bash
 brew install openjdk@21 gradle ktlint detekt jq
-# Garanta que JAVA_HOME aponta para a JDK instalada (ver "brew info openjdk@21").
+# Make sure JAVA_HOME points to the installed JDK (see "brew info openjdk@21").
 ```
 
 ### Linux (Ubuntu/Debian)
@@ -22,7 +22,7 @@ brew install openjdk@21 gradle ktlint detekt jq
 ```bash
 sudo apt install openjdk-21-jdk jq
 
-# Gradle: instale via SDKMAN (apt nativo costuma estar defasado):
+# Gradle: install via SDKMAN (native apt is usually out of date):
 curl -s "https://get.sdkman.io" | bash
 source "$HOME/.sdkman/bin/sdkman-init.sh"
 sdk install gradle
@@ -38,77 +38,77 @@ unzip -q "detekt-cli-${DETEKT_VERSION}.zip" -d /opt
 sudo ln -sf "/opt/detekt-cli-${DETEKT_VERSION}/bin/detekt-cli" /usr/local/bin/detekt
 ```
 
-## Metricas -- o que cada uma mede em Kotlin
+## Metrics -- what each one measures in Kotlin
 
-### `fmt` -- formatacao
+### `fmt` -- formatting
 
-Roda `ktlint 'src/**/*.kt' --reporter=plain`. Conta UMA linha por violacao no formato `file:linha:col: msg`.
+Runs `ktlint 'src/**/*.kt' --reporter=plain`. Counts ONE line per violation in the format `file:line:col: msg`.
 
-**Configuracao:** se o projeto tem `.editorconfig` na raiz, eh respeitado por ktlint. Sem ele, defaults do ktlint ("Kotlin coding conventions" estritas, incluindo function-signature multilinhas).
+**Configuration:** if the project has an `.editorconfig` at the root, it is respected by ktlint. Without it, ktlint defaults (strict "Kotlin coding conventions", including multi-line function signatures).
 
-**Como interpretar regressao:** PR introduziu codigo desformatado. Solucao: `ktlint 'src/**/*.kt' --format` (auto-fix) e revisar o diff.
+**How to interpret a regression:** the PR introduced unformatted code. Fix: `ktlint 'src/**/*.kt' --format` (auto-fix) and review the diff.
 
 ### `lint` -- detekt
 
-Roda `detekt --input src/main/kotlin --report txt:<log>`. Conta linhas no formato `file:linha:col: ... [RuleName]`.
+Runs `detekt --input src/main/kotlin --report txt:<log>`. Counts lines in the format `file:line:col: ... [RuleName]`.
 
-**Configuracao:** se o projeto tem `detekt.yml` (default name) ou outro arquivo passado via `--config`, eh respeitado. Sem config, defaults do detekt (regras "default" sem opt-ins).
+**Configuration:** if the project has `detekt.yml` (default name) or another file passed via `--config`, it is respected. Without config, detekt defaults ("default" rules without opt-ins).
 
-**Como interpretar regressao:** PR introduziu issue que detekt detecta. Solucao: ler `target/qg-logs/pr-lint.log`, identificar regra, fixar codigo. `@Suppress("RuleName")` so com causa raiz documentada.
+**How to interpret a regression:** the PR introduced an issue detekt detects. Fix: read `target/qg-logs/pr-lint.log`, identify the rule, fix the code. `@Suppress("RuleName")` only with a documented root cause.
 
-### `build` -- compilacao
+### `build` -- compilation
 
-Roda `gradle compileKotlin -q --no-daemon`. Conta linhas `file.kt:linha:col: error:` se exit code != 0.
+Runs `gradle compileKotlin -q --no-daemon`. Counts `file.kt:line:col: error:` lines if exit code != 0.
 
-**Como interpretar regressao:** codigo nao compila. Pouco provavel passar pelo dev e chegar no gate.
+**How to interpret a regression:** the code does not compile. Unlikely to slip past the dev and reach the gate.
 
-### `test` -- testes falhando
+### `test` -- failing tests
 
-Roda `gradle test --rerun-tasks --no-daemon`. Conta o numero N do resumo `N tests completed, F failed` (gradle imprime essa linha por modulo de teste; o gate pega a UTLIMA ocorrencia).
+Runs `gradle test --rerun-tasks --no-daemon`. Counts the number N from the summary `N tests completed, F failed` (gradle prints this line per test module; the gate takes the LAST occurrence).
 
-`--rerun-tasks` eh ESSENCIAL: sem ele, gradle marca o task `:test` como `UP-TO-DATE` entre execucoes consecutivas e nao re-executa, retornando 0 mesmo quando ha testes falhando. O `build.gradle.kts` do projeto deve ter `tasks.test { ignoreFailures = true }` para nao abortar a build.
+`--rerun-tasks` is ESSENTIAL: without it, gradle marks the `:test` task as `UP-TO-DATE` between consecutive runs and does not re-execute, returning 0 even when tests are failing. The project's `build.gradle.kts` must have `tasks.test { ignoreFailures = true }` so the build does not abort.
 
-**Tool error vs regressao:** se gradle trava (OOM, JVM crash), nao gera linha "tests completed" -- nao conta como falha de teste. Esses casos sao tool error e o usuario precisa investigar.
+**Tool error vs regression:** if gradle hangs (OOM, JVM crash), it does not produce a "tests completed" line -- it does not count as a test failure. These cases are a tool error and the user must investigate.
 
-**Como interpretar regressao:** testes que passavam falham agora. Solucao: rodar `gradle test --info`, ler erro, fixar.
+**How to interpret a regression:** tests that passed now fail. Fix: run `gradle test --info`, read the error, fix it.
 
-`@Ignore` (JUnit 4) ou `@Disabled` (JUnit 5) eh proibido como mitigacao (ver [`../contract.md#forbidden`](../contract.md#forbidden)).
+`@Ignore` (JUnit 4) or `@Disabled` (JUnit 5) is forbidden as a mitigation (see [`../contract.md#forbidden`](../contract.md#forbidden)).
 
-### `complexity` -- complexidade
+### `complexity` -- complexity
 
-Roda o mesmo `detekt` que o `lint`, mas conta apenas matches das regras especificas:
+Runs the same `detekt` as `lint`, but counts only matches of the specific rules:
 
 - `CyclomaticComplexMethod` (default threshold = 15)
-- `ComplexCondition` (default threshold = 4 expressoes booleanas)
+- `ComplexCondition` (default threshold = 4 boolean expressions)
 - `NestedBlockDepth` (default threshold = 4)
-- `LongMethod` (default threshold = 60 linhas)
-- `LongParameterList` (default threshold = 6 parametros funcao)
+- `LongMethod` (default threshold = 60 lines)
+- `LongParameterList` (default threshold = 6 function parameters)
 
-**Como interpretar regressao:** PR introduziu funcao acima de algum threshold. Solucoes: extrair sub-funcoes; substituir cadeias `if/else` por `when` ou polimorfismo; usar early-return.
+**How to interpret a regression:** the PR introduced a function above some threshold. Fixes: extract sub-functions; replace `if/else` chains with `when` or polymorphism; use early-return.
 
-### `coverage` -- cobertura de linhas
+### `coverage` -- line coverage
 
-Roda `gradle koverXmlReport --no-daemon` e parsea `build/reports/kover/report.xml`. Calcula `% covered` do contador raiz `<counter type="LINE" missed="M" covered="C"/>`.
+Runs `gradle koverXmlReport --no-daemon` and parses `build/reports/kover/report.xml`. Computes `% covered` from the root counter `<counter type="LINE" missed="M" covered="C"/>`.
 
-Kover usa o mesmo formato XML do JaCoCo. O projeto-alvo precisa ter `kover` plugin aplicado: `id("org.jetbrains.kotlinx.kover") version "0.8.3"` em `plugins{}`.
+Kover uses the same XML format as JaCoCo. The target project needs the `kover` plugin applied: `id("org.jetbrains.kotlinx.kover") version "0.8.3"` in `plugins{}`.
 
-**Margem de tolerancia:** default 1.0pp (ver `--cov-margin` ou `.qg.yaml: cov_margin`).
+**Tolerance margin:** default 1.0pp (see `--cov-margin` or `.qg.yaml: cov_margin`).
 
-**Como interpretar regressao:** PR adicionou codigo sem teste correspondente. Solucoes: adicionar teste; ou (com criterio) aumentar margem em `.qg.yaml`.
+**How to interpret a regression:** the PR added code without a corresponding test. Fixes: add a test; or (with discretion) raise the margin in `.qg.yaml`.
 
-## Troubleshooting comum
+## Common troubleshooting
 
 ### `Cannot find a Java installation matching: {languageVersion=17, ...}`
 
-Gradle nao encontra a JDK na versao requerida no `jvmToolchain(N)` do `build.gradle.kts`. Solucao: ajuste `jvmToolchain` para a versao instalada (`jvmToolchain(21)` se voce tem JDK 21) OU instale a JDK requerida e setar `JAVA_HOME`.
+Gradle cannot find the JDK at the version required by `jvmToolchain(N)` in `build.gradle.kts`. Fix: adjust `jvmToolchain` to the installed version (`jvmToolchain(21)` if you have JDK 21) OR install the required JDK and set `JAVA_HOME`.
 
-### `gradle test` reporta 0 falhas mesmo com teste falhando
+### `gradle test` reports 0 failures even with a failing test
 
-Gradle cacheia o output do task `:test` como `UP-TO-DATE`. O gate ja usa `--rerun-tasks` mas se voce rodar `gradle test` manualmente sem essa flag, vai bater no cache. Solucao: sempre `gradle test --rerun-tasks` ou `gradle clean test`.
+Gradle caches the `:test` task output as `UP-TO-DATE`. The gate already uses `--rerun-tasks` but if you run `gradle test` manually without that flag, you hit the cache. Fix: always `gradle test --rerun-tasks` or `gradle clean test`.
 
-### `kover` plugin nao aplicado, coverage retorna 0
+### `kover` plugin not applied, coverage returns 0
 
-O projeto-alvo precisa ter:
+The target project needs:
 
 ```kotlin
 plugins {
@@ -116,33 +116,33 @@ plugins {
 }
 ```
 
-E o report XML eh gerado em `build/reports/kover/report.xml` apos `gradle koverXmlReport`.
+And the XML report is generated at `build/reports/kover/report.xml` after `gradle koverXmlReport`.
 
-### Baseline cache stale apos mudar branch base
+### Stale baseline cache after changing the base branch
 
 ```bash
 ~/.quality-gate/kotlin/qg.sh --base origin/main --refresh-baseline
-# OU
+# OR
 rm -rf /tmp/qg-baseline-kotlin
 ```
 
-### `git archive` falha com "fatal: not a valid object name"
+### `git archive` fails with "fatal: not a valid object name"
 
-A base ref nao existe localmente. Solucao:
+The base ref does not exist locally. Fix:
 
 ```bash
 git fetch origin
 ```
 
-## Metricas omitidas
+## Omitted metrics
 
-Nenhuma. Kotlin suporta as 6 metricas reservadas com ferramentas oficiais (ktlint, detekt, gradle compileKotlin/test, kover).
+None. Kotlin supports the 6 reserved metrics with official tools (ktlint, detekt, gradle compileKotlin/test, kover).
 
-## Metricas extras
+## Extra metrics
 
-Nenhuma em V1. Candidatos futuros:
-- `vuln` via `gradle dependencyCheckAnalyze` (OWASP Dependency-Check) -- vulnerabilidades em deps.
-- `binary_compat` via `kotlinx-binary-compatibility-validator` -- breaking changes na API.
-- `unused_deps` via `gradle nebula.dependency-lock` ou similar.
+None in V1. Future candidates:
+- `vuln` via `gradle dependencyCheckAnalyze` (OWASP Dependency-Check) -- vulnerabilities in deps.
+- `binary_compat` via `kotlinx-binary-compatibility-validator` -- breaking API changes.
+- `unused_deps` via `gradle nebula.dependency-lock` or similar.
 
-Para adicionar, seguir contrato (secao "Estender") e `.claude/skills/add-quality-gate/`.
+To add, follow the contract (section "Extending") and `skills/add-quality-gate/`.

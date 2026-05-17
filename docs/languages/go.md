@@ -1,25 +1,25 @@
 # Quality Gate -- Go
 
-Documentacao especifica do gate Go. Para o contrato comum, ver [`../contract.md`](../contract.md).
+Go-specific gate documentation. For the common contract, see [`../contract.md`](../contract.md).
 
 ## Build system
 
-Quality Gate Go assume **go modules** (oficial, embutido na toolchain). Nao suporta GOPATH legado nem dep.
+Quality Gate Go assumes **go modules** (official, built into the toolchain). It does not support legacy GOPATH or dep.
 
-A sentinela de presenca eh `go.mod` na raiz. Se ausente no baseline, o gate emite warning e sai 0 (nada para medir).
+The presence sentinel is `go.mod` at the root. If absent in the baseline, the gate emits a warning and exits 0 (nothing to measure).
 
-## Pre-requisitos com instalacao
+## Prerequisites with install
 
 ### macOS
 
 ```bash
-# Toolchain Go
+# Go toolchain
 brew install go
 
 # Cyclomatic complexity
 go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
 
-# Linter (opcional; fallback usa go vet)
+# Linter (optional; fallback uses go vet)
 brew install golangci-lint
 
 # JSON parser
@@ -29,126 +29,126 @@ brew install jq
 ### Linux (Ubuntu/Debian)
 
 ```bash
-# Toolchain Go (use o tarball oficial para versoes recentes; apt costuma ter versoes antigas)
+# Go toolchain (use the official tarball for recent versions; apt usually has old versions)
 curl -fsSL https://go.dev/dl/go1.22.0.linux-amd64.tar.gz | sudo tar -C /usr/local -xz
 export PATH=$PATH:/usr/local/go/bin
 
 # Cyclomatic complexity
 go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
 
-# Linter (opcional)
+# Linter (optional)
 curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin"
 
 # JSON parser
 sudo apt install jq
 ```
 
-Garanta que `$(go env GOPATH)/bin` esta no `$PATH` para usar `gocyclo` e `golangci-lint`.
+Make sure `$(go env GOPATH)/bin` is on `$PATH` to use `gocyclo` and `golangci-lint`.
 
-## Metricas -- o que cada uma mede em Go
+## Metrics -- what each one measures in Go
 
-### `fmt` -- formatacao
+### `fmt` -- formatting
 
-Roda `gofmt -l .` no diretorio. Conta linhas terminadas em `.go` (cada arquivo desformatado eh uma linha).
+Runs `gofmt -l .` in the directory. Counts lines ending in `.go` (each unformatted file is one line).
 
-**Configuracao:** `gofmt` nao tem config -- regras sao fixas pela toolchain.
+**Configuration:** `gofmt` has no config -- the rules are fixed by the toolchain.
 
-**Como interpretar regressao:** PR introduziu arquivo divergente do `gofmt`. Solucao: `gofmt -w .` (ou `goimports -w .`).
+**How to interpret a regression:** the PR introduced a file diverging from `gofmt`. Fix: `gofmt -w .` (or `goimports -w .`).
 
 ### `lint` -- linter
 
-Por padrao roda `golangci-lint run --out-format=line-number ./...`. Se o binario falha (ex: incompatibilidade entre versao do golangci-lint e versao do Go instalada -- exit code != 0/1), o gate cai automaticamente para `go vet ./...` e emite `::warning::` para alertar.
+By default it runs `golangci-lint run --out-format=line-number ./...`. If the binary fails (e.g. an incompatibility between the golangci-lint version and the installed Go version -- exit code != 0/1), the gate automatically falls back to `go vet ./...` and emits a `::warning::` to alert you.
 
-Conta linhas no formato `path/file.go:LINHA:COL:` (cada issue eh uma linha).
+Counts lines in the format `path/file.go:LINE:COL:` (each issue is one line).
 
-**Configuracao:** se o projeto tem `.golangci.yml`/`.golangci.yaml`, eh respeitado. Sem ele, defaults do golangci-lint.
+**Configuration:** if the project has a `.golangci.yml`/`.golangci.yaml`, it is respected. Without it, golangci-lint defaults.
 
-**Forcar fallback:** exporte `QG_GO_LINT_FORCE_VET=1` para usar `go vet` mesmo se golangci-lint estiver instalado (util quando voce sabe que a versao do binario nao casa com a do Go).
+**Force fallback:** export `QG_GO_LINT_FORCE_VET=1` to use `go vet` even if golangci-lint is installed (useful when you know the binary version does not match the Go version).
 
-**Como interpretar regressao:** PR introduziu issue que linter detecta. Solucao: ler `target/qg-logs/pr-lint.log`, identificar linter, decidir entre fix de codigo ou desabilitacao via `//nolint:<rule>` com causa raiz documentada (ver [`../contract.md#forbidden`](../contract.md#forbidden)).
+**How to interpret a regression:** the PR introduced an issue the linter detects. Fix: read `target/qg-logs/pr-lint.log`, identify the linter, decide between a code fix or disabling via `//nolint:<rule>` with a documented root cause (see [`../contract.md#forbidden`](../contract.md#forbidden)).
 
-### `build` -- compilacao
+### `build` -- compilation
 
-Roda `go build ./...`. Conta linhas `path:linha:col:` -- cada erro de compilacao eh uma linha.
+Runs `go build ./...`. Counts `path:line:col:` lines -- each compilation error is one line.
 
-**Como interpretar regressao:** codigo nao compila. Pouco provavel passar pelo dev e chegar no gate; geralmente conflito de merge ou refactor incompleto.
+**How to interpret a regression:** the code does not compile. Unlikely to slip past the dev and reach the gate; usually a merge conflict or an incomplete refactor.
 
-### `test` -- testes falhando
+### `test` -- failing tests
 
-Roda `go test ./... -count=1 -vet=off`. Conta linhas `^--- FAIL:` (cada teste falhado).
+Runs `go test ./... -count=1 -vet=off`. Counts `^--- FAIL:` lines (each failed test).
 
-`-vet=off` evita duplicacao com a metrica `lint` (o `go test` por padrao roda vet em paralelo; sem `-vet=off` um problema de vet contaria 2x).
+`-vet=off` avoids duplication with the `lint` metric (`go test` by default runs vet in parallel; without `-vet=off` a vet problem would be counted twice).
 
-`-count=1` desabilita cache de teste para garantir execucao real.
+`-count=1` disables the test cache to guarantee a real run.
 
-**Tool error vs regressao:** `go test` panic do runner sai com codigo != 0/1 e linhas `panic:` em stderr -- isso NAO eh contado como teste falhado. Apenas `--- FAIL:` conta.
+**Tool error vs regression:** a `go test` runner panic exits with a code != 0/1 and `panic:` lines on stderr -- this is NOT counted as a failed test. Only `--- FAIL:` counts.
 
-**Como interpretar regressao:** testes que passavam no baseline falham no PR. Solucao: rodar localmente `go test ./... -count=1 -vet=off`, ler erro, fixar.
+**How to interpret a regression:** tests that passed on the baseline fail on the PR. Fix: run locally `go test ./... -count=1 -vet=off`, read the error, fix it.
 
-### `complexity` -- complexidade ciclomatica
+### `complexity` -- cyclomatic complexity
 
-Roda `gocyclo -over 15 .`. Conta funcoes com complexidade ciclomatica > 15.
+Runs `gocyclo -over 15 .`. Counts functions with cyclomatic complexity > 15.
 
-**Threshold:** `15` -- valor padrao recomendado pela comunidade Go (gocyclo readme cita "above 15 is candidate for refactoring").
+**Threshold:** `15` -- the value recommended by the Go community (the gocyclo readme cites "above 15 is candidate for refactoring").
 
-**Como interpretar regressao:** PR introduziu funcao acima do threshold. Solucoes: extrair sub-funcoes; reescrever com `switch` em vez de cadeias `if/else`; usar early-return para reduzir nesting.
+**How to interpret a regression:** the PR introduced a function above the threshold. Fixes: extract sub-functions; rewrite with `switch` instead of `if/else` chains; use early-return to reduce nesting.
 
-### `coverage` -- cobertura de linhas
+### `coverage` -- line coverage
 
-Roda `go test ./... -count=1 -vet=off -covermode=atomic -coverprofile=<path>` e extrai a linha `total:` de `go tool cover -func=<path>`.
+Runs `go test ./... -count=1 -vet=off -covermode=atomic -coverprofile=<path>` and extracts the `total:` line from `go tool cover -func=<path>`.
 
-**Margem de tolerancia:** default 1.0pp (ver `--cov-margin` ou `.qg.yaml: cov_margin`).
+**Tolerance margin:** default 1.0pp (see `--cov-margin` or `.qg.yaml: cov_margin`).
 
-**Como interpretar regressao:** PR adicionou codigo sem teste correspondente. Solucoes: adicionar test cobrindo o caminho novo; ou (com criterio) aumentar a margem em `.qg.yaml` se for caso justificado.
+**How to interpret a regression:** the PR added code without a corresponding test. Fixes: add a test covering the new path; or (with discretion) raise the margin in `.qg.yaml` if the case is justified.
 
-## Troubleshooting comum
+## Common troubleshooting
 
-### `golangci-lint` falha com "could not load export data: internal error in importing"
+### `golangci-lint` fails with "could not load export data: internal error in importing"
 
-Versao do `golangci-lint` esta defasada em relacao a versao do Go instalada. O gate detecta automaticamente e cai para `go vet`. Para resolver permanentemente:
+The `golangci-lint` version is out of date relative to the installed Go version. The gate detects this automatically and falls back to `go vet`. To fix it permanently:
 
 ```bash
 brew upgrade golangci-lint    # macOS
-# ou re-instale do site oficial:
+# or re-install from the official site:
 curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin"
 ```
 
-### `gocyclo` nao encontrado
+### `gocyclo` not found
 
 ```bash
 go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
 ```
 
-E garanta que `$(go env GOPATH)/bin` esta no `$PATH`.
+And make sure `$(go env GOPATH)/bin` is on `$PATH`.
 
-### Baseline cache stale apos mudar branch base
+### Stale baseline cache after changing the base branch
 
 ```bash
 ~/.quality-gate/go/qg.sh --base origin/main --refresh-baseline
 ```
 
-ou
+or
 
 ```bash
 rm -rf /tmp/qg-baseline-go
 ```
 
-### `git archive` falha com "fatal: not a valid object name"
+### `git archive` fails with "fatal: not a valid object name"
 
-A base ref nao existe localmente. Solucao:
+The base ref does not exist locally. Fix:
 
 ```bash
 git fetch origin
 ```
 
-## Metricas omitidas
+## Omitted metrics
 
-Nenhuma. Go suporta as 6 metricas reservadas com ferramentas oficiais (gofmt, go vet/golangci-lint, go build, go test, gocyclo, go test -coverprofile).
+None. Go supports the 6 reserved metrics with official tools (gofmt, go vet/golangci-lint, go build, go test, gocyclo, go test -coverprofile).
 
-## Metricas extras
+## Extra metrics
 
-Nenhuma em V1. Candidatos futuros:
-- `vuln` via `govulncheck` -- vulnerabilidades nas dependencias e codigo.
-- `staticcheck_advanced` -- checks adicionais que estao foras do golangci-lint default.
+None in V1. Future candidates:
+- `vuln` via `govulncheck` -- vulnerabilities in dependencies and code.
+- `staticcheck_advanced` -- additional checks outside the golangci-lint default.
 
-Para adicionar, seguir contrato (secao "Estender") e `.claude/skills/add-quality-gate/`.
+To add, follow the contract (section "Extending") and `skills/add-quality-gate/`.

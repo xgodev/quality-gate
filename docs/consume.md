@@ -1,59 +1,59 @@
-# Como usar o Quality Gate no seu projeto
+# How to use Quality Gate in your project
 
-Este guia cobre uso **local** (dev na máquina). CI será documentado em V2.
+This guide covers **local** use (dev on the machine). CI will be documented in V2.
 
-## Pré-requisitos
+## Prerequisites
 
-1. Git, bash 4+, awk, tar (sistema).
-2. Pré-reqs específicos da linguagem do seu projeto. Ver [`languages/`](languages/).
+1. Git, bash 4+, awk, tar (system).
+2. Language-specific prereqs for your project. See [`languages/`](languages/).
 
-Para Rust: cargo, cargo-llvm-cov, jq.
+For Rust: cargo, cargo-llvm-cov, jq.
 
-## Setup (uma vez por máquina)
+## Setup (once per machine)
 
 ```bash
 git clone git@github.com:xgodev/quality-gate.git ~/.quality-gate
 ```
 
-Atualize quando o time de plataforma anunciar mudanças:
+Update when the platform team announces changes:
 
 ```bash
 git -C ~/.quality-gate pull --ff-only
 ```
 
-## Rodar manualmente
+## Run manually
 
-No diretório do seu projeto:
+In your project directory:
 
 ```bash
 ~/.quality-gate/rust/qg.sh --base origin/main
 ```
 
-Ou setando env vars:
+Or by setting env vars:
 
 ```bash
 QG_BASE_REF=origin/main ~/.quality-gate/rust/qg.sh
 ```
 
-### Opções comuns
+### Common options
 
 ```bash
-# Tolerância de coverage diferente (default 1.0pp)
+# Different coverage tolerance (default 1.0pp)
 ~/.quality-gate/rust/qg.sh --base origin/main --cov-margin 0.5
 
-# Re-extrair baseline (ignorar cache)
+# Re-extract baseline (ignore cache)
 ~/.quality-gate/rust/qg.sh --base origin/main --refresh-baseline
 
-# Forçar gate completo (pular fast-path)
+# Force full gate (skip fast-path)
 ~/.quality-gate/rust/qg.sh --base origin/main --force-full
 
-# Output JSON para parsing
+# JSON output for parsing
 ~/.quality-gate/rust/qg.sh --base origin/main --format json > result.json
 ```
 
-## Hook git pre-push (opcional)
+## Git pre-push hook (optional)
 
-Adicionar em `.git/hooks/pre-push`:
+Add to `.git/hooks/pre-push`:
 
 ```bash
 #!/usr/bin/env bash
@@ -64,75 +64,75 @@ exec ~/.quality-gate/rust/qg.sh --base origin/main
 chmod +x .git/hooks/pre-push
 ```
 
-## Config por repo (`.qg.yaml` opcional)
+## Per-repo config (`.qg.yaml` optional)
 
-No raiz do seu projeto:
+At your project root:
 
 ```yaml
 cov_margin: 2.0
 skip_metrics:
   - metric: complexity
-    reason: "legacy module, plano de refactor em INT-1234"
+    reason: "legacy module, refactor plan in INT-1234"
     until: "2026-09-01"
 extra_fast_path_paths:
   - "^vendor/"
 ```
 
-Regras completas: [`contract.md`](contract.md#config-por-repo-qgyaml-opcional).
+Full rules: [`contract.md`](contract.md#per-repo-config-qgyaml-optional).
 
-## Bypass de emergência
+## Emergency bypass
 
-Hotfix de produção 3am, baseline quebrado, etc.:
+Production hotfix at 3am, broken baseline, etc.:
 
 ```bash
-QG_BYPASS_REASON="INT-9999 hotfix prod down, baseline corrompido" \
+QG_BYPASS_REASON="INT-9999 hotfix prod down, corrupted baseline" \
   ~/.quality-gate/rust/qg.sh --base origin/main
 ```
 
-Bypass é registrado em `target/qg-logs/bypass.log`. Use com critério.
+The bypass is recorded in `target/qg-logs/bypass.log`. Use with discretion.
 
 ## Troubleshooting
 
-| Sintoma | Causa provável | Solução |
+| Symptom | Likely cause | Fix |
 |---|---|---|
-| `::error::--base é obrigatório` | Não passou base ref | Adicionar `--base origin/main` |
-| `::error::cargo-llvm-cov não encontrado` | Pré-req faltando | `cargo install cargo-llvm-cov` |
-| Gate vermelho em PR que não tocou Rust | Fast-path não acionou | Ver se algum `Cargo.*` ou `.rs` foi modificado |
-| Baseline cache stale | Cache divergente | `--refresh-baseline` ou `rm -rf /tmp/qg-baseline-*` |
-| `git archive` falhou | Ref não existe local | `git fetch origin` |
+| `::error::--base is required` | Did not pass a base ref | Add `--base origin/main` |
+| `::error::cargo-llvm-cov not found` | Missing prereq | `cargo install cargo-llvm-cov` |
+| Red gate on a PR that did not touch Rust | Fast-path did not trigger | Check whether some `Cargo.*` or `.rs` was modified |
+| Stale baseline cache | Divergent cache | `--refresh-baseline` or `rm -rf /tmp/qg-baseline-*` |
+| `git archive` failed | Ref does not exist locally | `git fetch origin` |
 
-Detalhes por linguagem em [`languages/<lang>.md`](languages/).
+Per-language details in [`languages/<lang>.md`](languages/).
 
-## Smoke test (validação manual)
+## Smoke test (manual validation)
 
-Para confirmar que a instalação funciona end-to-end:
+To confirm the installation works end-to-end:
 
 ```bash
-# Clone do gate
+# Clone the gate
 git clone git@github.com:xgodev/quality-gate.git ~/.quality-gate
 
-# Teste 1: baseline contra ele mesmo → deve sair 0 (passed)
+# Test 1: baseline against itself -> should exit 0 (passed)
 cd ~/.quality-gate/rust/test-fixtures/baseline
 ~/.quality-gate/rust/qg.sh \
   --base origin/main \
   --baseline-dir "$(pwd)" \
   --force-full
-echo "Esperado: exit 0"
+echo "Expected: exit 0"
 
-# Teste 2: regressed contra baseline → deve sair 1 (regressed)
+# Test 2: regressed against baseline -> should exit 1 (regressed)
 cd ~/.quality-gate/rust/test-fixtures/regressed
 ~/.quality-gate/rust/qg.sh \
   --base origin/main \
   --baseline-dir ~/.quality-gate/rust/test-fixtures/baseline \
   --force-full
-echo "Esperado: exit 1, 5 métricas regredidas"
+echo "Expected: exit 1, 5 regressed metrics"
 
-# Teste 3: bypass governado → deve sair 0 com warning
+# Test 3: governed bypass -> should exit 0 with a warning
 QG_BYPASS_REASON="smoke test" ~/.quality-gate/rust/qg.sh \
   --base origin/main \
   --baseline-dir ~/.quality-gate/rust/test-fixtures/baseline \
   --force-full
-echo "Esperado: exit 0, ::warning:: visível, audit log gravado"
+echo "Expected: exit 0, ::warning:: visible, audit log written"
 ```
 
-Se os 3 testes saírem com os exit codes esperados, a instalação está OK.
+If the 3 tests exit with the expected exit codes, the installation is OK.

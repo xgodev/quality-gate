@@ -1,12 +1,12 @@
-# Formatos de Output
+# Output Formats
 
-Detalha os dois formatos de saída do gate (texto e JSON) com exemplos completos por veredito.
+Details the gate's two output formats (text and JSON) with complete examples per verdict.
 
-Para a especificação canônica, ver [`contract.md`](contract.md). Este documento é referência operacional.
+For the canonical specification, see [`contract.md`](contract.md). This document is an operational reference.
 
-## Texto (default)
+## Text (default)
 
-### Veredito: passou
+### Verdict: passed
 
 ```
 ═══ Quality Gate — rust ═══
@@ -16,10 +16,10 @@ Para a especificação canônica, ver [`contract.md`](contract.md). Este documen
   cov margin:    1.0pp
   logs:          target/qg-logs/
 
-── medindo base ──
-── medindo PR ──
+── measuring base ──
+── measuring PR ──
 
-métrica       base       pr     veredito
+metric        base       pr     verdict
 ─────────────────────────────────────────
 fmt              0        0    ✅ same
 lint             3        2    ✅ improved
@@ -28,53 +28,53 @@ test fails       0        0    ✅ same
 complexity       7        7    ✅ same
 coverage     82.3%    82.5%   ✅ improved
 
-::notice::PR não regrediu nenhuma métrica.
+::notice::PR did not regress any metric.
 ```
 
 Exit code: 0.
 
-### Veredito: regrediu
+### Verdict: regressed
 
 ```
-[header igual...]
+[same header...]
 
-métrica       base       pr     veredito
+metric        base       pr     verdict
 ─────────────────────────────────────────
 fmt              0        2    ❌ regressed
 lint             3        5    ❌ regressed
 build            0        0    ✅ same
 test fails       0        1    ❌ regressed
 complexity       7        9    ❌ regressed
-coverage     82.3%    79.8%   ❌ regressed (margem: 1.0pp, queda: 2.5pp)
+coverage     82.3%    79.8%   ❌ regressed (margin: 1.0pp, drop: 2.5pp)
 
-::error::PR regrediu fmt, lint, test fails, complexity, coverage — ver acima.
+::error::PR regressed fmt, lint, test fails, complexity, coverage -- see above.
 ```
 
 Exit code: 1.
 
-### Veredito: bypassed
+### Verdict: bypassed
 
 ```
 ═══ Quality Gate — rust ═══
   branch:        hotfix/INT-9999
   base ref:      origin/main
 
-::warning::QG bypass ativo — motivo: INT-9999 hotfix prod down, baseline corrompido
-::warning::Esta execução não validou métricas. Audit log: target/qg-logs/bypass.log
+::warning::QG bypass active -- reason: INT-9999 hotfix prod down, corrupted baseline
+::warning::This run did not validate metrics. Audit log: target/qg-logs/bypass.log
 ```
 
-Exit code: 0. Métricas não medidas.
+Exit code: 0. Metrics not measured.
 
-### Veredito: fast-path
+### Verdict: fast-path
 
 ```
 ═══ Quality Gate (fast-path) ═══
-  branch:        docs/atualiza-readme
+  branch:        docs/update-readme
   base ref:      origin/main
   scope:         no Rust files touched → skipping cargo gates
   override:      QG_FORCE_FULL=1 to run full gate
 
-── arquivos modificados ──
+── modified files ──
   README.md
   docs/getting-started.md
 
@@ -85,7 +85,7 @@ Exit code: 0.
 
 ## JSON (`--format json`)
 
-### Veredito: passou
+### Verdict: passed
 
 ```json
 {
@@ -108,13 +108,13 @@ Exit code: 0.
 }
 ```
 
-Exit code: 0. Stdout recebe SÓ o JSON; mensagens de progresso vão para stderr.
+Exit code: 0. Stdout receives ONLY the JSON; progress messages go to stderr.
 
-### Veredito: regrediu
+### Verdict: regressed
 
-Idêntico ao "passou", mas `verdict: "regressed"` global e métricas com `verdict: "regressed"`. Exit code: 1.
+Identical to "passed", but global `verdict: "regressed"` and metrics with `verdict: "regressed"`. Exit code: 1.
 
-### Veredito: bypassed
+### Verdict: bypassed
 
 ```json
 {
@@ -125,20 +125,20 @@ Idêntico ao "passou", mas `verdict: "regressed"` global e métricas com `verdic
   "started_at": "2026-05-14T10:30:12Z",
   "duration_seconds": 0,
   "verdict": "bypassed",
-  "bypass_reason": "INT-9999 hotfix prod down, baseline corrompido",
+  "bypass_reason": "INT-9999 hotfix prod down, corrupted baseline",
   "metrics": []
 }
 ```
 
-Exit code: 0. `metrics` vazio (gate não mediu).
+Exit code: 0. `metrics` empty (the gate did not measure).
 
-### Veredito: fast-path
+### Verdict: fast-path
 
 ```json
 {
   "schema_version": "1.0",
   "language": "rust",
-  "branch": "docs/atualiza-readme",
+  "branch": "docs/update-readme",
   "base_ref": "origin/main",
   "started_at": "2026-05-14T10:30:12Z",
   "duration_seconds": 2,
@@ -148,23 +148,23 @@ Exit code: 0. `metrics` vazio (gate não mediu).
 }
 ```
 
-Exit code: 0. `metrics` vazio (fast-path).
+Exit code: 0. `metrics` empty (fast-path).
 
-## Modo absoluto (`--base` ausente)
+## Absolute mode (`--base` absent)
 
-Sem `--base`/`QG_BASE_REF` o gate roda em modo absoluto: mede `.` uma vez, sem baseline, sem coluna `base`.
+Without `--base`/`QG_BASE_REF` the gate runs in absolute mode: measures `.` once, with no baseline, no `base` column.
 
-### Texto — com `absolute_thresholds` (uma violação)
+### Text -- with `absolute_thresholds` (one violation)
 
 ```
-═══ Quality Gate — rust (modo absoluto) ═══
+═══ Quality Gate — rust (absolute mode) ═══
   branch:        feature/x
-  cov margin:    n/a (modo absoluto)
+  cov margin:    n/a (absolute mode)
   logs:          target/qg-logs/
 
-── medindo (sem baseline) ──
+── measuring (no baseline) ──
 
-métrica       valor   limite   veredito
+metric        value   threshold   verdict
 ─────────────────────────────────────────
 fmt              0        0    ✅ ok
 lint             3        0    ❌ violated
@@ -173,22 +173,22 @@ test fails       0        0    ✅ ok
 complexity       7        -    ℹ️  reported
 coverage     82.3%      80%    ✅ ok
 
-::error::PR violou thresholds absolutos: lint — ver acima.
+::error::PR violated absolute thresholds: lint -- see above.
 ```
 
 Exit code: 1.
 
-### Texto — sem `.qg.yaml` / sem thresholds
+### Text -- without `.qg.yaml` / without thresholds
 
-Todas as linhas viram `ℹ️  reported`, rodapé:
+All lines become `ℹ️  reported`, footer:
 
 ```
-::notice::modo absoluto sem thresholds — apenas relatório (exit 0)
+::notice::absolute mode without thresholds -- report only (exit 0)
 ```
 
 Exit code: 0.
 
-### JSON — modo absoluto sem thresholds
+### JSON -- absolute mode without thresholds
 
 ```json
 {
@@ -214,7 +214,7 @@ Exit code: 0.
 
 Exit code: 0.
 
-### JSON — modo absoluto com threshold violado
+### JSON -- absolute mode with a violated threshold
 
 ```json
 {
@@ -242,7 +242,7 @@ Exit code: 1.
 
 ## `--detect`
 
-`<lang>/qg.sh --detect` imprime só o slug e exit 0 se a sentinela existe na raiz; nada + exit 1 caso contrário.
+`<lang>/qg.sh --detect` prints only the slug and exit 0 if the sentinel exists at the root; nothing + exit 1 otherwise.
 
 ```
 $ rust/qg.sh --detect
@@ -251,12 +251,12 @@ $ echo $?
 0
 ```
 
-## Dispatcher `qg` (monorepo / multi-linguagem)
+## Dispatcher `qg` (monorepo / multi-language)
 
-O dispatcher `qg` da raiz roda 1..N gates. Com **1 linguagem** detectada, a
-saida e exatamente a do `<lang>/qg.sh` (single object — sem wrapper). Com **N
-linguagens** (ou `.qg.yaml projects:` com multiplos paths), `--format json`
-emite um array envelopado:
+The root `qg` dispatcher runs 1..N gates. With **1 language** detected, the
+output is exactly that of `<lang>/qg.sh` (single object -- no wrapper). With **N
+languages** (or `.qg.yaml projects:` with multiple paths), `--format json`
+emits an enveloped array:
 
 ```json
 {
@@ -295,14 +295,14 @@ emite um array envelopado:
 }
 ```
 
-- `aggregate_verdict` = pior dos `results[].verdict` (precedencia de exit:
-  `2 > 1 > 3 > 0`; ou seja `failed`/`regressed` vence `passed`).
-- Exit code do dispatcher = pior exit code dos gates rodados.
-- **0 linguagens detectadas** → stderr `::error::nenhuma linguagem suportada
-  detectada`, **exit 3**, nenhum JSON em stdout.
+- `aggregate_verdict` = worst of the `results[].verdict` (exit precedence:
+  `2 > 1 > 3 > 0`; that is, `failed`/`regressed` beats `passed`).
+- The dispatcher's exit code = the worst exit code of the gates run.
+- **0 languages detected** -> stderr `::error::no supported language
+  detected`, **exit 3**, no JSON on stdout.
 
-Texto (`--format text`): cada gate imprime seu proprio bloco em sequencia,
-seguido de um rodape `::error::`/`::notice::` agregado.
+Text (`--format text`): each gate prints its own block in sequence,
+followed by an aggregated `::error::`/`::notice::` footer.
 
 ```
 $ qg --detect
@@ -312,11 +312,11 @@ $ echo $?
 0
 ```
 
-## Display labels (texto vs JSON)
+## Display labels (text vs JSON)
 
-A coluna "métrica" no texto pode usar label humano (`test fails`) enquanto o JSON usa o `name` reservado (`test`). Mapeamento:
+The "metric" column in text can use a human label (`test fails`) while the JSON uses the reserved `name` (`test`). Mapping:
 
-| `name` (JSON) | Display label (texto) |
+| `name` (JSON) | Display label (text) |
 |---|---|
 | `fmt` | `fmt` |
 | `lint` | `lint` |
@@ -325,11 +325,11 @@ A coluna "métrica" no texto pode usar label humano (`test fails`) enquanto o JS
 | `complexity` | `complexity` |
 | `coverage` | `coverage` |
 
-Display label fica a cargo da linguagem mas DEVE ser estável entre runs.
+The display label is up to the language but MUST be stable across runs.
 
-## Logs detalhados
+## Detailed logs
 
-Independente do `--format`, cada etapa de medição grava log completo em `<log-dir>/`:
+Regardless of `--format`, each measurement step writes a full log in `<log-dir>/`:
 
 - `<log-dir>/base-fmt.log`
 - `<log-dir>/base-lint.log`
@@ -338,6 +338,6 @@ Independente do `--format`, cada etapa de medição grava log completo em `<log-
 - `<log-dir>/base-complexity.log`
 - `<log-dir>/base-coverage.json`
 - `<log-dir>/pr-fmt.log` ... `<log-dir>/pr-coverage.json`
-- `<log-dir>/bypass.log` (se bypass acionado)
+- `<log-dir>/bypass.log` (if bypass triggered)
 
-Logs são reset a cada execução do mesmo `<log-dir>`.
+Logs are reset on each run of the same `<log-dir>`.

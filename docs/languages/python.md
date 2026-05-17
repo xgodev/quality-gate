@@ -1,14 +1,14 @@
 # Quality Gate -- Python
 
-Documentacao especifica do gate Python. Para o contrato comum, ver [`../contract.md`](../contract.md).
+Python-specific gate documentation. For the common contract, see [`../contract.md`](../contract.md).
 
 ## Build system
 
-Quality Gate Python assume **pip + pyproject.toml** como build/deps padrao. Nao suporta poetry, uv, pdm em V1 (a sentinela so checa `pyproject.toml`/`setup.py`/`setup.cfg`/`requirements*.txt` -- compativel com qualquer um, mas as ferramentas-canonica do gate -- `ruff`, `pytest`, `radon` -- sao instaladas via `pip`).
+Quality Gate Python assumes **pip + pyproject.toml** as the default build/deps. It does not support poetry, uv, pdm in V1 (the sentinel only checks `pyproject.toml`/`setup.py`/`setup.cfg`/`requirements*.txt` -- compatible with any of them, but the gate's canonical tools -- `ruff`, `pytest`, `radon` -- are installed via `pip`).
 
-A sentinela de presenca eh um destes na raiz: `pyproject.toml`, `setup.py`, `setup.cfg` ou `requirements*.txt`. Se nenhum existir no baseline, gate emite warning e sai 0.
+The presence sentinel is one of these at the root: `pyproject.toml`, `setup.py`, `setup.cfg` or `requirements*.txt`. If none exists in the baseline, the gate emits a warning and exits 0.
 
-## Pre-requisitos com instalacao
+## Prerequisites with install
 
 ### macOS
 
@@ -24,105 +24,105 @@ sudo apt install python3 python3-pip jq
 pip install ruff pytest pytest-cov radon
 ```
 
-Garanta que `~/.local/bin` (ou o `bin` do venv ativo) esta no `$PATH`.
+Make sure `~/.local/bin` (or the active venv's `bin`) is on `$PATH`.
 
-## Metricas -- o que cada uma mede em Python
+## Metrics -- what each one measures in Python
 
-### `fmt` -- formatacao
+### `fmt` -- formatting
 
-Roda `ruff format --check .`. Conta linhas `Would reformat: <path>` (cada arquivo desformatado eh uma linha).
+Runs `ruff format --check .`. Counts `Would reformat: <path>` lines (each unformatted file is one line).
 
-**Configuracao:** se o projeto tem `pyproject.toml` com `[tool.ruff]`, eh respeitado. Sem ele, defaults do ruff (formato proximo de Black).
+**Configuration:** if the project has a `pyproject.toml` with `[tool.ruff]`, it is respected. Without it, ruff defaults (a Black-like format).
 
-**Como interpretar regressao:** PR introduziu arquivo desformatado. Solucao: `ruff format .`.
+**How to interpret a regression:** the PR introduced an unformatted file. Fix: `ruff format .`.
 
 ### `lint` -- ruff check
 
-Roda `ruff check --output-format=concise .`. Conta linhas no formato `path:linha:col: CODIGO mensagem` (cada issue eh uma linha).
+Runs `ruff check --output-format=concise .`. Counts lines in the format `path:line:col: CODE message` (each issue is one line).
 
-**Configuracao:** se o projeto tem `[tool.ruff.lint]` em `pyproject.toml`, eh respeitado. Sem ele, defaults do ruff (regras E + F do pyflakes/pycodestyle).
+**Configuration:** if the project has `[tool.ruff.lint]` in `pyproject.toml`, it is respected. Without it, ruff defaults (E + F rules from pyflakes/pycodestyle).
 
-**Como interpretar regressao:** PR introduziu issue que ruff detecta. Solucao: rodar `ruff check --fix .` (auto-fix simples) ou ler `target/qg-logs/pr-lint.log` e fixar manualmente. Se for falso positivo, `# noqa: <CODIGO>` com causa raiz documentada.
+**How to interpret a regression:** the PR introduced an issue ruff detects. Fix: run `ruff check --fix .` (simple auto-fix) or read `target/qg-logs/pr-lint.log` and fix manually. If it is a false positive, `# noqa: <CODE>` with a documented root cause.
 
-### `build` -- compilacao bytecode
+### `build` -- bytecode compilation
 
-Roda `python3 -m compileall -q .`. Conta linhas `*** ...` ou `SyntaxError:` (cada erro de sintaxe eh contado).
+Runs `python3 -m compileall -q .`. Counts `*** ...` or `SyntaxError:` lines (each syntax error is counted).
 
-Em Python "build" eh sintaxe valida + import-able; nao ha linker. compileall faz parse + bytecode de todos os `.py`.
+In Python, "build" is valid syntax + importable; there is no linker. compileall parses + bytecodes all `.py` files.
 
-**Como interpretar regressao:** sintaxe quebrada. Pouco provavel passar pelo dev e chegar no gate; geralmente conflito de merge.
+**How to interpret a regression:** broken syntax. Unlikely to slip past the dev and reach the gate; usually a merge conflict.
 
-### `test` -- testes falhando
+### `test` -- failing tests
 
-Roda `pytest -p no:cacheprovider --tb=no -q`. Conta linhas `^FAILED ` no resumo do pytest.
+Runs `pytest -p no:cacheprovider --tb=no -q`. Counts `^FAILED ` lines in the pytest summary.
 
-`-p no:cacheprovider` evita criar `.pytest_cache` no fixture. `--tb=no -q` mantem o log enxuto -- so resumo.
+`-p no:cacheprovider` avoids creating `.pytest_cache` in the fixture. `--tb=no -q` keeps the log lean -- summary only.
 
-**Tool error vs regressao:** se pytest falha por erro de coleta (import error em `conftest.py`, plugin quebrado), o exit code eh != 0 e nao gera linha `FAILED ` -- nao conta como teste falhado. Esses casos aparecem no log e o usuario precisa investigar.
+**Tool error vs regression:** if pytest fails due to a collection error (import error in `conftest.py`, a broken plugin), the exit code is != 0 and no `FAILED ` line is produced -- it does not count as a failed test. These cases appear in the log and the user must investigate.
 
-**Como interpretar regressao:** testes que passavam falham agora. Solucao: `pytest -x --tb=short`, ler erro, fixar.
+**How to interpret a regression:** tests that passed now fail. Fix: `pytest -x --tb=short`, read the error, fix it.
 
-`@pytest.mark.skip` eh proibido como mitigacao (ver [`../contract.md#forbidden`](../contract.md#forbidden)).
+`@pytest.mark.skip` is forbidden as a mitigation (see [`../contract.md#forbidden`](../contract.md#forbidden)).
 
-### `complexity` -- complexidade ciclomatica
+### `complexity` -- cyclomatic complexity
 
-Roda `radon cc -n C -s .`. Conta funcoes em grau C (cc >= 11) ou pior.
+Runs `radon cc -n C -s .`. Counts functions at grade C (cc >= 11) or worse.
 
-**Threshold:** `C` no radon corresponde a complexidade ciclomatica >= 11 (escala A=1-5, B=6-10, C=11-20, D=21-30, E=31-40, F>=41).
+**Threshold:** `C` in radon corresponds to cyclomatic complexity >= 11 (scale A=1-5, B=6-10, C=11-20, D=21-30, E=31-40, F>=41).
 
-**Como interpretar regressao:** PR introduziu funcao com cc >= 11. Solucoes: extrair sub-funcoes; substituir cadeias `if/elif` por dispatch dict ou polymorphism; usar early-return.
+**How to interpret a regression:** the PR introduced a function with cc >= 11. Fixes: extract sub-functions; replace `if/elif` chains with a dispatch dict or polymorphism; use early-return.
 
-### `coverage` -- cobertura de linhas
+### `coverage` -- line coverage
 
-Roda `pytest --cov=. --cov-report=json:<path>` e extrai `.totals.percent_covered` via `jq`.
+Runs `pytest --cov=. --cov-report=json:<path>` and extracts `.totals.percent_covered` via `jq`.
 
-**Margem de tolerancia:** default 1.0pp (ver `--cov-margin` ou `.qg.yaml: cov_margin`).
+**Tolerance margin:** default 1.0pp (see `--cov-margin` or `.qg.yaml: cov_margin`).
 
-**Como interpretar regressao:** PR adicionou codigo sem teste correspondente. Solucoes: adicionar teste cobrindo o caminho novo; ou (com criterio) aumentar margem em `.qg.yaml` se for caso justificado.
+**How to interpret a regression:** the PR added code without a corresponding test. Fixes: add a test covering the new path; or (with discretion) raise the margin in `.qg.yaml` if the case is justified.
 
-## Troubleshooting comum
+## Common troubleshooting
 
-### `pytest-cov` nao instalado, gate sai 2
+### `pytest-cov` not installed, gate exits 2
 
 ```bash
 pip install pytest-cov
 ```
 
-O gate detecta `pytest-cov` via `python3 -c "import pytest_cov"` (modulo, nao binario).
+The gate detects `pytest-cov` via `python3 -c "import pytest_cov"` (module, not binary).
 
-### `ruff` ausente
+### `ruff` absent
 
 ```bash
 pip install ruff
-# OU
+# OR
 brew install ruff   # macOS
 ```
 
-### Baseline cache stale apos mudar branch base
+### Stale baseline cache after changing the base branch
 
 ```bash
 ~/.quality-gate/python/qg.sh --base origin/main --refresh-baseline
-# OU
+# OR
 rm -rf /tmp/qg-baseline-python
 ```
 
-### `git archive` falha com "fatal: not a valid object name"
+### `git archive` fails with "fatal: not a valid object name"
 
-A base ref nao existe localmente. Solucao:
+The base ref does not exist locally. Fix:
 
 ```bash
 git fetch origin
 ```
 
-## Metricas omitidas
+## Omitted metrics
 
-Nenhuma. Python suporta as 6 metricas reservadas com ferramentas oficiais.
+None. Python supports the 6 reserved metrics with official tools.
 
-## Metricas extras
+## Extra metrics
 
-Nenhuma em V1. Candidatos futuros:
-- `type` via `mypy --strict` -- erros de tipagem.
-- `security` via `bandit -q -r .` -- issues de seguranca.
-- `vuln` via `pip-audit` -- vulnerabilidades em dependencias.
+None in V1. Future candidates:
+- `type` via `mypy --strict` -- typing errors.
+- `security` via `bandit -q -r .` -- security issues.
+- `vuln` via `pip-audit` -- vulnerabilities in dependencies.
 
-Para adicionar, seguir contrato (secao "Estender") e `.claude/skills/add-quality-gate/`.
+To add, follow the contract (section "Extending") and `skills/add-quality-gate/`.
