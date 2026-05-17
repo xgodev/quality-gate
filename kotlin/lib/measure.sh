@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Funcoes de medicao do gate Kotlin (Gradle).
-# Source este arquivo a partir de kotlin/qg.sh.
-# Cada funcao SEMPRE retorna inteiro >= 0 em stdout, sem prefixos.
+# Measurement functions for the Kotlin gate (Gradle).
+# Source this file from kotlin/qg.sh.
+# Each function ALWAYS returns an integer >= 0 on stdout, with no prefixes.
 
 _grep_count() {
   local pattern="$1" file="$2"
@@ -11,7 +11,7 @@ _grep_count() {
   printf '%d\n' "${n:-0}"
 }
 
-# Garante numero; qualquer coisa nao-numerica (vazio, "Unknown", "N/A") -> 0
+# Ensures a number; anything non-numeric (empty, "Unknown", "N/A") -> 0
 _num() {
   local v="${1:-}"
   if printf '%s' "$v" | grep -qE '^-?[0-9]+(\.[0-9]+)?$'; then
@@ -21,9 +21,9 @@ _num() {
   fi
 }
 
-# Tamper-resistance (contrato): o gate impoe o PROPRIO ruleset. detekt.yml /
-# .editorconfig do projeto-alvo sao IGNORADOS. Override SO via env externa
-# QG_RULESET_DIR -- NUNCA de .qg.yaml/arquivo do projeto.
+# Tamper-resistance (contract): the gate enforces ITS OWN ruleset. detekt.yml /
+# .editorconfig of the target project are IGNORED. Override ONLY via the external env var
+# QG_RULESET_DIR -- NEVER from .qg.yaml/a project file.
 _QG_RULES_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/rules"
 qg_ruleset_dir() {
   if [ -n "${QG_RULESET_DIR:-}" ]; then
@@ -33,21 +33,21 @@ qg_ruleset_dir() {
   fi
 }
 
-# Sentinela da linguagem na raiz do diretorio dado (reusada por --detect,
-# fast-path e check de "linguagem ausente no baseline"). Slug: kotlin.
+# Language sentinel at the root of the given directory (reused by --detect,
+# fast-path and the "language absent in baseline" check). Slug: kotlin.
 qg_lang_present() {
   local dir="$1"
   [ -f "$dir/build.gradle.kts" ] || [ -f "$dir/settings.gradle.kts" ] \
     || [ -f "$dir/build.gradle" ]
 }
 
-# Wrapper Gradle e autoritativo (LEI): o ./gradlew pina a versao exata do
-# Gradle que o projeto usa (gradle-wrapper.properties). Se presente, usar o
-# wrapper -- NUNCA o 'gradle' do sistema (versao divergente => build/lint com
-# comportamento diferente do CI). Ausencia do wrapper E do gradle no sistema
-# = tool-error claro, nunca substituicao.
-# Ecoa o comando Gradle a usar em stdout; tool-error => return 1; sem build
-# Gradle => return 2.
+# The Gradle wrapper is authoritative (LAW): ./gradlew pins the exact Gradle
+# version the project uses (gradle-wrapper.properties). If present, use the
+# wrapper -- NEVER the system 'gradle' (a divergent version => build/lint with
+# different behavior from CI). Absence of both the wrapper AND the system gradle
+# = a clear tool-error, never substitution.
+# Echoes the Gradle command to use on stdout; tool-error => return 1; no Gradle
+# build => return 2.
 qg_gradle_cmd() {
   local dir="$1" log="$2"
   if [ ! -f "$dir/build.gradle.kts" ] && [ ! -f "$dir/build.gradle" ]; then
@@ -58,15 +58,15 @@ qg_gradle_cmd() {
   elif command -v gradle >/dev/null 2>&1; then
     printf 'gradle\n'
   else
-    echo "::error::build Gradle presente mas nem ./gradlew nem 'gradle' no PATH -- instale: 'sdk install gradle' via SDKMAN (Linux) / 'brew install gradle' (macOS) ou versione o Gradle Wrapper ./gradlew (sem Gradle nao ha como medir o build; substituicao silenciosa produziria resultado incorreto)" >> "$log"
+    echo "::error::Gradle build present but neither ./gradlew nor 'gradle' on PATH -- install: 'sdk install gradle' via SDKMAN (Linux) / 'brew install gradle' (macOS) or commit the Gradle Wrapper ./gradlew (without Gradle there is no way to measure the build; a silent substitution would produce an incorrect result)" >> "$log"
     return 1
   fi
   return 0
 }
 
-# Bug 1: resolve o closure de dependencias antes de medir build/test.
-# gradle resolve sozinho; garantimos non-offline e pre-resolvemos.
-# Falha de resolucao = tool-error (return 1).
+# Bug 1: resolves the dependency closure before measuring build/test.
+# gradle resolves on its own; we ensure non-offline and pre-resolve.
+# A resolution failure = tool-error (return 1).
 qg_resolve_deps() {
   local dir="$1" log="$2"
   : > "$log"
@@ -90,10 +90,10 @@ count_fmt_errors() {
   fi
   local rules
   rules=$(qg_ruleset_dir)
-  # Tamper-resistance: --editorconfig do QG, ignorando .editorconfig do projeto.
+  # Tamper-resistance: QG's --editorconfig, ignoring the project's .editorconfig.
   ( cd "$dir" && ktlint --editorconfig="$rules/.editorconfig" \
       'src/**/*.kt' --reporter=plain ) > "$log" 2>&1
-  # ktlint imprime UMA linha por violacao no formato file:linha:col: msg (rule)
+  # ktlint prints ONE line per violation in the format file:line:col: msg (rule)
   _grep_count '\.kt:[0-9]+:[0-9]+: ' "$log"
 }
 
@@ -104,14 +104,14 @@ count_lint_errors() {
     printf '0\n'
     return
   fi
-  # Tamper-resistance: -c aponta para o detekt.yml do QG, ignorando o do projeto.
+  # Tamper-resistance: -c points at QG's detekt.yml, ignoring the project's.
   ( cd "$dir" && detekt -c "$(qg_ruleset_dir)/detekt.yml" \
       --input src/main/kotlin --report "txt:$log.tmp" ) > "$log" 2>&1 || true
   if [ -f "$log.tmp" ]; then
     cat "$log.tmp" >> "$log"
     rm -f "$log.tmp"
   fi
-  # detekt imprime: file:linha:col: ... [RuleName]
+  # detekt prints: file:line:col: ... [RuleName]
   _grep_count '\.kt:[0-9]+:[0-9]+: .* \[[A-Z][A-Za-z0-9]+\]$' "$log"
 }
 
@@ -126,7 +126,7 @@ count_build_errors() {
     printf '0\n'
     return
   fi
-  # kotlinc imprime "file.kt:linha:col: error:"
+  # kotlinc prints "file.kt:line:col: error:"
   _grep_count '\.kt:[0-9]+:[0-9]+: error:' "$log"
 }
 
@@ -135,10 +135,10 @@ count_test_failures() {
   : > "$log"
   local gradle_cmd
   gradle_cmd=$(qg_gradle_cmd "$dir" "$log") || { printf '0\n'; return; }
-  # --rerun-tasks forca re-execucao (gradle marca como UP-TO-DATE entre rodadas).
-  # build.gradle.kts deve ter ignoreFailures=true OU usamos --continue + tolera exit !=0.
+  # --rerun-tasks forces re-execution (gradle marks UP-TO-DATE between runs).
+  # build.gradle.kts must have ignoreFailures=true OR we use --continue + tolerate exit !=0.
   ( cd "$dir" && "$gradle_cmd" test --rerun-tasks --no-daemon ) > "$log" 2>&1 || true
-  # gradle imprime "N tests completed, F failed".
+  # gradle prints "N tests completed, F failed".
   local n
   n=$(awk '
     /[0-9]+ tests completed, [0-9]+ failed/ {
@@ -163,14 +163,14 @@ count_complexity() {
     printf '0\n'
     return
   fi
-  # Tamper-resistance: -c aponta para o detekt.yml do QG, ignorando o do projeto.
+  # Tamper-resistance: -c points at QG's detekt.yml, ignoring the project's.
   ( cd "$dir" && detekt -c "$(qg_ruleset_dir)/detekt.yml" \
       --input src/main/kotlin --report "txt:$log.tmp" ) > "$log" 2>&1 || true
   if [ -f "$log.tmp" ]; then
     cat "$log.tmp" >> "$log"
     rm -f "$log.tmp"
   fi
-  # Conta apenas issues das regras complexity-related: CyclomaticComplexMethod, ComplexCondition,
+  # Counts only issues from complexity-related rules: CyclomaticComplexMethod, ComplexCondition,
   # NestedBlockDepth, LongMethod, LongParameterList.
   _grep_count '(CyclomaticComplexMethod|ComplexCondition|NestedBlockDepth|LongMethod|LongParameterList)' "$log"
 }
@@ -183,7 +183,7 @@ measure_coverage() {
   local xml="$dir/build/reports/kover/report.xml"
   local pct=0
   if [ -f "$xml" ]; then
-    # kover XML usa o mesmo formato do JaCoCo. O ULTIMO <counter type="LINE" ...> eh o total.
+    # kover XML uses the same format as JaCoCo. The LAST <counter type="LINE" ...> is the total.
     pct=$(LC_ALL=C awk '
       {
         while (match($0, /<counter type="LINE" missed="[0-9]+" covered="[0-9]+"\/>/)) {
@@ -205,6 +205,6 @@ measure_coverage() {
     ' "$xml")
     cp "$xml" "$out" 2>/dev/null || true
   fi
-  # Bug 2: nunca retorna vazio/"Unknown" -> 0.
+  # Bug 2: never returns empty/"Unknown" -> 0.
   printf '%s\n' "$(_num "$pct")"
 }

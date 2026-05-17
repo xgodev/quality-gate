@@ -1,6 +1,6 @@
 package qg
 
-// REGRESSION fmt: parametros sem newlines (ktlint vai reclamar).
+// REGRESSION fmt: parameters without newlines (ktlint will complain).
 fun add(a: Int, b: Int): Int = a + b
 
 fun multiply(
@@ -8,7 +8,7 @@ fun multiply(
     b: Int,
 ): Int = a * b
 
-// REGRESSION coverage: funcao publica sem teste.
+// REGRESSION coverage: public function without a test.
 fun uncovered(): Int = 99
 
 // REGRESSION complexity: ComplexMethod do detekt (cyclomatic > 15).

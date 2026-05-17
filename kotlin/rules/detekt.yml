@@ -1,6 +1,6 @@
-# Ruleset canonico Quality Gate -- Kotlin (detekt).
-# Imposto pelo QG via detekt -c <este>. Config do projeto-alvo e IGNORADA.
-# Defaults da comunidade; calibracao fina em V2.
+# Canonical Quality Gate ruleset -- Kotlin (detekt).
+# Enforced by QG via detekt -c <this>. The target project's config is IGNORED.
+# Community defaults; fine calibration in V2.
 build:
   maxIssues: 0
 

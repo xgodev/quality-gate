@@ -1,50 +1,50 @@
 # Quality Gate -- Kotlin
 
-Gate de qualidade para projetos Kotlin (Gradle). Cumpre o [contrato v1](../docs/contract.md).
+Quality gate for Kotlin (Gradle) projects. Complies with the [v1 contract](../docs/contract.md).
 
-## Pre-requisitos
+## Prerequisites
 
 - `java` JDK 17+ (preferencialmente 21 -- `brew install openjdk@21` ou `apt install openjdk-17-jdk`)
 - `gradle` -- `brew install gradle` (macOS) ou via SDKMAN (Linux)
 - `ktlint` -- `brew install ktlint` (macOS) ou baixe binario do github.com/pinterest/ktlint/releases
 - `detekt` -- `brew install detekt` (macOS) ou baixe binario do github.com/detekt/detekt/releases
-- `jq` -- `brew install jq` (macOS) ou `apt install jq` (Linux)
-- `git`, `bash 4+`, `awk`, `tar` (sistema)
+- `jq` -- `brew install jq` (macOS) or `apt install jq` (Linux)
+- `git`, `bash 4+`, `awk`, `tar` (system)
 
 O projeto-alvo precisa ter `org.jetbrains.kotlinx.kover` aplicado em `build.gradle.kts` para a metrica `coverage` funcionar.
 
-## Uso
+## Usage
 
 ```bash
 ~/.quality-gate/kotlin/qg.sh --base origin/main
 ```
 
-Ver [`docs/consume.md`](../docs/consume.md) para uso completo.
+See [`docs/consume.md`](../docs/consume.md) for full usage.
 
-## Metricas medidas
+## Measured metrics
 
-| Metrica | Ferramenta | Conta |
+| Metric | Tool | Counts |
 |---|---|---|
-| `fmt` | `ktlint 'src/**/*.kt' --reporter=plain` | linhas no formato `file:linha:col:` |
-| `lint` | `detekt --input src/main/kotlin --report txt:...` | linhas no formato `file:linha:col: ... [RuleName]` |
-| `build` | `gradle compileKotlin -q --no-daemon` | linhas `file.kt:linha:col: error:` |
-| `test` | `gradle test --rerun-tasks --no-daemon` | resumo `N tests completed, F failed` |
-| `complexity` | `detekt` filtrando regras `CyclomaticComplexMethod\|ComplexCondition\|NestedBlockDepth\|LongMethod\|LongParameterList` | matches dessas regras |
-| `coverage` | `gradle koverXmlReport --no-daemon` -> parse `build/reports/kover/report.xml` | `% LINE` do contador raiz |
+| `fmt` | `ktlint 'src/**/*.kt' --reporter=plain` | lines in the format `file:line:col:` |
+| `lint` | `detekt --input src/main/kotlin --report txt:...` | lines in the format `file:line:col: ... [RuleName]` |
+| `build` | `gradle compileKotlin -q --no-daemon` | `file.kt:line:col: error:` lines |
+| `test` | `gradle test --rerun-tasks --no-daemon` | `N tests completed, F failed` summary |
+| `complexity` | `detekt` filtering rules `CyclomaticComplexMethod\|ComplexCondition\|NestedBlockDepth\|LongMethod\|LongParameterList` | matches of those rules |
+| `coverage` | `gradle koverXmlReport --no-daemon` -> parse `build/reports/kover/report.xml` | `% LINE` of the root counter |
 
-## Estrutura
+## Structure
 
-- [`qg.sh`](qg.sh) -- script principal.
-- [`lib/measure.sh`](lib/measure.sh) -- funcoes `count_*` e `measure_coverage`.
-- [`lib/output.sh`](lib/output.sh) -- render texto e JSON.
-- [`test-fixtures/baseline/`](test-fixtures/baseline/) -- projeto Gradle limpo (kotlin.test + kover).
-- [`test-fixtures/regressed/`](test-fixtures/regressed/) -- projeto com regressoes deliberadas em fmt, lint, test, complexity, coverage.
+- [`qg.sh`](qg.sh) -- main script.
+- [`lib/measure.sh`](lib/measure.sh) -- `count_*` functions and `measure_coverage`.
+- [`lib/output.sh`](lib/output.sh) -- text and JSON render.
+- [`test-fixtures/baseline/`](test-fixtures/baseline/) -- a clean Gradle project (kotlin.test + kover).
+- [`test-fixtures/regressed/`](test-fixtures/regressed/) -- a project with deliberate regressions in fmt, lint, test, complexity, coverage.
 
-## Detalhes e troubleshooting
+## Details and troubleshooting
 
-Ver [`docs/languages/kotlin.md`](../docs/languages/kotlin.md).
+See [`docs/languages/kotlin.md`](../docs/languages/kotlin.md).
 
-## Testes do proprio script
+## Tests for the script itself
 
 ```bash
 bats tests/kotlin-qg.bats

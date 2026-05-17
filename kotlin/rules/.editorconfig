@@ -1,6 +1,6 @@
-# Ruleset canonico Quality Gate -- Kotlin (ktlint).
-# Imposto pelo QG via ktlint --editorconfig=<este>.
-# .editorconfig do projeto-alvo e IGNORADO para o gate.
+# Canonical Quality Gate ruleset -- Kotlin (ktlint).
+# Enforced by QG via ktlint --editorconfig=<this>.
+# The target project's .editorconfig is IGNORED for the gate.
 root = true
 
 [*.{kt,kts}]
