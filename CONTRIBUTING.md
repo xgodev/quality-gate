@@ -1,63 +1,63 @@
-# Contribuindo com o Quality Gate
+# Contributing to Quality Gate
 
-## Princípios
+## Principles
 
-1. **Independência por linguagem.** Cada `<lang>/qg.sh` é standalone. Sem orquestrador, sem `lib/` compartilhado entre linguagens.
-2. **Contrato é lei.** Toda mudança que afete CLI, exit codes, output ou config passa por revisão do `docs/contract.md` antes do código.
-3. **PT-BR no output.** Mensagens, ::error::, ::warning::, headers de tabela em PT-BR. Identificadores e nomes de métricas em EN ASCII.
-4. **TDD obrigatório** para mudanças no script. Test fixtures em `<lang>/test-fixtures/baseline/` e `<lang>/test-fixtures/regressed/`.
+1. **Per-language independence.** Each `<lang>/qg.sh` is standalone. No orchestrator, no `lib/` shared across languages.
+2. **The contract is law.** Any change affecting CLI, exit codes, output or config goes through a review of `docs/contract.md` before the code.
+3. **English in the output.** Messages, ::error::, ::warning::, table headers in English. Identifiers and metric names in EN ASCII.
+4. **TDD is mandatory** for script changes. Test fixtures in `<lang>/test-fixtures/baseline/` and `<lang>/test-fixtures/regressed/`.
 
-## Adicionar nova linguagem
+## Add a new language
 
-### Com IA (recomendado)
+### With AI (recommended)
 
-Invoque a skill `add-quality-gate` (em `.claude/skills/add-quality-gate/`):
+Invoke the `add-quality-gate` skill (in `skills/add-quality-gate/`):
 
 ```
-adicionar quality gate para Go
+add quality gate for Go
 ```
 
-A skill segue checklist obrigatório de 22 passos. Não pular nenhum.
+The skill follows a mandatory 22-step checklist. Do not skip any.
 
-### Manual (sem IA)
+### Manual (without AI)
 
-Siga o mesmo checklist documentado em `.claude/skills/add-quality-gate/SKILL.md`.
+Follow the same checklist documented in `skills/add-quality-gate/SKILL.md`.
 
-## Mudar o contrato
+## Change the contract
 
-1. Atualizar `docs/contract.md` + `docs/contract-v1.schema.json`.
-2. Atualizar TODOS os `<lang>/qg.sh` para cumprir a nova versão.
-3. Bumpar `QG_CONTRACT_VERSION` no header de cada script.
-4. Atualizar test fixtures se a mudança afeta output.
-5. Atualizar `.claude/skills/add-quality-gate/SKILL.md` se afeta o processo.
+1. Update `docs/contract.md` + `docs/contract-v1.schema.json`.
+2. Update ALL `<lang>/qg.sh` to comply with the new version.
+3. Bump `QG_CONTRACT_VERSION` in each script's header.
+4. Update test fixtures if the change affects output.
+5. Update `skills/add-quality-gate/SKILL.md` if it affects the process.
 
-Mudança breaking → bumpar major (v1 → v2). V1 ainda não tem versionamento via tags (decisão deliberada do spec).
+Breaking change -> bump major (v1 -> v2). V1 still has no tag-based versioning (deliberate spec decision).
 
-## Estrutura do repo
+## Repo structure
 
 ```
 quality-gate/
-├── README.md
-├── CONTRIBUTING.md
-├── docs/
-│   ├── contract.md
-│   ├── contract-v1.schema.json
-│   ├── output-format.md
-│   ├── consume.md
-│   └── languages/<lang>.md
-├── .claude/skills/add-quality-gate/
-└── <lang>/
-    ├── qg.sh
-    ├── README.md
-    └── test-fixtures/{baseline,regressed}/
+|-- README.md
+|-- CONTRIBUTING.md
+|-- docs/
+|   |-- contract.md
+|   |-- contract-v1.schema.json
+|   |-- output-format.md
+|   |-- consume.md
+|   `-- languages/<lang>.md
+|-- skills/add-quality-gate/
+`-- <lang>/
+    |-- qg.sh
+    |-- README.md
+    `-- test-fixtures/{baseline,regressed}/
 ```
 
-## Testes do próprio gate
+## Tests for the gate itself
 
-`tests/` na raiz contém testes em [bats](https://github.com/bats-core/bats-core). Rodar:
+`tests/` at the root contains tests in [bats](https://github.com/bats-core/bats-core). Run:
 
 ```bash
 bats tests/
 ```
 
-Toda mudança em `<lang>/qg.sh` exige test correspondente em `tests/<lang>-qg.bats`.
+Every change to `<lang>/qg.sh` requires a corresponding test in `tests/<lang>-qg.bats`.

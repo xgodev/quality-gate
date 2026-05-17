@@ -1,105 +1,105 @@
 # Quality Gate
 
-Gate de qualidade compartilhado entre projetos. Roda **igual** local e em CI: falha **somente** quando o PR piora alguma métrica em relação a uma base ref escolhida.
+Quality gate shared across projects. Runs **the same** locally and in CI: fails **only** when the PR worsens some metric relative to a chosen base ref.
 
-Este repositório é **dois em um**:
+This repository is **two-in-one**:
 
-- **CLI/CI:** clone o repo e rode o dispatcher `./qg` (ou `<lang>/qg.sh`) direto — `.claude-plugin/` é inerte fora do Claude Code.
-- **Plugin Claude Code:** instala a skill `quality-gate` **junto** com os scripts (dispatcher empacotado, sem clone em runtime):
+- **CLI/CI:** clone the repo and run the dispatcher `./qg` (or `<lang>/qg.sh`) directly -- `.claude-plugin/` is inert outside Claude Code.
+- **Claude Code plugin:** installs the `quality-gate` skill **together** with the scripts (bundled dispatcher, no runtime clone):
 
 ```text
 /plugin marketplace add git@github.com:xgodev/quality-gate.git
 /plugin install quality-gate
 ```
 
-Outro plugin pode declarar `quality-gate` como dependência (`name@marketplace`), re-listando este repo no `marketplace.json` dele.
+Another plugin can declare `quality-gate` as a dependency (`name@marketplace`), re-listing this repo in its own `marketplace.json`.
 
-## Como funciona
+## How it works
 
-1. Cada linguagem suportada tem um script standalone em `<lang>/qg.sh` (ex: `rust/qg.sh`).
-2. O script compara métricas (fmt, lint, build, test, complexity, coverage) entre o estado atual e a base ref passada via `--base`.
-3. Dívida preexistente nunca bloqueia. Só piora bloqueia.
+1. Each supported language has a standalone script at `<lang>/qg.sh` (e.g. `rust/qg.sh`).
+2. The script compares metrics (fmt, lint, build, test, complexity, coverage) between the current state and the base ref passed via `--base`.
+3. Pre-existing debt never blocks. Only worsening blocks.
 
-### Dispatcher `qg` (ponto de entrada)
+### Dispatcher `qg` (entry point)
 
-O jeito canonico de rodar e o **dispatcher `qg` na raiz**:
+The canonical way to run is the **`qg` dispatcher at the root**:
 
 ```bash
-cd /caminho/do/seu/projeto
-~/.quality-gate/qg --base origin/main          # roda o(s) gate(s)
-~/.quality-gate/qg --detect                    # lista linguagens
+cd /path/to/your/project
+~/.quality-gate/qg --base origin/main          # run the gate(s)
+~/.quality-gate/qg --detect                    # list languages
 ```
 
-Deteccao 100% shell (zero IA): o `qg` faz `<lang>/qg.sh --detect` para
-descobrir a(s) linguagem(s) e roda o(s) gate(s) correspondente(s). Repassa
-todas as flags. **Monorepo:** `.qg.yaml` com bloco `projects:` lista os
-sub-projetos. Exit codes: `0` verde, `1` regressao/threshold, `2`
-tool/setup, **`3` nenhuma linguagem suportada detectada** (exclusivo do
-dispatcher). Veredito agregado de N gates = pior (precedencia `2 > 1 > 3 > 0`);
-em `--format json` emite `{aggregate_verdict, results:[...]}`.
+100% shell detection (zero AI): `qg` calls `<lang>/qg.sh --detect` to
+discover the language(s) and run the matching gate(s). It forwards
+all flags. **Monorepo:** a `.qg.yaml` with a `projects:` block lists the
+sub-projects. Exit codes: `0` green, `1` regression/threshold, `2`
+tool/setup, **`3` no supported language detected** (dispatcher-exclusive).
+Aggregate verdict of N gates = worst (precedence `2 > 1 > 3 > 0`);
+with `--format json` it emits `{aggregate_verdict, results:[...]}`.
 
-### Modo absoluto e `--detect` (contrato v1.1)
+### Absolute mode and `--detect` (contract v1.1)
 
-- **`--detect`**: `<lang>/qg.sh --detect` imprime o slug da linguagem + exit 0 se a sentinela existe na raiz do projeto, ou exit 1 se não. Curto-circuita tudo. O dispatcher usa isto para descobrir quais gates rodar sem tabela hardcoded.
-- **Modo absoluto**: rodar `<lang>/qg.sh` (ou `qg`) **sem** `--base` (e sem `QG_BASE_REF`) mede o estado atual uma vez, sem baseline. Exit 0 sempre, exceto se `.qg.yaml` definir `absolute_thresholds` e alguma métrica violar um limite (exit 1). Útil quando não há base ref (ex: legado sem PR de referência). JSON traz `mode: "absolute"`, `base_ref: null`, `schema_version: "1.1"`.
+- **`--detect`**: `<lang>/qg.sh --detect` prints the language slug + exit 0 if the sentinel exists at the project root, or exit 1 if not. Short-circuits everything. The dispatcher uses this to discover which gates to run without a hardcoded table.
+- **Absolute mode**: running `<lang>/qg.sh` (or `qg`) **without** `--base` (and without `QG_BASE_REF`) measures the current state once, with no baseline. Exit 0 always, except if `.qg.yaml` defines `absolute_thresholds` and some metric violates a threshold (exit 1). Useful when there is no base ref (e.g. legacy without a reference PR). JSON carries `mode: "absolute"`, `base_ref: null`, `schema_version: "1.1"`.
 
-O modo comparativo (com `--base`) não muda — v1.1 é aditivo e backward-compatible.
+Comparative mode (with `--base`) does not change -- v1.1 is additive and backward-compatible.
 
 ### Tamper-resistance
 
-O gate **traz e impoe os proprios rulesets** (`<lang>/rules/`). Configs de
-qualidade do projeto-alvo (`.eslintrc`, `clippy.toml`, `.stylelintrc`,
-etc.) são **ignoradas por padrao** — senao o dev afrouxa uma regra no
-proprio repo e o gate vira teatro. Override só via env externa
-`QG_RULESET_DIR` (quem RODA o gate), nunca de `.qg.yaml`/arquivo do projeto.
+The gate **ships and enforces its own rulesets** (`<lang>/rules/`). Quality
+configs of the target project (`.eslintrc`, `clippy.toml`, `.stylelintrc`,
+etc.) are **ignored by default** -- otherwise the dev loosens a rule in
+their own repo and the gate becomes theater. Override only via the external
+env var `QG_RULESET_DIR` (whoever RUNS the gate), never from `.qg.yaml`/a project file.
 
-### React / Vue / Svelte / Angular = projeto nodejs
+### React / Vue / Svelte / Angular = nodejs project
 
-Projeto com `package.json` (mesmo React/Vue/etc.) e coberto por
-`nodejs/qg.sh`. O gate `web` so cobre **HTML/CSS estatico puro** (sem
-`package.json`). Regras de framework entram no ruleset do QG
-(`nodejs/rules/`), nunca no config do projeto.
+A project with `package.json` (even React/Vue/etc.) is covered by
+`nodejs/qg.sh`. The `web` gate only covers **pure static HTML/CSS** (no
+`package.json`). Framework rules go into the QG ruleset
+(`nodejs/rules/`), never into the project config.
 
-## Linguagens suportadas
+## Supported languages
 
-| Linguagem | Script | Métricas medidas | Pré-reqs |
+| Language | Script | Measured metrics | Prereqs |
 |---|---|---|---|
 | Rust | [`rust/qg.sh`](rust/README.md) | fmt, lint, build, test, complexity, coverage | cargo, cargo-llvm-cov, jq |
-| Go | [`go/qg.sh`](go/README.md) | fmt, lint, build, test, complexity, coverage | go, gofmt, gocyclo, golangci-lint (opcional), jq |
+| Go | [`go/qg.sh`](go/README.md) | fmt, lint, build, test, complexity, coverage | go, gofmt, gocyclo, golangci-lint (optional), jq |
 | Python | [`python/qg.sh`](python/README.md) | fmt, lint, build, test, complexity, coverage | python3, ruff, pytest, pytest-cov, radon, jq |
 | Node.js | [`nodejs/qg.sh`](nodejs/README.md) | fmt, lint, build, test, complexity, coverage | node 18+, npm, npx, jq (prettier/eslint/c8 via npx) |
-| Java | [`java/qg.sh`](java/README.md) | fmt, lint, build, test, complexity, coverage | java 17+, mvn, google-java-format, pmd, jq (jacoco-plugin no projeto) |
-| Swift\* | [`swift/qg.sh`](swift/README.md) | fmt, lint, build, test, coverage | swift 5.9+, swift-format, swiftlint, jq (xcrun no macOS) |
-| Kotlin | [`kotlin/qg.sh`](kotlin/README.md) | fmt, lint, build, test, complexity, coverage | java 17+, gradle, ktlint, detekt, jq (kover plugin no projeto) |
+| Java | [`java/qg.sh`](java/README.md) | fmt, lint, build, test, complexity, coverage | java 17+, mvn, google-java-format, pmd, jq (jacoco plugin in the project) |
+| Swift\* | [`swift/qg.sh`](swift/README.md) | fmt, lint, build, test, coverage | swift 5.9+, swift-format, swiftlint, jq (xcrun on macOS) |
+| Kotlin | [`kotlin/qg.sh`](kotlin/README.md) | fmt, lint, build, test, complexity, coverage | java 17+, gradle, ktlint, detekt, jq (kover plugin in the project) |
 | Web (HTML/CSS)\* | [`web/qg.sh`](web/README.md) | fmt, lint | node 18+, jq (prettier/stylelint/htmlhint via npx) |
 
-\* `complexity` omitido em Swift -- ver [`docs/languages/swift.md`](docs/languages/swift.md) seção "Metricas omitidas". `build`, `test`, `complexity` e `coverage` omitidos em Web (HTML/CSS estatico nao tem build/test/complexidade/cobertura) -- ver [`docs/languages/web.md`](docs/languages/web.md). Projeto React/Vue/etc. com `package.json` = projeto **nodejs** (`nodejs/qg.sh`), nao web.
+\* `complexity` omitted in Swift -- see [`docs/languages/swift.md`](docs/languages/swift.md) section "Omitted metrics". `build`, `test`, `complexity` and `coverage` omitted in Web (static HTML/CSS has no build/test/complexity/coverage) -- see [`docs/languages/web.md`](docs/languages/web.md). A React/Vue/etc. project with `package.json` = **nodejs** project (`nodejs/qg.sh`), not web.
 
 ## Quick start
 
 ```bash
-# Clone uma vez
+# Clone once
 git clone git@github.com:xgodev/quality-gate.git ~/.quality-gate
 
-# Rode no seu projeto (dispatcher detecta a linguagem sozinho)
-cd /caminho/do/seu/projeto
+# Run in your project (the dispatcher detects the language on its own)
+cd /path/to/your/project
 ~/.quality-gate/qg --base origin/main
 ```
 
-## Documentação
+## Documentation
 
-- [`docs/contract.md`](docs/contract.md) — contrato comum a toda linguagem (CLI, exit codes, output, bypass, `.qg.yaml`).
-- [`docs/output-format.md`](docs/output-format.md) — formatos texto e JSON detalhados.
-- [`docs/consume.md`](docs/consume.md) — como integrar no seu projeto (local agora; CI em V2).
-- [`docs/languages/rust.md`](docs/languages/rust.md) — pré-reqs, métricas e troubleshooting de Rust.
-- [`docs/languages/go.md`](docs/languages/go.md) — pré-reqs, métricas e troubleshooting de Go.
-- [`docs/languages/python.md`](docs/languages/python.md) — pré-reqs, métricas e troubleshooting de Python.
-- [`docs/languages/nodejs.md`](docs/languages/nodejs.md) — pré-reqs, métricas e troubleshooting de Node.js.
-- [`docs/languages/java.md`](docs/languages/java.md) — pré-reqs, métricas e troubleshooting de Java.
-- [`docs/languages/swift.md`](docs/languages/swift.md) — pré-reqs, métricas e troubleshooting de Swift (complexity omitido).
-- [`docs/languages/kotlin.md`](docs/languages/kotlin.md) — pré-reqs, métricas e troubleshooting de Kotlin.
-- [`docs/languages/web.md`](docs/languages/web.md) — pré-reqs e troubleshooting de Web (HTML/CSS; só fmt+lint; React/Vue=nodejs).
+- [`docs/contract.md`](docs/contract.md) -- contract common to every language (CLI, exit codes, output, bypass, `.qg.yaml`).
+- [`docs/output-format.md`](docs/output-format.md) -- detailed text and JSON formats.
+- [`docs/consume.md`](docs/consume.md) -- how to integrate it in your project (local now; CI in V2).
+- [`docs/languages/rust.md`](docs/languages/rust.md) -- prereqs, metrics and troubleshooting for Rust.
+- [`docs/languages/go.md`](docs/languages/go.md) -- prereqs, metrics and troubleshooting for Go.
+- [`docs/languages/python.md`](docs/languages/python.md) -- prereqs, metrics and troubleshooting for Python.
+- [`docs/languages/nodejs.md`](docs/languages/nodejs.md) -- prereqs, metrics and troubleshooting for Node.js.
+- [`docs/languages/java.md`](docs/languages/java.md) -- prereqs, metrics and troubleshooting for Java.
+- [`docs/languages/swift.md`](docs/languages/swift.md) -- prereqs, metrics and troubleshooting for Swift (complexity omitted).
+- [`docs/languages/kotlin.md`](docs/languages/kotlin.md) -- prereqs, metrics and troubleshooting for Kotlin.
+- [`docs/languages/web.md`](docs/languages/web.md) -- prereqs and troubleshooting for Web (HTML/CSS; only fmt+lint; React/Vue=nodejs).
 
-## Contribuindo
+## Contributing
 
-Veja [`CONTRIBUTING.md`](CONTRIBUTING.md). Para adicionar nova linguagem com auxílio de IA, use a skill `add-quality-gate` em `.claude/skills/`.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). To add a new language with AI assistance, use the `add-quality-gate` skill in `skills/`.
