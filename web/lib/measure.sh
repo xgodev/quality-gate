@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Funcoes de medicao do gate web (HTML + CSS estatico puro).
-# Source este arquivo a partir de web/qg.sh.
-# Cada funcao SEMPRE retorna inteiro >= 0 em stdout, sem prefixos.
+# Measurement functions for the web gate (pure static HTML + CSS).
+# Source this file from web/qg.sh.
+# Each function ALWAYS returns an integer >= 0 on stdout, with no prefixes.
 #
-# OBSERVACAO: este gate mede APENAS fmt + lint. As metricas build, test,
-# complexity e coverage sao OMITIDAS -- HTML/CSS estatico nao tem conceito
-# de build/test/complexidade/cobertura. Documentado em docs/languages/web.md.
-# (Igual Swift omite complexity -- o contrato permite omissao documentada.)
+# NOTE: this gate measures ONLY fmt + lint. The build, test,
+# complexity and coverage metrics are OMITTED -- static HTML/CSS has no concept
+# of build/test/complexity/coverage. Documented in docs/languages/web.md.
+# (Just as Swift omits complexity -- the contract allows a documented omission.)
 
 _grep_count() {
   local pattern="$1" file="$2"
@@ -16,7 +16,7 @@ _grep_count() {
   printf '%d\n' "${n:-0}"
 }
 
-# Garante numero; qualquer coisa nao-numerica (vazio, "Unknown", "N/A") -> 0
+# Ensures a number; anything non-numeric (empty, "Unknown", "N/A") -> 0
 _num() {
   local v="${1:-}"
   if printf '%s' "$v" | grep -qE '^-?[0-9]+(\.[0-9]+)?$'; then
@@ -26,11 +26,11 @@ _num() {
   fi
 }
 
-# Tamper-resistance (contrato): o gate impoe o PROPRIO ruleset. .stylelintrc /
-# .htmlhintrc / .prettierrc do projeto-alvo sao IGNORADOS. Override SO via env
-# externa QG_RULESET_DIR -- NUNCA de .qg.yaml/arquivo do projeto.
-# Base absoluta capturada no SOURCE-TIME (antes de qualquer cd), robusta a
-# mudanca de cwd e a source com path relativo.
+# Tamper-resistance (contract): the gate enforces ITS OWN ruleset. The target
+# project's .stylelintrc / .htmlhintrc / .prettierrc are IGNORED. Override ONLY
+# via the external env var QG_RULESET_DIR -- NEVER from .qg.yaml/a project file.
+# The absolute base is captured at SOURCE-TIME (before any cd), robust to
+# cwd changes and to being sourced with a relative path.
 _QG_RULES_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/rules"
 qg_ruleset_dir() {
   if [ -n "${QG_RULESET_DIR:-}" ]; then
@@ -40,10 +40,10 @@ qg_ruleset_dir() {
   fi
 }
 
-# Sentinela da linguagem na raiz do diretorio dado (reusada por --detect,
-# fast-path e check de "linguagem ausente no baseline"). Slug: web.
-# Presenca de *.html / *.css / *.scss na raiz E ausencia de package.json
-# (se ha package.json e projeto nodejs -> nodejs/qg.sh cobre HTML/CSS dele).
+# Language sentinel at the root of the given directory (reused by --detect,
+# fast-path and the "language absent in baseline" check). Slug: web.
+# Presence of *.html / *.css / *.scss at the root AND absence of package.json
+# (if there is a package.json it is a nodejs project -> nodejs/qg.sh covers its HTML/CSS).
 qg_lang_present() {
   local dir="$1"
   [ -f "$dir/package.json" ] && return 1
@@ -54,16 +54,16 @@ qg_lang_present() {
   return 1
 }
 
-# web nao tem gerenciador de deps -> no-op de simetria (contrato Bug 1).
+# web has no dependency manager -> symmetry no-op (contract Bug 1).
 qg_resolve_deps() {
   local dir="$1" log="$2"
   : > "$log"
   return 0
 }
 
-# fontes HTML/CSS/SCSS. LEI (docs/contract.md): mede CODIGO-FONTE -- exclui
-# dirs gerados/vendored pelo ignore CANONICO do QG (mesma lista de
-# web/rules/.prettierignore), nunca config do projeto-alvo.
+# HTML/CSS/SCSS sources. LAW (docs/contract.md): measures SOURCE CODE -- excludes
+# generated/vendored dirs via QG's CANONICAL ignore (same list as
+# web/rules/.prettierignore), never the target project's config.
 _qg_web_excl_re='^\./(node_modules|dist|build|out|\.next|\.nuxt|\.expo|coverage|\.turbo|\.cache)/'
 _qg_web_html() {
   ( cd "$1" && find . \
@@ -91,17 +91,17 @@ count_fmt_errors() {
   : > "$log"
   local rules
   rules=$(qg_ruleset_dir)
-  # Tamper-resistance: --config do QG + --no-editorconfig (ignora .prettierrc
-  # e .editorconfig do projeto-alvo). --ignore-path aponta para o
-  # .prettierignore CANONICO do QG (NUNCA o do projeto): LEI -- mede
-  # CODIGO-FONTE, dirs gerados/vendored ficam de fora. Verifica HTML+CSS+SCSS.
+  # Tamper-resistance: QG's --config + --no-editorconfig (ignores the target
+  # project's .prettierrc and .editorconfig). --ignore-path points at
+  # QG's CANONICAL .prettierignore (NEVER the project's): LAW -- measures
+  # SOURCE CODE, generated/vendored dirs stay out. Checks HTML+CSS+SCSS.
   ( cd "$dir" && npx --yes prettier --check \
       --config "$rules/.prettierrc.json" --no-editorconfig \
       --ignore-path "$rules/.prettierignore" \
       "**/*.{html,css,scss}" ) > "$log" 2>&1 || true
-  # prettier emite "[warn] <path>" para cada arquivo divergente. Filtro
-  # defensivo: mesmo se prettier nao honrar bem o --ignore-path, paths
-  # gerados/minificados nao entram na contagem.
+  # prettier emits "[warn] <path>" for each diverging file. A defensive
+  # filter: even if prettier does not honor --ignore-path well, generated/
+  # minified paths do not enter the count.
   local n
   n=$(grep -E '^\[warn\] [^[:space:]].*\.(html|css|scss)$' "$log" 2>/dev/null \
     | grep -vE '^\[warn\] (.*/)?(node_modules|dist|build|out|\.next|\.nuxt|\.expo|coverage|\.turbo|\.cache)/' \
@@ -115,15 +115,15 @@ count_lint_errors() {
   local rules total=0
   rules=$(qg_ruleset_dir)
 
-  # stylelint (CSS/SCSS) -- ruleset do QG, ignora config do projeto.
+  # stylelint (CSS/SCSS) -- QG's ruleset, ignores the project's config.
   local css_files
   css_files=$(_qg_web_css "$dir")
   if [ -n "$css_files" ]; then
-    # stylelint: --config aponta arquivo explicito -> ignora .stylelintrc do
-    # projeto (stylelint nao tem --no-config-lookup; --config ja sobrepoe).
-    # Passa a lista EXPLICITA de fontes (ja filtrada por _qg_web_css com o
-    # ignore canonico) em vez de glob "**/*" -- LEI: nunca varrer dirs
-    # gerados/vendored nem *.min.css.
+    # stylelint: --config points at an explicit file -> ignores the project's
+    # .stylelintrc (stylelint has no --no-config-lookup; --config already overrides).
+    # Passes the EXPLICIT source list (already filtered by _qg_web_css with the
+    # canonical ignore) instead of a glob "**/*" -- LAW: never scan generated/
+    # vendored dirs nor *.min.css.
     ( cd "$dir" && printf '%s\n' "$css_files" \
         | xargs npx --yes stylelint \
         --config "$rules/.stylelintrc.json" ) > "$log.style" 2>&1 || true
@@ -135,17 +135,17 @@ count_lint_errors() {
     rm -f "$log.style"
   fi
 
-  # htmlhint (HTML) -- ruleset do QG, ignora .htmlhintrc do projeto.
+  # htmlhint (HTML) -- QG's ruleset, ignores the project's .htmlhintrc.
   local html_files
   html_files=$(_qg_web_html "$dir")
   if [ -n "$html_files" ]; then
-    # Lista EXPLICITA (ja filtrada por _qg_web_html com o ignore canonico)
-    # em vez de glob "**/*.html" -- LEI: nunca varrer dirs gerados/vendored.
+    # EXPLICIT list (already filtered by _qg_web_html with the canonical ignore)
+    # instead of a glob "**/*.html" -- LAW: never scan generated/vendored dirs.
     ( cd "$dir" && printf '%s\n' "$html_files" \
         | xargs npx --yes htmlhint \
         --config "$rules/.htmlhintrc" ) > "$log.html" 2>&1 || true
     local h
-    # htmlhint resumo: "N errors in M files" / linhas "L:C msg".
+    # htmlhint summary: "N errors in M files" / lines "L:C msg".
     h=$(awk '
       /[0-9]+ (error|errors) in [0-9]+ (file|files)/ {
         for (i=1; i<=NF; i++) if ($(i+1) == "error" || $(i+1) == "errors") { print $i; exit }

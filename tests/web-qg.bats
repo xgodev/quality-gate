@@ -8,7 +8,7 @@ setup() {
   qg_clean_env
 }
 
-@test "web/qg.sh --help mostra usage" {
+@test "web/qg.sh --help shows usage" {
   run "$(qg_script_path web)" --help
   [ "$status" -eq 0 ]
   [[ "$output" == *"--base"* ]]
@@ -16,12 +16,12 @@ setup() {
   [[ "$output" == *"OMITIDAS"* ]] || [[ "$output" == *"fmt"* ]]
 }
 
-@test "web/qg.sh declara QG_CONTRACT_VERSION=1 no header" {
+@test "web/qg.sh declares QG_CONTRACT_VERSION=1 in the header" {
   run grep -E "^# QG_CONTRACT_VERSION=1$" "$(qg_script_path web)"
   [ "$status" -eq 0 ]
 }
 
-@test "web/qg.sh --detect sem HTML/CSS sai 1" {
+@test "web/qg.sh --detect without HTML/CSS exits 1" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -32,7 +32,7 @@ setup() {
   rm -rf "$tmp"
 }
 
-@test "web/qg.sh --detect com HTML na raiz e SEM package.json imprime slug + sai 0" {
+@test "web/qg.sh --detect with HTML at the root and NO package.json prints slug + exits 0" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -44,7 +44,7 @@ setup() {
   rm -rf "$tmp"
 }
 
-@test "web/qg.sh --detect com package.json (projeto nodejs) NAO detecta web" {
+@test "web/qg.sh --detect with package.json (nodejs project) does NOT detect web" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -56,13 +56,13 @@ setup() {
   rm -rf "$tmp"
 }
 
-@test "web/qg.sh --format invalido sai 2" {
+@test "web/qg.sh --format invalid exits 2" {
   run "$(qg_script_path web)" --base origin/main --format xml
   [ "$status" -eq 2 ]
   [[ "$output" == *"--format"* ]]
 }
 
-@test "web/qg.sh com QG_BYPASS_REASON --format json retorna verdict bypassed" {
+@test "web/qg.sh with QG_BYPASS_REASON --format json returns verdict bypassed" {
   export QG_BYPASS_REASON="teste"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -73,7 +73,7 @@ setup() {
   rm -rf "$logdir"
 }
 
-@test "web count_fmt: 0 no baseline" {
+@test "web count_fmt: 0 in baseline" {
   source "$QG_REPO_ROOT/web/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -82,7 +82,7 @@ setup() {
   rm -rf "$logdir"
 }
 
-@test "web count_fmt: > 0 no regressed" {
+@test "web count_fmt: > 0 in regressed" {
   source "$QG_REPO_ROOT/web/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -91,7 +91,7 @@ setup() {
   rm -rf "$logdir"
 }
 
-@test "web count_lint: 0 no baseline" {
+@test "web count_lint: 0 in baseline" {
   source "$QG_REPO_ROOT/web/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -100,7 +100,7 @@ setup() {
   rm -rf "$logdir"
 }
 
-@test "web count_lint: > 0 no regressed (stylelint + htmlhint)" {
+@test "web count_lint: > 0 in regressed (stylelint + htmlhint)" {
   source "$QG_REPO_ROOT/web/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -109,14 +109,14 @@ setup() {
   rm -rf "$logdir"
 }
 
-@test "web _num: sanitiza nao-numerico para 0 (Bug 2)" {
+@test "web _num: sanitizes non-numeric to 0 (Bug 2)" {
   source "$QG_REPO_ROOT/web/lib/measure.sh"
   [ "$(_num "Unknown")" = "0" ]
   [ "$(_num "")" = "0" ]
   [ "$(_num "3")" = "3" ]
 }
 
-@test "web/qg.sh modo absoluto sem .qg.yaml: exit 0, JSON mode absolute, so fmt+lint" {
+@test "web/qg.sh absolute mode without .qg.yaml: exit 0, JSON mode absolute, only fmt+lint" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path web baseline)"
@@ -132,7 +132,7 @@ setup() {
   rm -rf "$logdir"
 }
 
-@test "web/qg.sh modo absoluto com absolute_thresholds violado: exit 1, métrica violated" {
+@test "web/qg.sh absolute mode with absolute_thresholds violated: exit 1, metric violated" {
   local logdir tmp
   logdir=$(qg_tmp_dir)
   tmp=$(qg_tmp_dir)
@@ -152,7 +152,7 @@ EOF
   rm -rf "$logdir" "$tmp"
 }
 
-@test "web/qg.sh .qg.yaml absolute_thresholds com chave de metrica omitida (build) sai 2" {
+@test "web/qg.sh .qg.yaml absolute_thresholds with an omitted-metric key (build) exits 2" {
   local tmp
   tmp=$(qg_tmp_dir)
   cp -R "$(qg_fixture_path web baseline)/." "$tmp/"
@@ -201,7 +201,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "web Bug build/: fmt/lint ignoram dirs gerados (mede fonte, nao artefato)" {
+@test "web Bug build/: fmt/lint ignore generated dirs (measures source, not artifact)" {
   source "$QG_REPO_ROOT/web/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -224,19 +224,19 @@ EOF
   </body>
 </html>
 EOF
-  # build/ + dist/ GERADO: CSS/HTML lixo, nao-formatado, com violacoes.
+  # build/ + dist/ GENERATED: junk CSS/HTML, unformatted, with violations.
   mkdir -p "$tmp/build" "$tmp/dist"
   printf '.x{color:red;;}  .y{}\n' > "$tmp/build/bundle.min.css"
   printf '<html><body><img src=a></body>\n' > "$tmp/build/index.html"
   printf '.z{COLOR:#ABC}\n' > "$tmp/dist/app.css"
   result_lint=$(count_lint_errors "$tmp" "$logdir/lint.log")
   result_fmt=$(count_fmt_errors "$tmp" "$logdir/fmt.log")
-  [ "$result_lint" = "0" ] || { echo "lint deveria ser 0 (build/dist ignorados); got $result_lint"; cat "$logdir/lint.log"; return 1; }
-  [ "$result_fmt" = "0" ] || { echo "fmt deveria ser 0 (so src/ limpo); got $result_fmt"; cat "$logdir/fmt.log"; return 1; }
+  [ "$result_lint" = "0" ] || { echo "lint should be 0 (build/dist ignored); got $result_lint"; cat "$logdir/lint.log"; return 1; }
+  [ "$result_fmt" = "0" ] || { echo "fmt should be 0 (only clean src/); got $result_fmt"; cat "$logdir/fmt.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }
 
-@test "web Bug build/: violacoes REAIS em src/ ainda contadas (exclusao nao mascara fonte)" {
+@test "web Bug build/: REAL violations in src/ still counted (the exclusion does not mask source)" {
   source "$QG_REPO_ROOT/web/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -245,21 +245,21 @@ EOF
   printf '.bad {\n  color: #zzzzzz;\n}\n' > "$tmp/src/style.css"
   printf '.gen {\n  color: #yyyyyy;\n}\n' > "$tmp/build/bundle.min.css"
   result=$(count_lint_errors "$tmp" "$logdir/lint.log")
-  [ "$result" -gt 0 ] || { echo "esperava >0 (violacao real em src/); got $result"; cat "$logdir/lint.log"; return 1; }
+  [ "$result" -gt 0 ] || { echo "expected >0 (real violation in src/); got $result"; cat "$logdir/lint.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }
 
-@test "web/qg.sh tamper-resistance: ignora .stylelintrc afrouxado do projeto" {
+@test "web/qg.sh tamper-resistance: ignores the project's loosened .stylelintrc" {
   source "$QG_REPO_ROOT/web/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
   cp -R "$(qg_fixture_path web regressed)/." "$tmp/"
-  # Dev tenta afrouxar: .stylelintrc.json do projeto sem regras.
+  # Dev tries to loosen: the project's .stylelintrc.json with no rules.
   cat > "$tmp/.stylelintrc.json" <<EOF
 { "rules": {} }
 EOF
   result=$(count_lint_errors "$tmp" "$logdir/lint.log")
   # Gate usa --config <QG>/web/rules/.stylelintrc.json, ignora o do projeto.
-  [ "$result" -gt 0 ] || { echo "esperava >0 mesmo com .stylelintrc vazio; got $result"; cat "$logdir/lint.log"; return 1; }
+  [ "$result" -gt 0 ] || { echo "expected >0 even with an empty .stylelintrc; got $result"; cat "$logdir/lint.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }
