@@ -11,6 +11,14 @@ anything so a future session does not repeat past mistakes.
 
 ## Hard rules
 
+- **Docs are ALWAYS updated in the same change. No exceptions.** Any change
+  to code, structure, dependencies, behavior, or version updates — in the
+  **same commit** — every doc it affects: `README.md`, `CONTRIBUTING.md`,
+  `docs/**`, this `CLAUDE.md`, per-language `README.md`/`docs/languages/*`,
+  the skill `SKILL.md`s, and `.claude-plugin/plugin.json` `description` if it
+  no longer matches reality. A doc or manifest that lies about the project is
+  a defect, not a follow-up. Before committing, ask: "what does this change
+  make false?" — and fix it now, not later.
 - **English only. Everywhere.** README, CONTRIBUTING, `docs/**`, `CLAUDE.md`,
   `SKILL.md`, code comments, AND all runtime output (`::error::`,
   `::warning::`, `::notice::`, the metric table, every user-facing string in
