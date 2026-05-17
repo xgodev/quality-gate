@@ -1,4 +1,4 @@
-// REGRESSION: fmt - linha sem espaço após operador (rustfmt vai reclamar)
+// REGRESSION: fmt - line without a space after the operator (rustfmt will complain)
 pub fn add(a:i32,b:i32)->i32{
     a+b
 }
@@ -7,19 +7,19 @@ pub fn multiply(a: i32, b: i32) -> i32 {
     a * b
 }
 
-// REGRESSION: lint - variável não usada (clippy warning -> erro com -D warnings)
+// REGRESSION: lint - unused variable (clippy warning -> error with -D warnings)
 pub fn unused_warning() -> i32 {
     let unused = 42;
     100
 }
 
-// REGRESSION: build - tipo errado, não compila
+// REGRESSION: build - wrong type, does not compile
 // pub fn type_mismatch() -> String {
 //     42
 // }
-// (Comentado para deixar isolado em teste específico — ver Task 19/20.)
+// (Commented out to keep it isolated in a specific test -- see Task 19/20.)
 
-// REGRESSION: complexity - função com cognitive complexity > 25
+// REGRESSION: complexity - function with cognitive complexity > 25
 pub fn complex_function(x: i32, y: i32) -> i32 {
     let mut r = 0;
     if x > 0 {
@@ -126,7 +126,7 @@ pub fn complex_function(x: i32, y: i32) -> i32 {
     r
 }
 
-// REGRESSION: coverage - função pública sem teste
+// REGRESSION: coverage - public function without a test
 pub fn uncovered() -> i32 {
     99
 }
@@ -135,10 +135,10 @@ pub fn uncovered() -> i32 {
 mod tests {
     use super::*;
 
-    // REGRESSION: test - teste falhando
+    // REGRESSION: test - failing test
     #[test]
     fn test_failing_on_purpose() {
-        assert_eq!(add(2, 3), 999); // valor errado de propósito
+        assert_eq!(add(2, 3), 999); // wrong value on purpose
     }
 
     #[test]

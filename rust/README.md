@@ -1,48 +1,48 @@
-# Quality Gate — Rust
+# Quality Gate -- Rust
 
-Gate de qualidade para projetos Rust. Cumpre o [contrato v1](../docs/contract.md).
+Quality gate for Rust projects. Complies with the [v1 contract](../docs/contract.md).
 
-## Pré-requisitos
+## Prerequisites
 
-- `cargo` (toolchain Rust — instale via [rustup.rs](https://rustup.rs))
-- `cargo-llvm-cov` — `cargo install cargo-llvm-cov`
-- `jq` — `brew install jq` (macOS) ou `apt install jq` (Linux)
-- `git`, `bash 4+`, `awk`, `tar` (sistema)
+- `cargo` (Rust toolchain -- install via [rustup.rs](https://rustup.rs))
+- `cargo-llvm-cov` -- `cargo install cargo-llvm-cov`
+- `jq` -- `brew install jq` (macOS) or `apt install jq` (Linux)
+- `git`, `bash 4+`, `awk`, `tar` (system)
 
-## Uso
+## Usage
 
 ```bash
 ~/.quality-gate/rust/qg.sh --base origin/main
 ```
 
-Ver [`docs/consume.md`](../docs/consume.md) para uso completo.
+See [`docs/consume.md`](../docs/consume.md) for full usage.
 
-## Métricas medidas
+## Measured metrics
 
-| Métrica | Ferramenta | Conta |
+| Metric | Tool | Counts |
 |---|---|---|
-| `fmt` | `cargo fmt --check` | linhas `Diff in` |
-| `lint` | `cargo clippy -D warnings` (sem complexity) | linhas `^error` |
-| `build` | `cargo build --all-targets` | linhas `^error` |
-| `test` | `cargo test --all-targets --no-fail-fast` | soma de `failed: N` |
+| `fmt` | `cargo fmt --check` | `Diff in` lines |
+| `lint` | `cargo clippy -D warnings` (without complexity) | `^error` lines |
+| `build` | `cargo build --all-targets` | `^error` lines |
+| `test` | `cargo test --all-targets --no-fail-fast` | sum of `failed: N` |
 | `complexity` | `cargo clippy -W cognitive_complexity/too_many_lines/too_many_arguments/type_complexity` | matches |
 | `coverage` | `cargo llvm-cov --json` | `lines.percent` |
 
-Thresholds de complexidade: defaults da comunidade clippy (cognitive 25, lines 100, args 7, type 250).
+Complexity thresholds: clippy community defaults (cognitive 25, lines 100, args 7, type 250).
 
-## Estrutura
+## Structure
 
-- [`qg.sh`](qg.sh) — script principal.
-- [`lib/measure.sh`](lib/measure.sh) — funções `count_*` e `measure_coverage`.
-- [`lib/output.sh`](lib/output.sh) — render texto e JSON.
-- [`test-fixtures/baseline/`](test-fixtures/baseline/) — projeto Rust limpo.
-- [`test-fixtures/regressed/`](test-fixtures/regressed/) — projeto com regressões deliberadas.
+- [`qg.sh`](qg.sh) -- main script.
+- [`lib/measure.sh`](lib/measure.sh) -- `count_*` functions and `measure_coverage`.
+- [`lib/output.sh`](lib/output.sh) -- text and JSON render.
+- [`test-fixtures/baseline/`](test-fixtures/baseline/) -- a clean Rust project.
+- [`test-fixtures/regressed/`](test-fixtures/regressed/) -- a project with deliberate regressions.
 
-## Detalhes e troubleshooting
+## Details and troubleshooting
 
-Ver [`docs/languages/rust.md`](../docs/languages/rust.md).
+See [`docs/languages/rust.md`](../docs/languages/rust.md).
 
-## Testes do próprio script
+## Tests for the script itself
 
 ```bash
 bats tests/rust-qg.bats

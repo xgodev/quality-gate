@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # QG_CONTRACT_VERSION=1
 #
-# qg -- dispatcher deterministico. Detecta a(s) linguagem(s) do projeto-alvo
-# via <lang>/qg.sh --detect e roda o(s) gate(s) correspondente(s).
-# Deteccao 100% shell, zero IA. A skill consumer SO chama este script.
+# qg -- deterministic dispatcher. Detects the target project's language(s)
+# via <lang>/qg.sh --detect and runs the matching gate(s).
+# 100% shell detection, zero AI. The consumer skill ONLY calls this script.
 #
-# Contrato: docs/contract.md, secao "Dispatcher deterministico".
+# Contract: docs/contract.md, section "Deterministic dispatcher".
 
 set -uo pipefail
 
@@ -14,31 +14,31 @@ TARGET="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 show_help() {
   cat <<'EOF'
-Uso: qg [--base <git-ref>] [opcoes]
+Usage: qg [--base <git-ref>] [options]
      qg --detect
 
-Dispatcher deterministico. Descobre a(s) linguagem(s) do projeto e roda
-o(s) <lang>/qg.sh correspondente(s). Repassa TODAS as flags intactas.
+Deterministic dispatcher. Discovers the project's language(s) and runs
+the matching <lang>/qg.sh. Forwards ALL flags intact.
 
-Opcoes especiais do dispatcher:
-  --detect    Lista os slugs detectados (um por linha). exit 0 se >=1,
-              exit 3 se nenhuma linguagem suportada.
+Dispatcher-specific options:
+  --detect    Lists the detected slugs (one per line). exit 0 if >=1,
+              exit 3 if no supported language.
 
-Demais flags (--base, --format, --cov-margin, --log-dir, ...) sao
-repassadas para o(s) <lang>/qg.sh. Ver docs/contract.md.
+Other flags (--base, --format, --cov-margin, --log-dir, ...) are
+forwarded to the <lang>/qg.sh. See docs/contract.md.
 
 Exit codes:
-  0  todos os gates passaram (ou bypassed/fast-path)
-  1  >=1 gate regrediu / threshold absoluto violado
-  2  erro de setup/ferramenta em algum gate
-  3  nenhuma linguagem suportada detectada (dispatcher)
+  0  all gates passed (or bypassed/fast-path)
+  1  >=1 gate regressed / absolute threshold violated
+  2  setup/tool error in some gate
+  3  no supported language detected (dispatcher)
 
-Precedencia do veredito agregado: 2 > 1 > 3 > 0.
+Aggregate verdict precedence: 2 > 1 > 3 > 0.
 EOF
 }
 
-# Detecta se --detect foi pedido (sem consumir os demais args, que sao
-# repassados intactos para <lang>/qg.sh).
+# Detects whether --detect was requested (without consuming the other args,
+# which are forwarded intact to <lang>/qg.sh).
 DISPATCH_DETECT_ONLY=0
 for a in "$@"; do
   case "$a" in
@@ -48,10 +48,10 @@ for a in "$@"; do
 done
 
 # --- .qg.yaml projects: (monorepo) -------------------------------------------
-# Schema fechado por item: path (obrigatorio), lang (opcional). Chave
-# desconhecida -> exit 2. Se projects: existe, USA APENAS essa lista.
+# Closed schema per item: path (required), lang (optional). Unknown
+# key -> exit 2. If projects: exists, USES ONLY that list.
 QG_YAML="$TARGET/.qg.yaml"
-PROJECTS_RAW=""        # linhas "path|lang" (lang pode ser vazio)
+PROJECTS_RAW=""        # "path|lang" lines (lang may be empty)
 HAS_PROJECTS=0
 
 if [ -f "$QG_YAML" ]; then
@@ -79,12 +79,12 @@ if [ -f "$QG_YAML" ]; then
           cur_lang=$(echo "$line" | sed -E 's/^[[:space:]]*lang:[[:space:]]*"?([^"#]*)"?.*/\1/' | sed -E 's/[[:space:]]+$//')
           ;;
         "  - "*)
-          # item inline tipo "  - foo:" -> chave desconhecida
+          # inline item like "  - foo:" -> unknown key
           key=$(echo "$line" | sed -E 's/^[[:space:]]*-[[:space:]]*([a-zA-Z_]+):.*/\1/')
           case "$key" in
             path|lang) ;;
             *)
-              echo "::error::.qg.yaml: projects[] chave desconhecida: $key" >&2
+              echo "::error::.qg.yaml: projects[] unknown key: $key" >&2
               exit 2
               ;;
           esac
@@ -94,7 +94,7 @@ if [ -f "$QG_YAML" ]; then
           case "$key" in
             path|lang) ;;
             *)
-              echo "::error::.qg.yaml: projects[] chave desconhecida: $key" >&2
+              echo "::error::.qg.yaml: projects[] unknown key: $key" >&2
               exit 2
               ;;
           esac
@@ -114,15 +114,15 @@ if [ -f "$QG_YAML" ]; then
   fi
 fi
 
-# --- Descoberta -------------------------------------------------------------
-# Emite linhas "slug|workdir" para cada gate a rodar.
+# --- Discovery -------------------------------------------------------------
+# Emits "slug|workdir" lines for each gate to run.
 discover() {
   if [ "$HAS_PROJECTS" = "1" ]; then
     while IFS='|' read -r p l; do
       [ -z "$p" ] && continue
       local wd="$TARGET/$p"
       if [ ! -d "$wd" ]; then
-        echo "::error::.qg.yaml projects: path inexistente: $p" >&2
+        echo "::error::.qg.yaml projects: nonexistent path: $p" >&2
         continue
       fi
       if [ -n "$l" ]; then
@@ -153,10 +153,10 @@ discover() {
 
 MATCHES=$(discover)
 
-# --- qg --detect: so lista slugs -------------------------------------------
+# --- qg --detect: only lists slugs -------------------------------------------
 if [ "$DISPATCH_DETECT_ONLY" = "1" ]; then
   if [ -z "$MATCHES" ]; then
-    echo "::error::nenhuma linguagem suportada detectada" >&2
+    echo "::error::no supported language detected" >&2
     exit 3
   fi
   echo "$MATCHES" | awk -F'|' 'NF { print $1 }' | sort -u
@@ -165,13 +165,13 @@ fi
 
 # --- 0 matches -------------------------------------------------------------
 if [ -z "$MATCHES" ]; then
-  echo "::error::nenhuma linguagem suportada detectada" >&2
+  echo "::error::no supported language detected" >&2
   exit 3
 fi
 
 N_MATCHES=$(echo "$MATCHES" | grep -c . || true)
 
-# Descobre --format dos argumentos repassados (para envelopar JSON em N>1).
+# Discover --format from the forwarded arguments (to envelope JSON when N>1).
 FMT="text"
 prev=""
 for a in "$@"; do
@@ -180,7 +180,7 @@ for a in "$@"; do
 done
 [ -n "${QG_FORMAT:-}" ] && [ "$FMT" = "text" ] && FMT="$QG_FORMAT"
 
-# --- 1 match: repassa direto, exit code intacto ----------------------------
+# --- 1 match: forward directly, exit code intact ----------------------------
 if [ "$N_MATCHES" -eq 1 ]; then
   slug=$(echo "$MATCHES" | head -1 | cut -d'|' -f1)
   wd=$(echo "$MATCHES" | head -1 | cut -d'|' -f2-)
@@ -188,8 +188,8 @@ if [ "$N_MATCHES" -eq 1 ]; then
   exit $?
 fi
 
-# --- N matches: roda todos, agrega ----------------------------------------
-# Precedencia de exit: 2 > 1 > 3 > 0.
+# --- N matches: run all, aggregate ----------------------------------------
+# Exit precedence: 2 > 1 > 3 > 0.
 worst_exit() {
   local a="$1" b="$2"
   for code in 2 1 3; do
@@ -234,9 +234,9 @@ if [ "$FMT" = "json" ]; then
 else
   echo
   if [ "$agg_exit" -eq 0 ]; then
-    echo "::notice::dispatcher: todos os gates passaram (${N_MATCHES} linguagens)"
+    echo "::notice::dispatcher: all gates passed (${N_MATCHES} languages)"
   else
-    echo "::error::dispatcher: ao menos um gate falhou (veredito agregado, exit $agg_exit)"
+    echo "::error::dispatcher: at least one gate failed (aggregate verdict, exit $agg_exit)"
   fi
 fi
 

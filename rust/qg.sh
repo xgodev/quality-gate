@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # QG_CONTRACT_VERSION=1
 #
-# rust/qg.sh — Quality Gate para Rust
+# rust/qg.sh -- Quality Gate for Rust
 #
-# Cumpre o contrato em docs/contract.md (versão 1.x). Compara 6 métricas
-# (fmt, lint, build, test, complexity, coverage) entre o estado atual e
-# uma base ref. Falha somente se PR piora alguma métrica.
+# Complies with the contract in docs/contract.md (version 1.x). Compares 6 metrics
+# (fmt, lint, build, test, complexity, coverage) between the current state and
+# a base ref. Fails only if the PR worsens some metric.
 
 set -uo pipefail
 
@@ -17,29 +17,29 @@ source "$QG_SCRIPT_DIR/lib/output.sh"
 
 show_help() {
   cat <<'EOF'
-Uso: rust/qg.sh [--base <git-ref>] [opções]
+Usage: rust/qg.sh [--base <git-ref>] [options]
      rust/qg.sh --detect
 
-Opções:
-  --detect              Detecta se a linguagem existe na raiz; imprime slug
-                        + exit 0 se sim, exit 1 se não. Curto-circuita tudo.
-  --base <ref>          Ref a comparar (ex: origin/main). Ausente → modo absoluto.
-  --baseline-dir <dir>  Path de baseline já preparado.
-  --cov-margin <pp>     Tolerância de coverage em pp. Default: 1.0
-  --log-dir <dir>       Onde gravar logs. Default: target/qg-logs
-  --refresh-baseline    Re-extrai baseline mesmo se cache existir.
-  --force-full          Pula fast-path.
-  --format text|json    Formato de output. Default: text.
-  -h, --help            Esta mensagem.
+Options:
+  --detect              Detects whether the language exists at the root; prints slug
+                        + exit 0 if yes, exit 1 if not. Short-circuits everything.
+  --base <ref>          Ref to compare against (e.g. origin/main). Absent -> absolute mode.
+  --baseline-dir <dir>  Path to an already-prepared baseline.
+  --cov-margin <pp>     Coverage tolerance in pp. Default: 1.0
+  --log-dir <dir>       Where to write logs. Default: target/qg-logs
+  --refresh-baseline    Re-extract baseline even if a cache exists.
+  --force-full          Skip fast-path.
+  --format text|json    Output format. Default: text.
+  -h, --help            This message.
 
-Variáveis de ambiente equivalentes: QG_BASE_REF, QG_BASELINE_DIR, QG_COV_MARGIN,
+Equivalent environment variables: QG_BASE_REF, QG_BASELINE_DIR, QG_COV_MARGIN,
 QG_LOG_DIR, QG_REFRESH_BASELINE, QG_FORCE_FULL, QG_FORMAT, QG_BYPASS_REASON.
 
-Mais detalhes: docs/contract.md
+More details: docs/contract.md
 EOF
 }
 
-# Defaults a partir de env vars
+# Defaults from env vars
 QG_BASE_REF_ARG="${QG_BASE_REF:-}"
 QG_BASELINE_DIR_ARG="${QG_BASELINE_DIR:-}"
 QG_COV_MARGIN_ARG="${QG_COV_MARGIN:-1.0}"
@@ -88,14 +88,14 @@ while [ $# -gt 0 ]; do
       exit 0
       ;;
     *)
-      echo "::error::argumento desconhecido: $1" >&2
+      echo "::error::unknown argument: $1" >&2
       show_help >&2
       exit 2
       ;;
   esac
 done
 
-# --detect: curto-circuita ANTES de qualquer validação/pré-req.
+# --detect: short-circuits BEFORE any validation/prereq.
 if [ "$QG_DETECT_ARG" = "1" ]; then
   qg_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
   if qg_lang_present "$qg_root"; then
@@ -105,7 +105,7 @@ if [ "$QG_DETECT_ARG" = "1" ]; then
   exit 1
 fi
 
-# --base ausente (e sem QG_BASE_REF) → modo absoluto (não é erro).
+# --base absent (and no QG_BASE_REF) -> absolute mode (not an error).
 QG_ABSOLUTE_MODE=0
 if [ -z "$QG_BASE_REF_ARG" ]; then
   QG_ABSOLUTE_MODE=1
@@ -114,31 +114,31 @@ fi
 case "$QG_FORMAT_ARG" in
   text|json) ;;
   *)
-    echo "::error::--format deve ser 'text' ou 'json' (recebido: '$QG_FORMAT_ARG')" >&2
+    echo "::error::--format must be 'text' or 'json' (got: '$QG_FORMAT_ARG')" >&2
     exit 2
     ;;
 esac
 
 if ! awk -v m="$QG_COV_MARGIN_ARG" 'BEGIN { exit !(m+0 == m) }' 2>/dev/null; then
-  echo "::error::--cov-margin deve ser numérico (recebido: '$QG_COV_MARGIN_ARG')" >&2
+  echo "::error::--cov-margin must be numeric (got: '$QG_COV_MARGIN_ARG')" >&2
   exit 2
 fi
 
 check_prereqs() {
   local missing=()
-  command -v cargo >/dev/null 2>&1 || missing+=("cargo (toolchain Rust) -- instale: 'curl --proto =https --tlsv1.2 -sSf https://sh.rustup.rs | sh' (Linux) / 'brew install rustup-init && rustup-init' (macOS) (sem cargo nao ha como compilar/medir o projeto)")
-  command -v jq >/dev/null 2>&1 || missing+=("jq (parser JSON) -- instale: 'apt install jq' (Linux) / 'brew install jq' (macOS) (sem jq o gate nao parseia metricas)")
-  command -v git >/dev/null 2>&1 || missing+=("git -- instale: 'apt install git' (Linux) / 'brew install git' (macOS) (sem git nao ha baseline/diff)")
-  command -v awk >/dev/null 2>&1 || missing+=("awk -- instale: 'apt install gawk' (Linux) / 'brew install gawk' (macOS) (sem awk o parsing numerico quebra)")
-  command -v tar >/dev/null 2>&1 || missing+=("tar -- instale: 'apt install tar' (Linux) / preinstalado (macOS) (sem tar nao ha extracao de baseline)")
+  command -v cargo >/dev/null 2>&1 || missing+=("cargo (Rust toolchain) -- install: 'curl --proto =https --tlsv1.2 -sSf https://sh.rustup.rs | sh' (Linux) / 'brew install rustup-init && rustup-init' (macOS) (without cargo there is no way to compile/measure the project)")
+  command -v jq >/dev/null 2>&1 || missing+=("jq (JSON parser) -- install: 'apt install jq' (Linux) / 'brew install jq' (macOS) (without jq the gate cannot parse metrics)")
+  command -v git >/dev/null 2>&1 || missing+=("git -- install: 'apt install git' (Linux) / 'brew install git' (macOS) (without git there is no baseline/diff)")
+  command -v awk >/dev/null 2>&1 || missing+=("awk -- install: 'apt install gawk' (Linux) / 'brew install gawk' (macOS) (without awk numeric parsing breaks)")
+  command -v tar >/dev/null 2>&1 || missing+=("tar -- install: 'apt install tar' (Linux) / preinstalled (macOS) (without tar there is no baseline extraction)")
 
   if command -v cargo >/dev/null 2>&1; then
-    cargo llvm-cov --version >/dev/null 2>&1 || missing+=("cargo-llvm-cov -- instale: 'cargo install cargo-llvm-cov' (Linux) / 'cargo install cargo-llvm-cov' (macOS) (sem ela a metrica coverage nao roda)")
+    cargo llvm-cov --version >/dev/null 2>&1 || missing+=("cargo-llvm-cov -- install: 'cargo install cargo-llvm-cov' (Linux) / 'cargo install cargo-llvm-cov' (macOS) (without it the coverage metric does not run)")
   fi
 
   if [ ${#missing[@]} -gt 0 ]; then
     for tool in "${missing[@]}"; do
-      echo "::error::ferramenta faltando: $tool" >&2
+      echo "::error::missing tool: $tool" >&2
     done
     exit 2
   fi
@@ -159,7 +159,7 @@ handle_bypass() {
   local ts
   ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-  # Audit log (sempre)
+  # Audit log (always)
   printf '%s\tbranch=%s\tuser=%s\treason=%s\n' "$ts" "$branch" "$user" "$reason" \
     >> "$log_dir/bypass.log"
 
@@ -184,8 +184,8 @@ EOF
   branch:        $branch
   base ref:      $QG_BASE_REF_ARG
 
-::warning::QG bypass ativo — motivo: $reason
-::warning::Esta execução não validou métricas. Audit log: $log_dir/bypass.log
+::warning::QG bypass active -- reason: $reason
+::warning::This run did not validate metrics. Audit log: $log_dir/bypass.log
 EOF
   fi
   exit 0
@@ -202,8 +202,8 @@ QG_YAML_SKIP_METRICS_RAW=""
 QG_ABS_THRESHOLDS_RAW=""
 
 if [ -f "$QG_YAML_FILE" ]; then
-  # Validação minimalista de schema fechado.
-  # Chaves permitidas no top-level: cov_margin, skip_metrics,
+  # Minimal closed-schema validation.
+  # Allowed top-level keys: cov_margin, skip_metrics,
   # extra_fast_path_paths, absolute_thresholds
   while IFS= read -r line; do
     case "$line" in
@@ -215,7 +215,7 @@ if [ -f "$QG_YAML_FILE" ]; then
           case "$key" in
             cov_margin|skip_metrics|extra_fast_path_paths|absolute_thresholds) ;;
             *)
-              echo "::error::.qg.yaml: chave desconhecida no top-level: $key" >&2
+              echo "::error::.qg.yaml: unknown top-level key: $key" >&2
               exit 2
               ;;
           esac
@@ -224,7 +224,7 @@ if [ -f "$QG_YAML_FILE" ]; then
     esac
   done < "$QG_YAML_FILE"
 
-  # absolute_thresholds (só usado em modo absoluto). Schema fechado.
+  # absolute_thresholds (only used in absolute mode). Closed schema.
   in_abs=0
   while IFS= read -r line; do
     if [ "$in_abs" = "1" ]; then
@@ -235,12 +235,12 @@ if [ -f "$QG_YAML_FILE" ]; then
           case "$akey" in
             fmt|lint|build|test|complexity|coverage) ;;
             *)
-              echo "::error::.qg.yaml: absolute_thresholds chave desconhecida: $akey" >&2
+              echo "::error::.qg.yaml: absolute_thresholds unknown key: $akey" >&2
               exit 2
               ;;
           esac
           if ! awk -v m="$aval" 'BEGIN { exit !(m+0 == m) }' 2>/dev/null; then
-            echo "::error::.qg.yaml: absolute_thresholds[$akey] não-numérico: $aval" >&2
+            echo "::error::.qg.yaml: absolute_thresholds[$akey] non-numeric: $aval" >&2
             exit 2
           fi
           QG_ABS_THRESHOLDS_RAW="${QG_ABS_THRESHOLDS_RAW}${akey}=${aval}"$'\n'
@@ -253,18 +253,18 @@ if [ -f "$QG_YAML_FILE" ]; then
     esac
   done < "$QG_YAML_FILE"
 
-  # Extrai cov_margin
+  # Extract cov_margin
   cov_yaml=$(grep -E "^cov_margin:" "$QG_YAML_FILE" | head -1 | sed -E 's/cov_margin:[[:space:]]*//')
   if [ -n "$cov_yaml" ]; then
     if awk -v m="$cov_yaml" 'BEGIN { exit !(m+0 == m) }' 2>/dev/null; then
       QG_COV_MARGIN_ARG="$cov_yaml"
     else
-      echo "::error::.qg.yaml: cov_margin não-numérico: $cov_yaml" >&2
+      echo "::error::.qg.yaml: cov_margin non-numeric: $cov_yaml" >&2
       exit 2
     fi
   fi
 
-  # Valida skip_metrics: cada item precisa de metric, reason, until
+  # Validate skip_metrics: each item needs metric, reason, until
   in_skip=0
   current_metric=""
   current_reason=""
@@ -273,10 +273,10 @@ if [ -f "$QG_YAML_FILE" ]; then
     if [ "$in_skip" = "1" ]; then
       case "$line" in
         "  - metric:"*)
-          # Valida item anterior se existir
+          # Validate the previous item if it exists
           if [ -n "$current_metric" ]; then
-            [ -z "$current_reason" ] && { echo "::error::.qg.yaml: skip_metrics[$current_metric] sem 'reason'" >&2; exit 2; }
-            [ -z "$current_until" ] && { echo "::error::.qg.yaml: skip_metrics[$current_metric] sem 'until'" >&2; exit 2; }
+            [ -z "$current_reason" ] && { echo "::error::.qg.yaml: skip_metrics[$current_metric] missing 'reason'" >&2; exit 2; }
+            [ -z "$current_until" ] && { echo "::error::.qg.yaml: skip_metrics[$current_metric] missing 'until'" >&2; exit 2; }
           fi
           current_metric=$(echo "$line" | sed -E 's/.*metric:[[:space:]]*//')
           current_reason=""
@@ -289,10 +289,10 @@ if [ -f "$QG_YAML_FILE" ]; then
           current_until=$(echo "$line" | sed -E 's/.*until:[[:space:]]*"?([^"]*)"?.*/\1/')
           ;;
         ""|extra_fast_path_paths:*|cov_margin:*)
-          # Sai do bloco skip_metrics
+          # Leave the skip_metrics block
           if [ -n "$current_metric" ]; then
-            [ -z "$current_reason" ] && { echo "::error::.qg.yaml: skip_metrics[$current_metric] sem 'reason'" >&2; exit 2; }
-            [ -z "$current_until" ] && { echo "::error::.qg.yaml: skip_metrics[$current_metric] sem 'until'" >&2; exit 2; }
+            [ -z "$current_reason" ] && { echo "::error::.qg.yaml: skip_metrics[$current_metric] missing 'reason'" >&2; exit 2; }
+            [ -z "$current_until" ] && { echo "::error::.qg.yaml: skip_metrics[$current_metric] missing 'until'" >&2; exit 2; }
             QG_YAML_SKIP_METRICS_RAW="${QG_YAML_SKIP_METRICS_RAW}${current_metric}|${current_reason}|${current_until}"$'\n'
           fi
           in_skip=0
@@ -304,10 +304,10 @@ if [ -f "$QG_YAML_FILE" ]; then
       "skip_metrics:"*) in_skip=1 ;;
     esac
   done < "$QG_YAML_FILE"
-  # Trata último item se arquivo terminar dentro de skip_metrics
+  # Handle the last item if the file ends inside skip_metrics
   if [ "$in_skip" = "1" ] && [ -n "$current_metric" ]; then
-    [ -z "$current_reason" ] && { echo "::error::.qg.yaml: skip_metrics[$current_metric] sem 'reason'" >&2; exit 2; }
-    [ -z "$current_until" ] && { echo "::error::.qg.yaml: skip_metrics[$current_metric] sem 'until'" >&2; exit 2; }
+    [ -z "$current_reason" ] && { echo "::error::.qg.yaml: skip_metrics[$current_metric] missing 'reason'" >&2; exit 2; }
+    [ -z "$current_until" ] && { echo "::error::.qg.yaml: skip_metrics[$current_metric] missing 'until'" >&2; exit 2; }
     QG_YAML_SKIP_METRICS_RAW="${QG_YAML_SKIP_METRICS_RAW}${current_metric}|${current_reason}|${current_until}"$'\n'
   fi
 
@@ -334,14 +334,14 @@ qg_abs_threshold() {
   printf '%s' "$QG_ABS_THRESHOLDS_RAW" | grep -E "^${name}=" | head -1 | sed -E "s/^${name}=//"
 }
 
-# --- MODO ABSOLUTO -----------------------------------------------------------
+# --- ABSOLUTE MODE -----------------------------------------------------------
 if [ "$QG_ABSOLUTE_MODE" = "1" ]; then
   mkdir -p "$QG_LOG_DIR_ARG"
   if ! qg_resolve_deps "." "$QG_LOG_DIR_ARG/abs-deps.log"; then
-    echo "::error::falha ao resolver dependências de rust — ver $QG_LOG_DIR_ARG/abs-deps.log" >&2
+    echo "::error::failed to resolve rust dependencies -- see $QG_LOG_DIR_ARG/abs-deps.log" >&2
     exit 2
   fi
-  echo "── medindo (sem baseline) ──" >&2
+  echo "── measuring (no baseline) ──" >&2
   abs_fmt=$(count_fmt_errors "." "$QG_LOG_DIR_ARG/abs-fmt.log")
   abs_lint=$(count_lint_errors "." "$QG_LOG_DIR_ARG/abs-lint.log")
   abs_build=$(count_build_errors "." "$QG_LOG_DIR_ARG/abs-build.log")
@@ -383,7 +383,7 @@ fi
 
 RUST_PATH_RE='\.rs$|^Cargo\.|build\.rs$|^rust-toolchain'
 
-# Aplica extra_fast_path_paths no regex de fast-path
+# Apply extra_fast_path_paths to the fast-path regex
 if [ -n "$QG_YAML_EXTRA_FAST_PATH" ]; then
   RUST_PATH_RE_EXTRA="${RUST_PATH_RE}${QG_YAML_EXTRA_FAST_PATH}"
 else
@@ -422,17 +422,17 @@ EOF
 ═══ Quality Gate (fast-path) ═══
   branch:        $branch
   base ref:      $QG_BASE_REF_ARG
-  scope:         no Rust files touched → skipping cargo gates
-  override:      QG_FORCE_FULL=1 to run full gate
+  scope:         no Rust files touched -> skipping cargo gates
+  override:      QG_FORCE_FULL=1 to run the full gate
 
-── arquivos modificados ──
+── modified files ──
 $(echo "$changed_files" | sed 's/^/  /')
 
 ✅ fast-path passed (no Rust to measure)
 EOF
     fi
 
-    # Sintaxe check de scripts shell modificados (catch barato)
+    # Syntax check of modified shell scripts (cheap catch)
     shell_files=$(echo "$changed_files" | grep -E '\.sh$' || true)
     if [ -n "$shell_files" ]; then
       while IFS= read -r f; do
@@ -455,7 +455,7 @@ prepare_baseline() {
   mkdir -p "$target"
   git fetch origin --quiet 2>/dev/null || true
   if ! git archive "$QG_BASE_REF_ARG" 2>/dev/null | tar -xC "$target"; then
-    echo "::error::falhou extrair '$QG_BASE_REF_ARG' via git archive — tente 'git fetch origin'" >&2
+    echo "::error::failed to extract '$QG_BASE_REF_ARG' via git archive -- try 'git fetch origin'" >&2
     return 1
   fi
 }
@@ -466,13 +466,13 @@ if [ -z "$QG_BASELINE_DIR_ARG" ]; then
     prepare_baseline "$QG_BASELINE_DIR_ARG" || exit 2
   fi
 elif [ ! -d "$QG_BASELINE_DIR_ARG" ]; then
-  echo "::error::--baseline-dir '$QG_BASELINE_DIR_ARG' não existe" >&2
+  echo "::error::--baseline-dir '$QG_BASELINE_DIR_ARG' does not exist" >&2
   exit 2
 fi
 
 QG_BASELINE_DIR_ARG=$(cd "$QG_BASELINE_DIR_ARG" && pwd)
 
-# Linguagem ausente no baseline
+# Language absent in baseline
 if [ ! -f "$QG_BASELINE_DIR_ARG/Cargo.toml" ]; then
   branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "<detached>")
   ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -492,22 +492,22 @@ if [ ! -f "$QG_BASELINE_DIR_ARG/Cargo.toml" ]; then
 }
 EOF
   else
-    echo "::warning::linguagem ausente no baseline (Cargo.toml não encontrado em $QG_BASELINE_DIR_ARG) — gate skipped"
+    echo "::warning::language absent in baseline (Cargo.toml not found in $QG_BASELINE_DIR_ARG) -- gate skipped"
   fi
   exit 0
 fi
 
 mkdir -p "$QG_LOG_DIR_ARG"
-# Bug 1: resolve dependências de baseline E PR antes de medir build/test.
+# Bug 1: resolve baseline AND PR dependencies before measuring build/test.
 if ! qg_resolve_deps "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-deps.log"; then
-  echo "::error::falha ao resolver dependências de rust (baseline) — ver $QG_LOG_DIR_ARG/base-deps.log" >&2
+  echo "::error::failed to resolve rust dependencies (baseline) -- see $QG_LOG_DIR_ARG/base-deps.log" >&2
   exit 2
 fi
 if ! qg_resolve_deps "." "$QG_LOG_DIR_ARG/pr-deps.log"; then
-  echo "::error::falha ao resolver dependências de rust (PR) — ver $QG_LOG_DIR_ARG/pr-deps.log" >&2
+  echo "::error::failed to resolve rust dependencies (PR) -- see $QG_LOG_DIR_ARG/pr-deps.log" >&2
   exit 2
 fi
-echo "── medindo base ──" >&2
+echo "── measuring base ──" >&2
 base_fmt=$(count_fmt_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-fmt.log")
 base_lint=$(count_lint_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-lint.log")
 base_build=$(count_build_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-build.log")
@@ -515,7 +515,7 @@ base_test=$(count_test_failures "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-tes
 base_complex=$(count_complexity "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-complex.log")
 base_cov=$(measure_coverage "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-cov.json")
 
-echo "── medindo PR ──" >&2
+echo "── measuring PR ──" >&2
 pr_fmt=$(count_fmt_errors "." "$QG_LOG_DIR_ARG/pr-fmt.log")
 pr_lint=$(count_lint_errors "." "$QG_LOG_DIR_ARG/pr-lint.log")
 pr_build=$(count_build_errors "." "$QG_LOG_DIR_ARG/pr-build.log")

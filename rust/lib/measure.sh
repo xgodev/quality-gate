@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Funções de medição do gate Rust.
-# Source este arquivo a partir de rust/qg.sh.
-# Cada função SEMPRE retorna inteiro >= 0 em stdout, sem prefixos.
+# Measurement functions for the Rust gate.
+# Source this file from rust/qg.sh.
+# Each function ALWAYS returns an integer >= 0 on stdout, with no prefixes.
 
 _grep_count() {
   local pattern="$1" file="$2"
@@ -14,7 +14,7 @@ _grep_count() {
   printf '%d\n' "${n:-0}"
 }
 
-# Garante numero; qualquer coisa nao-numerica (vazio, "Unknown", "N/A") -> 0
+# Ensures a number; anything non-numeric (empty, "Unknown", "N/A") -> 0
 _num() {
   local v="${1:-}"
   if printf '%s' "$v" | grep -qE '^-?[0-9]+(\.[0-9]+)?$'; then
@@ -24,10 +24,10 @@ _num() {
   fi
 }
 
-# Tamper-resistance (contrato): o gate impoe o PROPRIO ruleset. clippy.toml /
-# rustfmt.toml do projeto-alvo sao IGNORADOS. Override SO via env externa
+# Tamper-resistance (contract): the gate enforces ITS OWN ruleset. clippy.toml /
+# rustfmt.toml of the target project are IGNORED. Override ONLY via the external env var
 # QG_RULESET_DIR (setada por quem RODA o gate) -- NUNCA de .qg.yaml/arquivo
-# do projeto. Default = rules/ embarcado no QG.
+# Default = rules/ bundled in QG.
 _QG_RULES_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/rules"
 qg_ruleset_dir() {
   if [ -n "${QG_RULESET_DIR:-}" ]; then
@@ -37,19 +37,19 @@ qg_ruleset_dir() {
   fi
 }
 
-# Sentinela da linguagem na raiz do diretorio dado (reusada por --detect,
-# fast-path e check de "linguagem ausente no baseline"). Slug: rust.
+# Language sentinel at the root of the given directory (reused by --detect,
+# fast-path and the "language absent in baseline" check). Slug: rust.
 qg_lang_present() {
   local dir="$1"
   [ -f "$dir/Cargo.toml" ]
 }
 
-# rust-toolchain.toml/rust-toolchain e autoritativo (LEI): pina o channel
-# que o projeto usa. cargo/rustup honram o arquivo NATIVAMENTE -- o gate
-# NUNCA injeta `+stable`/override que ignore o arquivo. Se o channel pinado
-# nao esta instalado e o rustup nao consegue instalar (offline) => tool-error
-# claro, NUNCA build com stable do sistema.
-# Retorna 0 se honravel/sem pin; 1 = tool-error (msg no $log).
+# rust-toolchain.toml/rust-toolchain is authoritative (LAW): pins the channel
+# the project uses. cargo/rustup honor the file NATIVELY -- the gate
+# NEVER injects `+stable`/an override that ignores the file. If the pinned channel
+# is not installed and rustup cannot install it (offline) => tool-error
+# clear, NEVER a build with the system stable.
+# Returns 0 if honorable/no pin; 1 = tool-error (message in $log).
 qg_check_rust_toolchain() {
   local dir="$1" log="$2"
   local tf="" channel=""
@@ -64,28 +64,28 @@ qg_check_rust_toolchain() {
   fi
   [ -z "$channel" ] && return 0
   command -v rustup >/dev/null 2>&1 || return 0
-  # Channel pinado ja instalado? rustup toolchain list lista as instaladas.
+  # Pinned channel already installed? rustup toolchain list lists the installed ones.
   if rustup toolchain list 2>/dev/null | grep -q "^${channel}\b\|^${channel}-"; then
     return 0
   fi
-  # Nao instalado: so e seguro se rustup conseguir instalar (online). Testa
-  # sem efeito colateral pesado: tentar resolver a versao remota.
+  # Not installed: only safe if rustup can install it (online). Tests
+  # without a heavy side effect: try to resolve the remote version.
   if ! rustup run "$channel" rustc --version >/dev/null 2>&1; then
-    echo "::error::rust-toolchain pina channel '${channel}' nao instalado e rustup nao consegue instala-lo (offline?) -- instale: 'rustup toolchain install ${channel}' (Linux) / 'rustup toolchain install ${channel}' (macOS) (build com stable do sistema mediria artefato incorreto)" >> "$log"
+    echo "::error::rust-toolchain pins channel '${channel}' not installed and rustup cannot install it (offline?) -- install: 'rustup toolchain install ${channel}' (Linux) / 'rustup toolchain install ${channel}' (macOS) (building with the system stable would measure an incorrect artifact)" >> "$log"
     return 1
   fi
   return 0
 }
 
-# Bug 1: cargo resolve dependencias sozinho no build/test. cargo/rustup
-# honram rust-toolchain.toml nativamente -- NAO injetar `+stable`/override.
-# Falha de resolucao = tool-error.
+# Bug 1: cargo resolves dependencies on its own in build/test. cargo/rustup
+# honor rust-toolchain.toml natively -- do NOT inject `+stable`/an override.
+# A resolution failure = tool-error.
 qg_resolve_deps() {
   local dir="$1" log="$2"
   : > "$log"
   [ -f "$dir/Cargo.toml" ] || return 0
   qg_check_rust_toolchain "$dir" "$log" || return 1
-  # Sem `+toolchain`: cargo honra rust-toolchain.toml por si.
+  # No `+toolchain`: cargo honors rust-toolchain.toml on its own.
   ( cd "$dir" && cargo fetch ) >> "$log" 2>&1 || return 1
   return 0
 }
@@ -95,8 +95,8 @@ count_fmt_errors() {
   : > "$log"
   local rules
   rules=$(qg_ruleset_dir)
-  # Tamper-resistance: rustfmt aponta para o rustfmt.toml do QG, ignorando o
-  # do projeto-alvo.
+  # Tamper-resistance: rustfmt points at QG's rustfmt.toml, ignoring the
+  # target project's.
   ( cd "$dir" && cargo fmt --all -- --check \
       --config-path "$rules/rustfmt.toml" ) > "$log" 2>&1 || true
   _grep_count '^Diff in ' "$log"
@@ -107,7 +107,7 @@ count_lint_errors() {
   : > "$log"
   local rules
   rules=$(qg_ruleset_dir)
-  # Tamper-resistance: clippy le clippy.toml de CLIPPY_CONF_DIR -> ruleset do QG.
+  # Tamper-resistance: clippy reads clippy.toml from CLIPPY_CONF_DIR -> QG's ruleset.
   (
     cd "$dir" && CLIPPY_CONF_DIR="$rules" cargo clippy --all-targets -- \
       -D warnings \
@@ -142,8 +142,8 @@ count_complexity() {
   : > "$log"
   local rules
   rules=$(qg_ruleset_dir)
-  # Tamper-resistance: thresholds de complexidade vem do clippy.toml do QG
-  # (CLIPPY_CONF_DIR), nunca do projeto-alvo.
+  # Tamper-resistance: complexity thresholds come from QG's clippy.toml
+  # (CLIPPY_CONF_DIR), never from the target project.
   (
     cd "$dir" && CLIPPY_CONF_DIR="$rules" cargo clippy --all-targets -- \
       -A clippy::all \
@@ -162,6 +162,6 @@ measure_coverage() {
   if [ -s "$out" ]; then
     pct=$(jq -r '.data[0].totals.lines.percent // 0' "$out" 2>/dev/null || echo 0)
   fi
-  # Bug 2: nunca retorna vazio/"Unknown" -> 0.
+  # Bug 2: never returns empty/"Unknown" -> 0.
   printf '%s\n' "$(_num "$pct")"
 }

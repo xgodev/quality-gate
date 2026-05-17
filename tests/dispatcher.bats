@@ -4,10 +4,10 @@ bats_require_minimum_version 1.5.0
 
 load 'helpers/setup'
 
-# Cria um ROOT falso com gates sinteticos controlaveis. Cada fake gate:
-#  --detect : exit 0 + imprime slug se existe <sentinela> no cwd, senao exit 1
-#  (sem --detect): imprime JSON minimo e sai com o codigo gravado em
-#                  $FAKE_<SLUG>_EXIT (default 0); ecoa os args recebidos.
+# Creates a fake ROOT with controllable synthetic gates. Each fake gate:
+#  --detect : exit 0 + prints slug if <sentinel> exists in cwd, otherwise exit 1
+#  (without --detect): prints minimal JSON and exits with the code stored in
+#                  $FAKE_<SLUG>_EXIT (default 0); echoes the received args.
 make_fake_root() {
   local root="$1"; shift
   mkdir -p "$root"
@@ -40,18 +40,18 @@ setup() {
   qg_clean_env
 }
 
-@test "dispatcher: 0 matches -> exit 3 + mensagem" {
+@test "dispatcher: 0 matches -> exit 3 + message" {
   local root proj
   root=$(qg_tmp_dir); proj=$(qg_tmp_dir)
   make_fake_root "$root" go GO_SENTINEL 0 nodejs NODE_SENTINEL 0
   cd "$proj"
   run "$root/qg" --base origin/main
   [ "$status" -eq 3 ]
-  [[ "$output" == *"nenhuma linguagem suportada detectada"* ]]
+  [[ "$output" == *"no supported language detected"* ]]
   cd "$QG_REPO_ROOT"; rm -rf "$root" "$proj"
 }
 
-@test "dispatcher: 1 match -> repassa exit code do gate" {
+@test "dispatcher: 1 match -> forwards the gate's exit code" {
   local root proj
   root=$(qg_tmp_dir); proj=$(qg_tmp_dir)
   make_fake_root "$root" go GO_SENTINEL 1 nodejs NODE_SENTINEL 0
@@ -72,7 +72,7 @@ setup() {
   cd "$QG_REPO_ROOT"; rm -rf "$root" "$proj"
 }
 
-@test "dispatcher: N matches -> roda todos, veredito agregado = pior (1 vence 0)" {
+@test "dispatcher: N matches -> runs all, aggregate verdict = worst (1 beats 0)" {
   local root proj
   root=$(qg_tmp_dir); proj=$(qg_tmp_dir)
   make_fake_root "$root" go GO_SENTINEL 0 nodejs NODE_SENTINEL 1
@@ -82,7 +82,7 @@ setup() {
   cd "$QG_REPO_ROOT"; rm -rf "$root" "$proj"
 }
 
-@test "dispatcher: N matches -> precedencia 2 > 1 (tool error vence regressao)" {
+@test "dispatcher: N matches -> precedence 2 > 1 (tool error beats regression)" {
   local root proj
   root=$(qg_tmp_dir); proj=$(qg_tmp_dir)
   make_fake_root "$root" go GO_SENTINEL 1 nodejs NODE_SENTINEL 2
@@ -92,7 +92,7 @@ setup() {
   cd "$QG_REPO_ROOT"; rm -rf "$root" "$proj"
 }
 
-@test "dispatcher: N matches --format json -> array envelopado com aggregate_verdict" {
+@test "dispatcher: N matches --format json -> enveloped array with aggregate_verdict" {
   local root proj
   root=$(qg_tmp_dir); proj=$(qg_tmp_dir)
   make_fake_root "$root" go GO_SENTINEL 0 nodejs NODE_SENTINEL 1
@@ -105,7 +105,7 @@ setup() {
   cd "$QG_REPO_ROOT"; rm -rf "$root" "$proj"
 }
 
-@test "dispatcher: --detect lista slugs detectados, exit 0" {
+@test "dispatcher: --detect lists detected slugs, exit 0" {
   local root proj
   root=$(qg_tmp_dir); proj=$(qg_tmp_dir)
   make_fake_root "$root" go GO_SENTINEL 0 nodejs NODE_SENTINEL 0
@@ -117,7 +117,7 @@ setup() {
   cd "$QG_REPO_ROOT"; rm -rf "$root" "$proj"
 }
 
-@test "dispatcher: --detect sem matches -> exit 3" {
+@test "dispatcher: --detect with no matches -> exit 3" {
   local root proj
   root=$(qg_tmp_dir); proj=$(qg_tmp_dir)
   make_fake_root "$root" go GO_SENTINEL 0
@@ -127,13 +127,13 @@ setup() {
   cd "$QG_REPO_ROOT"; rm -rf "$root" "$proj"
 }
 
-@test "dispatcher: .qg.yaml projects: usa APENAS a lista (monorepo)" {
+@test "dispatcher: .qg.yaml projects: uses ONLY the list (monorepo)" {
   local root proj
   root=$(qg_tmp_dir); proj=$(qg_tmp_dir)
   make_fake_root "$root" go GO_SENTINEL 0 nodejs NODE_SENTINEL 1
   mkdir -p "$proj/backend" "$proj/frontend"
   touch "$proj/backend/GO_SENTINEL" "$proj/frontend/NODE_SENTINEL"
-  # raiz sem sentinela; so projects: deve ser considerado
+  # root without a sentinel; only projects: should be considered
   cat > "$proj/.qg.yaml" <<EOF
 projects:
   - path: backend
@@ -148,7 +148,7 @@ EOF
   cd "$QG_REPO_ROOT"; rm -rf "$root" "$proj"
 }
 
-@test "dispatcher: .qg.yaml projects: chave desconhecida -> exit 2" {
+@test "dispatcher: .qg.yaml projects: unknown key -> exit 2" {
   local root proj
   root=$(qg_tmp_dir); proj=$(qg_tmp_dir)
   make_fake_root "$root" go GO_SENTINEL 0
@@ -164,7 +164,7 @@ EOF
   cd "$QG_REPO_ROOT"; rm -rf "$root" "$proj"
 }
 
-@test "dispatcher: repassa --base e --format intactos pro gate" {
+@test "dispatcher: forwards --base and --format intact to the gate" {
   local root proj
   root=$(qg_tmp_dir); proj=$(qg_tmp_dir)
   mkdir -p "$root/go"

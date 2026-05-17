@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Renderiza output texto e JSON do gate Rust.
+# Renders text and JSON output for the Rust.
 
-# Garante numero; qualquer coisa nao-numerica (vazio, "Unknown", "N/A") -> 0
+# Ensures a number; anything non-numeric (empty, "Unknown", "N/A") -> 0
 _num() {
   local v="${1:-}"
   if printf '%s' "$v" | grep -qE '^-?[0-9]+(\.[0-9]+)?$'; then
@@ -11,7 +11,7 @@ _num() {
   fi
 }
 
-# --- Modo absoluto -----------------------------------------------------------
+# --- Absolute mode -----------------------------------------------------------
 _abs_metric_verdict() {
   local value="$1" threshold="$2" kind="$3"
   if [ -z "$threshold" ]; then
@@ -36,7 +36,7 @@ _abs_emoji() {
   esac
 }
 
-# Compara dois inteiros, retorna 'same'/'improved'/'regressed'
+# Compares two integers, returns 'same'/'improved'/'regressed'
 verdict_count() {
   local base="$1" pr="$2"
   if [ "${pr:-0}" -gt "${base:-0}" ]; then
@@ -48,7 +48,7 @@ verdict_count() {
   fi
 }
 
-# Compara dois floats com margem (coverage)
+# Compares two floats with a margin (coverage)
 verdict_coverage() {
   local base="$1" pr="$2" margin="$3"
   if awk -v b="$base" -v p="$pr" -v m="$margin" 'BEGIN { exit !(p < b - m) }'; then
@@ -77,12 +77,12 @@ print_cov_row() {
   if [ "$4" = "regressed" ]; then
     local drop
     drop=$(awk -v b="$2" -v p="$3" 'BEGIN { printf "%.1f", b-p }')
-    extra=" (margem: ${5}pp, queda: ${drop}pp)"
+    extra=" (margin: ${5}pp, drop: ${drop}pp)"
   fi
   printf 'coverage     %5.2f%%  %5.2f%%   %s%s\n' "$2" "$3" "$(verdict_emoji "$4")" "$extra"
 }
 
-# Renderiza tabela texto
+# Renders the text table
 render_text() {
   local branch="$1" base_ref="$2" baseline="$3" cov_margin="$4" log_dir="$5"
   local base_fmt="$6" pr_fmt="$7"
@@ -101,10 +101,10 @@ render_text() {
   cov margin:    ${cov_margin}pp
   logs:          $log_dir/
 
-── medindo base ──
-── medindo PR ──
+── measuring base ──
+── measuring PR ──
 
-métrica       base       pr     veredito
+metric        base       pr     verdict
 ─────────────────────────────────────────
 EOF
 
@@ -136,14 +136,14 @@ EOF
 
   if [ "$regressed" -ne 0 ]; then
     local IFS=", "
-    echo "::error::PR regrediu ${reglist[*]} — ver acima."
+    echo "::error::PR regressed ${reglist[*]} -- see above."
     return 1
   fi
-  echo "::notice::PR não regrediu nenhuma métrica."
+  echo "::notice::PR did not regress any metric."
   return 0
 }
 
-# Renderiza JSON
+# Renders JSON
 render_json() {
   local branch="$1" base_ref="$2" started_at="$3" duration="$4"
   local base_fmt="$5" pr_fmt="$6"
@@ -203,20 +203,20 @@ render_json() {
   return 0
 }
 
-# --- Render modo absoluto ----------------------------------------------------
+# --- Absolute-mode render ----------------------------------------------------
 render_absolute_text() {
   local branch="$1" started_at="$2" duration="$3" log_dir="$4"
   shift 4
   cat <<EOF
 
-═══ Quality Gate — rust (modo absoluto) ═══
+═══ Quality Gate — rust (absolute mode) ═══
   branch:        $branch
-  cov margin:    n/a (modo absoluto)
+  cov margin:    n/a (absolute mode)
   logs:          $log_dir/
 
-── medindo (sem baseline) ──
+── measuring (no baseline) ──
 
-métrica       valor   limite   veredito
+metric        value   threshold   verdict
 ─────────────────────────────────────────
 EOF
   local any_violation=0 viol_list=() has_threshold=0
@@ -241,13 +241,13 @@ EOF
   echo
   if [ "$any_violation" -ne 0 ]; then
     local IFS=", "
-    echo "::error::PR violou thresholds absolutos: ${viol_list[*]} — ver acima."
+    echo "::error::PR violated absolute thresholds: ${viol_list[*]} -- see above."
     return 1
   fi
   if [ "$has_threshold" -eq 0 ]; then
-    echo "::notice::modo absoluto sem thresholds — apenas relatório (exit 0)"
+    echo "::notice::absolute mode without thresholds -- report only (exit 0)"
   else
-    echo "::notice::modo absoluto: nenhum threshold violado (exit 0)"
+    echo "::notice::absolute mode: no threshold violated (exit 0)"
   fi
   return 0
 }

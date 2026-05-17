@@ -1,25 +1,25 @@
-# Testes do Quality Gate
+# Quality Gate Tests
 
-Testes em [bats](https://github.com/bats-core/bats-core).
+Tests in [bats](https://github.com/bats-core/bats-core).
 
-## Rodar tudo
+## Run all
 
 ```bash
 bats tests/
 ```
 
-## Rodar só uma linguagem
+## Run only one language
 
 ```bash
 bats tests/rust-qg.bats
 ```
 
-## Estrutura
+## Structure
 
-- `tests/<lang>-qg.bats` — testes do script de cada linguagem.
-- `tests/helpers/setup.bash` — helpers compartilhados.
-- `tests/contract.bats` — testes do contrato (válidos para QUALQUER linguagem).
+- `tests/<lang>-qg.bats` -- tests for each language's script.
+- `tests/helpers/setup.bash` -- shared helpers.
+- `tests/contract.bats` -- contract tests (valid for ANY language).
 
 ## Fixtures
 
-Cada `<lang>/test-fixtures/{baseline,regressed}/` é usado pelos testes via `qg_fixture_path "<lang>" "baseline"`.
+Each `<lang>/test-fixtures/{baseline,regressed}/` is used by the tests via `qg_fixture_path "<lang>" "baseline"`.

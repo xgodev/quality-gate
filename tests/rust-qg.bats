@@ -8,7 +8,7 @@ setup() {
   qg_clean_env
 }
 
-@test "rust/qg.sh --help mostra usage" {
+@test "rust/qg.sh --help shows usage" {
   run "$(qg_script_path rust)" --help
   [ "$status" -eq 0 ]
   [[ "$output" == *"--base"* ]]
@@ -16,35 +16,35 @@ setup() {
   [[ "$output" == *"--help"* ]]
 }
 
-@test "rust/qg.sh -h equivalente a --help" {
+@test "rust/qg.sh -h equivalent to --help" {
   run "$(qg_script_path rust)" -h
   [ "$status" -eq 0 ]
   [[ "$output" == *"--base"* ]]
 }
 
-@test "rust/qg.sh declara QG_CONTRACT_VERSION=1 no header" {
+@test "rust/qg.sh declares QG_CONTRACT_VERSION=1 in the header" {
   run grep -E "^# QG_CONTRACT_VERSION=1$" "$(qg_script_path rust)"
   [ "$status" -eq 0 ]
 }
 
-@test "rust/qg.sh sem --base NAO sai 2 por falta de --base (modo absoluto)" {
+@test "rust/qg.sh without --base does NOT exit 2 due to missing --base (absolute mode)" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
   run "$(qg_script_path rust)"
-  [[ "$output" != *"--base é obrigatório"* ]]
+  [[ "$output" != *"--base is required"* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp"
 }
 
-@test "rust/qg.sh respeita QG_BASE_REF env var quando --base ausente" {
+@test "rust/qg.sh respects the QG_BASE_REF env var when --base is absent" {
   export QG_BASE_REF="origin/main"
   run "$(qg_script_path rust)"
-  # Não deve sair com 2 por falta de --base; pode sair 2 por outras razões adiante.
-  [[ "$output" != *"--base é obrigatório"* ]]
+  # Should not exit 2 due to missing --base; may exit 2 for other reasons later.
+  [[ "$output" != *"--base is required"* ]]
 }
 
-@test "rust/qg.sh --detect sem sentinela sai 1" {
+@test "rust/qg.sh --detect without a sentinel exits 1" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -55,7 +55,7 @@ setup() {
   rm -rf "$tmp"
 }
 
-@test "rust/qg.sh --detect com sentinela imprime slug e sai 0" {
+@test "rust/qg.sh --detect with a sentinel prints the slug and exits 0" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -72,7 +72,7 @@ EOF
   rm -rf "$tmp"
 }
 
-@test "rust LEI: rust-toolchain.toml com channel nao instalado e nao instalavel = tool-error" {
+@test "rust LAW: rust-toolchain.toml with a channel not installed and not installable = tool-error" {
   source "$QG_REPO_ROOT/rust/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -86,7 +86,7 @@ EOF
 [toolchain]
 channel = "nightly-2099-12-31"
 EOF
-  # Stub rustup: channel ausente da lista e 'rustup run' falha (offline).
+  # Stub rustup: channel absent from the list and 'rustup run' fails (offline).
   local stubdir="$logdir/stub"
   mkdir -p "$stubdir"
   cat > "$stubdir/rustup" <<EOF
@@ -106,13 +106,13 @@ EOF
   rm -rf "$tmp" "$logdir"
 }
 
-@test "rust LEI: script NAO injeta +stable/override que ignore rust-toolchain.toml" {
-  # Ignora linhas de comentario (comecam com # apos espacos): so codigo real.
+@test "rust LAW: script does NOT inject +stable/an override that ignores rust-toolchain.toml" {
+  # Ignore comment lines (start with # after spaces): only real code.
   run bash -c "grep -vE '^[[:space:]]*#' '$QG_REPO_ROOT/rust/lib/measure.sh' | grep -nE 'cargo[[:space:]]+\+|rustup override set|--toolchain[[:space:]]+stable'"
   [ "$status" -ne 0 ]
 }
 
-@test "rust LEI: channel ja instalado NAO e tool-error" {
+@test "rust LAW: a channel already installed is NOT a tool-error" {
   source "$QG_REPO_ROOT/rust/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -134,7 +134,7 @@ EOF
   rm -rf "$tmp" "$logdir"
 }
 
-@test "rust/qg.sh modo absoluto sem .qg.yaml: exit 0, JSON mode absolute base_ref null" {
+@test "rust/qg.sh absolute mode without .qg.yaml: exit 0, JSON mode absolute base_ref null" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path rust baseline)"
@@ -149,7 +149,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "rust/qg.sh modo absoluto com absolute_thresholds violado: exit 1, métrica violated" {
+@test "rust/qg.sh absolute mode with absolute_thresholds violated: exit 1, metric violated" {
   local logdir tmp
   logdir=$(qg_tmp_dir)
   tmp=$(qg_tmp_dir)
@@ -169,7 +169,7 @@ EOF
   rm -rf "$logdir" "$tmp"
 }
 
-@test "rust _num: sanitiza não-numérico para 0 (Bug 2)" {
+@test "rust _num: sanitizes non-numeric to 0 (Bug 2)" {
   source "$QG_REPO_ROOT/rust/lib/measure.sh"
   [ "$(_num "Unknown")" = "0" ]
   [ "$(_num "")" = "0" ]
@@ -177,27 +177,27 @@ EOF
   [ "$(_num "7")" = "7" ]
 }
 
-@test "rust/qg.sh --format inválido sai 2" {
+@test "rust/qg.sh --format invalid exits 2" {
   run "$(qg_script_path rust)" --base origin/main --format xml
   [ "$status" -eq 2 ]
   [[ "$output" == *"--format"* ]]
 }
 
-@test "rust/qg.sh --cov-margin não-numérico sai 2" {
+@test "rust/qg.sh --cov-margin non-numeric exits 2" {
   run "$(qg_script_path rust)" --base origin/main --cov-margin abc
   [ "$status" -eq 2 ]
   [[ "$output" == *"--cov-margin"* ]]
 }
 
-@test "rust/qg.sh detecta ferramenta faltando e sai 2 com mensagem instalável" {
-  # Simula PATH sem cargo
+@test "rust/qg.sh detects a missing tool and exits 2 with an installable message" {
+  # Simulate PATH without cargo
   run env PATH="/usr/bin:/bin" "$(qg_script_path rust)" --base origin/main
   [ "$status" -eq 2 ]
   [[ "$output" == *"cargo"* ]]
-  [[ "$output" == *"instale"* ]] || [[ "$output" == *"install"* ]]
+  [[ "$output" == *"install"* ]]
 }
 
-@test "rust/qg.sh com QG_BYPASS_REASON sai 0 e emite warning" {
+@test "rust/qg.sh with QG_BYPASS_REASON exits 0 and emits a warning" {
   export QG_BYPASS_REASON="teste de bypass"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -211,7 +211,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "rust/qg.sh com QG_BYPASS_REASON --format json retorna verdict bypassed" {
+@test "rust/qg.sh with QG_BYPASS_REASON --format json returns verdict bypassed" {
   export QG_BYPASS_REASON="teste"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -223,13 +223,13 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "rust/qg.sh sem QG_BYPASS_REASON não emite bypass" {
+@test "rust/qg.sh without QG_BYPASS_REASON does not emit a bypass" {
   unset QG_BYPASS_REASON
   run "$(qg_script_path rust)" --base origin/main
   [[ "$output" != *"bypass"* ]]
 }
 
-@test "rust/qg.sh fast-path quando só docs mudaram" {
+@test "rust/qg.sh fast-path when only docs changed" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -240,7 +240,7 @@ EOF
   git add README.md
   git commit -qm "initial"
   git checkout -qb feature
-  echo "novo conteudo" >> README.md
+  echo "new content" >> README.md
   git add README.md
   git commit -qm "edit docs"
 
@@ -251,7 +251,7 @@ EOF
   rm -rf "$tmp"
 }
 
-@test "rust/qg.sh --force-full pula fast-path" {
+@test "rust/qg.sh --force-full skips fast-path" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -266,14 +266,14 @@ EOF
   git add README.md
   git commit -qm "edit"
 
-  # --force-full deve continuar e eventualmente sair 2 (sem Cargo.toml) ou tentar medir
+  # --force-full should continue and eventually exit 2 (no Cargo.toml) or try to measure
   run "$(qg_script_path rust)" --base master --force-full
   [[ "$output" != *"fast-path"* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp"
 }
 
-@test ".qg.yaml inválido (chave desconhecida) sai 2" {
+@test ".qg.yaml invalid (unknown key) exits 2" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -288,20 +288,20 @@ EOF
   rm -rf "$tmp"
 }
 
-@test ".qg.yaml com cov_margin numérico é aceito" {
+@test ".qg.yaml with numeric cov_margin is accepted" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
   echo "cov_margin: 3.5" > .qg.yaml
   run "$(qg_script_path rust)" --base origin/main --force-full
-  # Pode sair 2 por outras razões (sem git, sem Cargo.toml) mas NÃO por .qg.yaml
+  # May exit 2 for other reasons (no git, no Cargo.toml) but NOT due to .qg.yaml
   [[ "$output" != *"unknown_key"* ]]
-  [[ "$output" != *"chave desconhecida"* ]]
+  [[ "$output" != *"unknown"* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp"
 }
 
-@test ".qg.yaml skip_metrics sem reason sai 2" {
+@test ".qg.yaml skip_metrics without reason exits 2" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -317,13 +317,13 @@ EOF
   rm -rf "$tmp"
 }
 
-@test "baseline: --baseline-dir inexistente sai 2" {
-  run "$(qg_script_path rust)" --base origin/main --baseline-dir /tmp/qg-nao-existe-xyz --force-full
+@test "baseline: --baseline-dir nonexistent exits 2" {
+  run "$(qg_script_path rust)" --base origin/main --baseline-dir /tmp/qg-does-not-exist-xyz --force-full
   [ "$status" -eq 2 ]
   [[ "$output" == *"baseline"* ]] || [[ "$output" == *"--baseline-dir"* ]]
 }
 
-@test "count_fmt: 0 no fixture baseline" {
+@test "count_fmt: 0 in the baseline fixture" {
   source "$QG_REPO_ROOT/rust/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -332,7 +332,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_fmt: > 0 no fixture regressed" {
+@test "count_fmt: > 0 in the regressed fixture" {
   source "$QG_REPO_ROOT/rust/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -341,7 +341,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_lint: 0 no baseline" {
+@test "count_lint: 0 in baseline" {
   source "$QG_REPO_ROOT/rust/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -350,7 +350,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_lint: > 0 no regressed" {
+@test "count_lint: > 0 in regressed" {
   source "$QG_REPO_ROOT/rust/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -359,7 +359,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_build: 0 no baseline" {
+@test "count_build: 0 in baseline" {
   source "$QG_REPO_ROOT/rust/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -368,7 +368,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_test: 0 no baseline" {
+@test "count_test: 0 in baseline" {
   source "$QG_REPO_ROOT/rust/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -377,7 +377,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_test: 1 no regressed (test_failing_on_purpose)" {
+@test "count_test: 1 in regressed (test_failing_on_purpose)" {
   source "$QG_REPO_ROOT/rust/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -386,7 +386,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_complexity: 0 no baseline" {
+@test "count_complexity: 0 in baseline" {
   source "$QG_REPO_ROOT/rust/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -395,7 +395,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_complexity: > 0 no regressed (complex_function)" {
+@test "count_complexity: > 0 in regressed (complex_function)" {
   source "$QG_REPO_ROOT/rust/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -404,7 +404,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "measure_coverage: ~100% no baseline" {
+@test "measure_coverage: ~100% in baseline" {
   source "$QG_REPO_ROOT/rust/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -413,7 +413,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "measure_coverage: < 100% no regressed (uncovered exists)" {
+@test "measure_coverage: < 100% in regressed (uncovered exists)" {
   source "$QG_REPO_ROOT/rust/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -422,7 +422,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "e2e: rodando regressed contra baseline → exit 1, JSON com verdict regressed" {
+@test "e2e: running regressed against baseline -> exit 1, JSON with verdict regressed" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path rust regressed)"
@@ -438,7 +438,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "e2e: rodando baseline contra ele mesmo → exit 0" {
+@test "e2e: running baseline against itself -> exit 0" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path rust baseline)"
@@ -454,7 +454,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "e2e: --format text mostra tabela com colunas esperadas" {
+@test "e2e: --format text shows the table with expected columns" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path rust baseline)"
@@ -465,15 +465,15 @@ EOF
     --format text \
     --force-full
   [ "$status" -eq 0 ]
-  [[ "$output" == *"métrica"* ]]
-  [[ "$output" == *"veredito"* ]]
+  [[ "$output" == *"metric"* ]]
+  [[ "$output" == *"verdict"* ]]
   [[ "$output" == *"fmt"* ]]
   [[ "$output" == *"coverage"* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$logdir"
 }
 
-@test "e2e: 10 runs idênticas no regressed devem retornar exit 1 todas as vezes" {
+@test "e2e: 10 identical runs in regressed must return exit 1 every time" {
   for i in $(seq 1 10); do
     local logdir
     logdir=$(qg_tmp_dir)
@@ -490,11 +490,11 @@ EOF
   done
 }
 
-@test "baseline: linguagem ausente no baseline emite warning + exit 0" {
+@test "baseline: language absent in baseline emits a warning + exit 0" {
   local tmp baseline
   tmp=$(qg_tmp_dir)
   baseline=$(qg_tmp_dir)
-  echo "# sem Cargo.toml" > "$baseline/README.md"
+  echo "# no Cargo.toml" > "$baseline/README.md"
   cd "$tmp"
   git -c init.defaultBranch=master init -q
   git config user.email "t@t"
@@ -516,18 +516,18 @@ EOF
 
   run "$(qg_script_path rust)" --base master --baseline-dir "$baseline"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"linguagem ausente"* ]] || [[ "$output" == *"skipped"* ]]
+  [[ "$output" == *"language absent"* ]] || [[ "$output" == *"skipped"* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp" "$baseline"
 }
 
-@test "tamper-resistance: clippy ignora clippy.toml afrouxado do projeto (gate usa ruleset do QG)" {
-  command -v cargo >/dev/null 2>&1 || skip "cargo nao disponivel"
+@test "tamper-resistance: clippy ignores the project's loosened clippy.toml (gate uses QG's ruleset)" {
+  command -v cargo >/dev/null 2>&1 || skip "cargo not available"
   source "$QG_REPO_ROOT/rust/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
   cp -R "$(qg_fixture_path rust regressed)/." "$tmp/"
-  # Dev tenta afrouxar: clippy.toml do projeto eleva thresholds pro infinito.
+  # Dev tries to loosen: the project's clippy.toml raises thresholds to infinity.
   cat > "$tmp/clippy.toml" <<EOF
 cognitive-complexity-threshold = 99999
 too-many-lines-threshold = 99999
@@ -535,7 +535,7 @@ too-many-arguments-threshold = 99999
 type-complexity-threshold = 999999
 EOF
   result=$(count_complexity "$tmp" "$logdir/cx.log")
-  # Gate usa CLIPPY_CONF_DIR=<QG>/rust/rules (threshold 25), ignora o do projeto.
-  [ "$result" -gt 0 ] || { echo "esperava >0 mesmo com clippy.toml afrouxado; got $result"; cat "$logdir/cx.log"; return 1; }
+  # Gate uses CLIPPY_CONF_DIR=<QG>/rust/rules (threshold 25), ignores the project's.
+  [ "$result" -gt 0 ] || { echo "expected >0 even with a loosened clippy.toml; got $result"; cat "$logdir/cx.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }
