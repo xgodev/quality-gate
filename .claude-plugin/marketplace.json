@@ -1,0 +1,14 @@
+{
+  "name": "quality-gate",
+  "owner": {
+    "name": "xgodev",
+    "url": "https://github.com/xgodev"
+  },
+  "plugins": [
+    {
+      "name": "quality-gate",
+      "source": "./",
+      "description": "Quality Gate dispatcher + per-language gates + the quality-gate skill."
+    }
+  ]
+}

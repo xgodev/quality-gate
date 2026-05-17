@@ -2,6 +2,18 @@
 
 Gate de qualidade compartilhado entre projetos. Roda **igual** local e em CI: falha **somente** quando o PR piora alguma métrica em relação a uma base ref escolhida.
 
+Este repositório é **dois em um**:
+
+- **CLI/CI:** clone o repo e rode o dispatcher `./qg` (ou `<lang>/qg.sh`) direto — `.claude-plugin/` é inerte fora do Claude Code.
+- **Plugin Claude Code:** instala a skill `quality-gate` **junto** com os scripts (dispatcher empacotado, sem clone em runtime):
+
+```text
+/plugin marketplace add git@github.com:xgodev/quality-gate.git
+/plugin install quality-gate
+```
+
+Outro plugin pode declarar `quality-gate` como dependência (`name@marketplace`), re-listando este repo no `marketplace.json` dele.
+
 ## Como funciona
 
 1. Cada linguagem suportada tem um script standalone em `<lang>/qg.sh` (ex: `rust/qg.sh`).
