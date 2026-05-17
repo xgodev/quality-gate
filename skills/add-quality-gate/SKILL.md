@@ -1,352 +1,352 @@
 ---
 name: add-quality-gate
-description: Use ao adicionar suporte a uma nova linguagem no quality-gate (criar novo <lang>/qg.sh). Triggers verbatim "adicionar QG", "adicionar quality gate para Go", "adicionar quality gate para Python", "novo gate para Java", "criar quality gate Kotlin", "suportar TypeScript no QG", "novo QG para linguagem", "adicionar linguagem ao quality gate".
+description: Use when adding support for a new language to quality-gate (creating a new <lang>/qg.sh). Triggers "add QG", "add quality gate for Go", "add quality gate for Python", "new gate for Java", "create Kotlin quality gate", "support TypeScript in QG", "new QG for a language", "add a language to the quality gate".
 ---
 
-# Adicionar nova linguagem ao Quality Gate
+# Add a new language to Quality Gate
 
-Esta skill eh prescritiva. Ela define a ORDEM e o ESCOPO do trabalho de adicionar uma nova linguagem ao gate compartilhado. Pular passos quebra o contrato e gera scripts incompativeis com a skill consumidora `quality-gate`.
+This skill is prescriptive. It defines the ORDER and the SCOPE of the work to add a new language to the shared gate. Skipping steps breaks the contract and produces scripts incompatible with the consumer skill `quality-gate`.
 
-## LEI 0 — Compatibilidade de contrato (PRIMEIRO PASSO, sem excecao)
+## LAW 0 -- Contract compatibility (FIRST STEP, no exception)
 
-Antes de tocar em qualquer codigo:
+Before touching any code:
 
-1. Ler `docs/contract.md` integral. Confirmar que a versao declarada eh `1.x`. Se for `2.x` ou maior, ESTA SKILL ESTA DESATUALIZADA — pare e escale.
-2. O script gerado DEVE declarar `# QG_CONTRACT_VERSION=1` na **linha 2**. Sem isso, ferramentas de validacao nao reconhecem o script como conforme. (O `schema_version` do JSON eh `"1.1"`, mas `QG_CONTRACT_VERSION` continua `1` — aditivo.)
-3. Reler `docs/contract.md` nao eh perfumaria. O contrato muda regularmente — assumir que voce ja sabe eh como o subagent do RED chegou ao bug de copiar `rust/qg.sh` direto.
+1. Read `docs/contract.md` in full. Confirm the declared version is `1.x`. If it is `2.x` or higher, THIS SKILL IS OUT OF DATE -- stop and escalate.
+2. The generated script MUST declare `# QG_CONTRACT_VERSION=1` on **line 2**. Without it, validation tools do not recognize the script as compliant. (The JSON `schema_version` is `"1.1"`, but `QG_CONTRACT_VERSION` stays `1` -- additive.)
+3. Re-reading `docs/contract.md` is not busywork. The contract changes regularly -- assuming you already know is how the RED subagent ended up with the bug of copying `rust/qg.sh` directly.
 
-## LEI 0.1 — v1.1 eh obrigatoria em toda linguagem nova
+## LAW 0.1 -- v1.1 is mandatory in every new language
 
-Toda linguagem nova JA NASCE com (template ja traz tudo, voce so resolve placeholders):
+Every new language is BORN with (the template already ships everything, you only resolve placeholders):
 
-- **`--detect`**: curto-circuita ANTES de qualquer validacao/pre-req. Imprime o slug + exit 0 se a sentinela existe na raiz (`git rev-parse --show-toplevel || pwd`), senao exit 1. Reusa `qg_lang_present` (em `lib/measure.sh`) — MESMA sentinela do check de baseline-ausente. Nao duplica regex.
-- **Modo absoluto**: `--base` ausente (e sem `QG_BASE_REF`) NAO eh mais exit 2 — vira modo absoluto. Pula baseline, fast-path e check de linguagem-ausente; mede `.` uma vez; le `.qg.yaml absolute_thresholds`; exit 0 sempre exceto se um threshold for violado (exit 1). JSON: `mode: "absolute"`, `base_ref: null`, metricas `{name,value,threshold,verdict}`.
-- **Bug 1 (resolucao de deps)**: se a linguagem tem gerenciador de dependencias, `qg_resolve_deps` (em `lib/measure.sh`) DEVE rodar antes de medir build/test, para baseline E PR (comparativo) e para `.` (absoluto). Falha de resolucao = tool-error exit 2 (`::error::falha ao resolver dependencias de <lang> — <detalhe>`), NUNCA build regredido. Linguagens sem resolucao explicita (rust/cargo, swift/SwiftPM) mantem `qg_resolve_deps` como no-op de simetria.
-- **Bug 2 (`_num`)**: funcao `_num()` obrigatoria em `lib/measure.sh` E `lib/output.sh`. Aplicada em TODO ponto que alimenta `jq --argjson`/`awk`/comparacao. `measure_coverage` NUNCA retorna `"Unknown"`/vazio — sempre numero (0 quando nao ha cobertura legitima; tool-error exit 2 quando a ferramenta quebrou).
-- **LEI toolchain/build-system declarado e autoritativo**: a linguagem nova DEVE detectar o build-system/manager/toolchain que o projeto declara (lockfile, build-system file, wrapper, diretiva de versao pinada). Se o gate nao suporta esse build-system OU nao consegue honra-lo exatamente (ferramenta ausente no PATH, versao pinada nao satisfazivel, wrapper ausente) => **tool-error exit 2** com `::error::` claro no `$log`, NUNCA substituir silenciosamente por outra ferramenta/versao/manager. Substituicao silenciosa mede artefato diferente do que CI/producao vao construir → veredito sem valor. Ref: `nodejs/lib/measure.sh` `qg_resolve_deps()` (padrao) e `docs/contract.md` secao "Toolchain/build-system declarado e autoritativo (LEI)". Validar com fixture que declara manager/build-system/toolchain nao disponivel e confirmar exit 2 + mensagem (nunca fallback).
+- **`--detect`**: short-circuits BEFORE any validation/prereq. Prints the slug + exit 0 if the sentinel exists at the root (`git rev-parse --show-toplevel || pwd`), otherwise exit 1. Reuses `qg_lang_present` (in `lib/measure.sh`) -- the SAME sentinel as the baseline-absent check. Does not duplicate the regex.
+- **Absolute mode**: `--base` absent (and no `QG_BASE_REF`) is no longer exit 2 -- it becomes absolute mode. Skips baseline, fast-path and the language-absent check; measures `.` once; reads `.qg.yaml absolute_thresholds`; exit 0 always except if a threshold is violated (exit 1). JSON: `mode: "absolute"`, `base_ref: null`, metrics `{name,value,threshold,verdict}`.
+- **Bug 1 (dependency resolution)**: if the language has a dependency manager, `qg_resolve_deps` (in `lib/measure.sh`) MUST run before measuring build/test, for baseline AND PR (comparative) and for `.` (absolute). A resolution failure = tool-error exit 2 (`::error::failed to resolve <lang> dependencies -- <detail>`), NEVER a regressed build. Languages without explicit resolution (rust/cargo, swift/SwiftPM) keep `qg_resolve_deps` as a symmetry no-op.
+- **Bug 2 (`_num`)**: a `_num()` function is mandatory in `lib/measure.sh` AND `lib/output.sh`. Applied at EVERY point that feeds `jq --argjson`/`awk`/comparison. `measure_coverage` NEVER returns `"Unknown"`/empty -- always a number (0 when there is no legitimate coverage; tool-error exit 2 when the tool broke).
+- **LAW the declared toolchain/build-system is authoritative**: the new language MUST detect the build-system/manager/toolchain the project declares (lockfile, build-system file, wrapper, pinned-version directive). If the gate does not support that build-system OR cannot honor it exactly (tool absent from PATH, pinned version not satisfiable, wrapper absent) => **tool-error exit 2** with a clear `::error::` in the `$log`, NEVER silently substitute another tool/version/manager. Silent substitution measures a different artifact than what CI/production will build -> a worthless verdict. Ref: `nodejs/lib/measure.sh` `qg_resolve_deps()` (pattern) and `docs/contract.md` section "The declared toolchain/build-system is authoritative (LAW)". Validate with a fixture that declares an unavailable manager/build-system/toolchain and confirm exit 2 + message (never a fallback).
 
-## LEI 0.2 — Tamper-resistance: a linguagem nova NASCE com `rules/` proprio
+## LAW 0.2 -- Tamper-resistance: the new language is BORN with its own `rules/`
 
-O gate **traz e impoe os proprios rulesets** (contrato, secao
-"Tamper-resistance"). Config de qualidade do projeto-alvo (`.eslintrc`,
+The gate **ships and enforces its own rulesets** (contract, section
+"Tamper-resistance"). The target project's quality config (`.eslintrc`,
 `clippy.toml`, `pyproject.toml [tool.ruff]`, `.swiftlint.yml`, `detekt.yml`,
-`.stylelintrc`, etc.) e **ignorada por padrao** — senao o dev afrouxa uma
-regra no proprio repo e o gate vira teatro.
+`.stylelintrc`, etc.) is **ignored by default** -- otherwise the dev loosens a
+rule in their own repo and the gate becomes theater.
 
-Toda linguagem nova OBRIGATORIAMENTE:
+Every new language MANDATORILY:
 
-1. Cria `<lang>/rules/` com a config canonica da(s) ferramenta(s) (defaults
-   da comunidade em V1; calibracao fina e V2 — o que importa e a MECANICA).
-2. `lib/measure.sh` define `qg_ruleset_dir()` que retorna
-   `${QG_RULESET_DIR:-<base absoluta>/rules}`. A base absoluta e capturada
-   em **source-time** (`_QG_RULES_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/rules"`)
-   — robusta a `cd` e a source com path relativo.
-3. Cada `count_*` invoca a ferramenta apontando para `$(qg_ruleset_dir)/...`
-   **e com as flags que ignoram config local** (ex: `eslint
-   --no-config-lookup --config`; `ruff --config <arquivo>`; `clippy` via
+1. Creates `<lang>/rules/` with the canonical config of the tool(s) (community
+   defaults in V1; fine calibration is V2 -- what matters is the MECHANICS).
+2. `lib/measure.sh` defines `qg_ruleset_dir()` that returns
+   `${QG_RULESET_DIR:-<absolute base>/rules}`. The absolute base is captured
+   at **source-time** (`_QG_RULES_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/rules"`)
+   -- robust to `cd` and to being sourced with a relative path.
+3. Each `count_*` invokes the tool pointing at `$(qg_ruleset_dir)/...`
+   **and with the flags that ignore local config** (e.g. `eslint
+   --no-config-lookup --config`; `ruff --config <file>`; `clippy` via
    `CLIPPY_CONF_DIR`; `detekt -c`; `prettier --config --no-editorconfig`).
-   Ferramentas sem config (gofmt, google-java-format) sao trivialmente
+   Tools without config (gofmt, google-java-format) are trivially
    tamper-proof.
-4. **Override SO externo:** ruleset alternativo so via env `QG_RULESET_DIR`
-   setada por quem RODA o gate. NUNCA lido de `.qg.yaml` nem de arquivo do
-   projeto-alvo (o dev controla esses).
-5. **Validacao obrigatoria (passo 17e):** fixture com config afrouxada
-   (`.eslintrc` desligando regra, `clippy.toml` com threshold infinito,
-   etc.) + um problema real; confirmar que o gate IGNORA a config do
-   projeto e AINDA detecta o problema. Test fica em `tests/<lang>-qg.bats`.
+4. **Override is external ONLY:** an alternative ruleset only via env `QG_RULESET_DIR`
+   set by whoever RUNS the gate. NEVER read from `.qg.yaml` nor a target
+   project file (the dev controls those).
+5. **Mandatory validation (step 17e):** a fixture with loosened config
+   (`.eslintrc` turning off a rule, `clippy.toml` with an infinite threshold,
+   etc.) + a real problem; confirm the gate IGNORES the project's
+   config and STILL detects the problem. The test lives in `tests/<lang>-qg.bats`.
 
-PROIBIDO: invocar a ferramenta sem `--config`/equivalente do QG "porque o
-projeto ja tem config"; ler `QG_RULESET_DIR` de `.qg.yaml`; deixar a
-ferramenta descobrir config do projeto-alvo.
+FORBIDDEN: invoking the tool without QG's `--config`/equivalent "because the
+project already has a config"; reading `QG_RULESET_DIR` from `.qg.yaml`; letting
+the tool discover the target project's config.
 
-## LEI 0.2.1 -- fmt/lint/complexity medem CODIGO-FONTE (ignore canonico do QG)
+## LAW 0.2.1 -- fmt/lint/complexity measure SOURCE CODE (QG's canonical ignore)
 
-`fmt`/`lint`/`complexity` medem **codigo-fonte**, NUNCA artefato gerado/
-vendored. Bug confirmado em producao (my-project): varrer `.` cru
-contava bundles minificados em `build/` (`lint=1658`, `complexity=404`,
-100% gerado) enquanto `src/` real tinha 0 — metrica inutil.
+`fmt`/`lint`/`complexity` measure **source code**, NEVER a generated/
+vendored artifact. Bug confirmed in production (my-project): scanning raw `.`
+counted minified bundles in `build/` (`lint=1658`, `complexity=404`,
+100% generated) while the real `src/` had 0 -- a useless metric.
 
-Toda linguagem nova cujo `count_fmt`/`count_lint`/`count_complexity`
-**varre arquivos por path** (glob `.`/`**/*`, `find`, ferramenta sem
-escopo de build-system) OBRIGATORIAMENTE aplica o **ignore CANONICO do
-QG** (tamper-proof: NUNCA `.eslintignore`/`.prettierignore`/`.gitignore`/
-`.qg.yaml` do projeto — o dev nao afrouxa a varredura):
+Every new language whose `count_fmt`/`count_lint`/`count_complexity`
+**scans files by path** (glob `.`/`**/*`, `find`, a tool without
+build-system scope) MANDATORILY applies the **QG CANONICAL
+ignore** (tamper-proof: NEVER `.eslintignore`/`.prettierignore`/`.gitignore`/
+the project's `.qg.yaml` -- the dev does not loosen the scan):
 
 `node_modules/ dist/ build/ out/ .next/ .nuxt/ .expo/ coverage/ .turbo/
-.cache/` (+ `.venv/`/`venv/` Python, `vendor/` Go) e `*.min.js`
+.cache/` (+ `.venv/`/`venv/` Python, `vendor/` Go) and `*.min.js`
 `*.min.css` `*.bundle.js` `*.chunk.js` `*-lock.json` `*.map`.
 
-Mecanismo conforme a ferramenta: bloco `ignores` global (eslint flat),
+Mechanism depends on the tool: global `ignores` block (eslint flat),
 `--ignore-path <QG>/.prettierignore`, `extend-exclude` (ruff,
-independe de respect-gitignore), `-i/-e`/`-ignore` (radon/gocyclo), ou
-filtro de output + prune no `find` helper. Linguagens cujo lint/fmt JA
-e scope de build-system (cargo, mvn-pmd `-d src`, ktlint `src/**`,
-detekt `--input src`) ou ja excluem o gerado (swift `.build/`) NAO tem o
-anti-pattern -- nao gold-plate. **Validacao (passo 17e-bis):** fixture com
-`build/` (bundle minificado lixo) + `src/` limpo => `lint=0`,
-`complexity=0`, `fmt` so conta src; e tamper (`.eslintignore` vazio do
-projeto) => QG ainda exclui `build/`. Ref: `docs/contract.md` LEI
-"fmt/lint/complexity medem CODIGO-FONTE".
+independent of respect-gitignore), `-i/-e`/`-ignore` (radon/gocyclo), or
+output filter + prune in the `find` helper. Languages whose lint/fmt is ALREADY
+build-system scoped (cargo, mvn-pmd `-d src`, ktlint `src/**`,
+detekt `--input src`) or already exclude the generated output (swift `.build/`) do NOT have the
+anti-pattern -- do not gold-plate. **Validation (step 17e-bis):** a fixture with
+`build/` (junk minified bundle) + a clean `src/` => `lint=0`,
+`complexity=0`, `fmt` only counts src; and tamper (empty project
+`.eslintignore`) => QG still excludes `build/`. Ref: `docs/contract.md` LAW
+"fmt/lint/complexity measure SOURCE CODE".
 
-## LEI 0.3 — Dispatcher awareness
+## LAW 0.3 -- Dispatcher awareness
 
-A skill consumer NAO chama `<lang>/qg.sh` diretamente — ela chama o
-dispatcher `qg` da raiz, que faz `<lang>/qg.sh --detect` e roda o(s)
-gate(s). Implicacoes para a linguagem nova:
+The consumer skill does NOT call `<lang>/qg.sh` directly -- it calls the
+root dispatcher `qg`, which runs `<lang>/qg.sh --detect` and runs the
+gate(s). Implications for the new language:
 
-- `--detect` DEVE imprimir exatamente o slug + exit 0 com sentinela, exit
-  1 sem (nunca exit 2). O dispatcher depende disso.
-- Exit codes do `<lang>/qg.sh` continuam `0|1|2`. O **exit 3** e exclusivo
-  do dispatcher ("nenhuma linguagem detectada") — NUNCA emita exit 3 de um
+- `--detect` MUST print exactly the slug + exit 0 with the sentinel, exit
+  1 without (never exit 2). The dispatcher depends on this.
+- The `<lang>/qg.sh` exit codes stay `0|1|2`. **Exit 3** is dispatcher-exclusive
+  ("no language detected") -- NEVER emit exit 3 from a
   `<lang>/qg.sh`.
-- O `<lang>/qg.sh` precisa rodar corretamente quando o cwd e um sub-path de
-  monorepo (`.qg.yaml projects:`). Use paths relativos a `.`/cwd, nunca
-  assuma raiz do git.
+- `<lang>/qg.sh` must run correctly when the cwd is a sub-path of a
+  monorepo (`.qg.yaml projects:`). Use paths relative to `.`/cwd, never
+  assume the git root.
 
-## LEI 1 — Use o template, nunca copie `rust/qg.sh`
+## LAW 1 -- Use the template, never copy `rust/qg.sh`
 
-Ponto de partida obrigatorio: `templates/qg.sh.template`. Ele tem comentarios `# TODO(template):` em cada bloco que precisa de decisao por linguagem.
+Mandatory starting point: `templates/qg.sh.template`. It has `# TODO(template):` comments in each block that needs a per-language decision.
 
-Copiar `rust/qg.sh` direto eh PROIBIDO mesmo que pareca mais rapido. O template foi extraido a partir de aprendizados de produção; ele tem placeholders nos pontos exatos onde linguagem importa e copia-direta da binding rotineiramente esquece de mexer (ex: `RUST_PATH_RE`, `Cargo.toml` como sentinela, mensagens hard-coded com "rust").
+Copying `rust/qg.sh` directly is FORBIDDEN even if it seems faster. The template was extracted from production learnings; it has placeholders at the exact points where the language matters and a direct copy of the binding routinely forgets to touch (e.g. `RUST_PATH_RE`, `Cargo.toml` as the sentinel, hard-coded messages with "rust").
 
-## LEI 2 — Output sempre em PT-BR
+## LAW 2 -- Output always in English
 
-Toda mensagem para humano (stderr, ::error::, ::warning::, headers de tabela, blocos de help) em **PT-BR sem acento**. Identificadores de metrica e veredito por metrica em EN ASCII (`fmt`, `lint`, `same`, `improved`, `regressed`).
+Every human-facing message (stderr, ::error::, ::warning::, table headers, help blocks) in **English ASCII** (no accents, no em-dash -- use `--`). Metric identifiers and per-metric verdicts in EN ASCII (`fmt`, `lint`, `same`, `improved`, `regressed`).
 
-Mensagens novas que voce precisar criar para a sua linguagem (ex: "ferramenta X falhou inesperadamente") tambem em PT-BR. Nao misture idiomas porque "fica mais natural em EN".
+New messages you need to create for your language (e.g. "tool X failed unexpectedly") also in English. Do not mix languages.
 
-## LEI 3 — Bypass nunca eh decisao da skill
+## LAW 3 -- A bypass is never the skill's decision
 
-Esta skill cria o gate, nao decide quando burlar. `QG_BYPASS_REASON` so existe para o usuario final setar conscientemente. Nao adicione codigo que seta a env var, nao adicione "modo dev sem gate", nao adicione fallback silencioso.
+This skill creates the gate, it does not decide when to circumvent it. `QG_BYPASS_REASON` only exists for the end user to set consciously. Do not add code that sets the env var, do not add a "dev mode without gate", do not add a silent fallback.
 
-## Pre-requisitos antes de comecar
+## Prerequisites before starting
 
-Identifique com o solicitante (perguntar explicitamente se nao foi dito):
+Identify with the requester (ask explicitly if not stated):
 
-- Nome da linguagem + slug ASCII (sem acento, lowercase, ex: `go`, `python`, `java`).
-- **UM** build system canonico. Se a linguagem tem multiplos (pip vs poetry vs uv; npm vs pnpm vs bun; mvn vs gradle), escolher um e documentar a decisao em `docs/languages/<lang>.md`. NAO suportar varios em V1.
-- Para cada uma das 6 metricas reservadas (`fmt`, `lint`, `build`, `test`, `complexity`, `coverage`):
-  - Ferramenta oficial para medir, ou
-  - Decisao explicita de OMITIR (com justificativa para a doc).
-- Metricas extras alem das 6: nome em `snake_case` ASCII unico, semantica documentada.
-- Se alguma ferramenta exige auth (token, env var): listar agora — vai entrar no pre-req check obrigatoriamente.
+- Language name + ASCII slug (no accents, lowercase, e.g. `go`, `python`, `java`).
+- **ONE** canonical build system. If the language has several (pip vs poetry vs uv; npm vs pnpm vs bun; mvn vs gradle), choose one and document the decision in `docs/languages/<lang>.md`. Do NOT support several in V1.
+- For each of the 6 reserved metrics (`fmt`, `lint`, `build`, `test`, `complexity`, `coverage`):
+  - An official tool to measure it, or
+  - An explicit decision to OMIT it (with a justification for the doc).
+- Extra metrics beyond the 6: a unique `snake_case` ASCII name, documented semantics.
+- If some tool requires auth (token, env var): list it now -- it will mandatorily enter the prereq check.
 
-## Checklist obrigatorio (executar EM ORDEM)
+## Mandatory checklist (execute IN ORDER)
 
-### Setup (passos 1-3)
+### Setup (steps 1-3)
 
-1. Copiar `.claude/skills/add-quality-gate/templates/qg.sh.template` para `<lang>/qg.sh`. Substituir TODOS os placeholders `{{UPPER_SNAKE}}`. **Remover** todos os comentarios `# TODO(template):` apos resolver — nao deixar como "guia informativo". Se `# TODO(template):` sobrevive ao commit, voce nao terminou.
-2. Conferir que **linha 2** eh literalmente `# QG_CONTRACT_VERSION=1`. Sem isso, gate eh rejeitado.
-3. Copiar `templates/README.md.template` para `<lang>/README.md` e `templates/language-doc.md.template` para `docs/languages/<lang>.md`. Resolver placeholders em ambos AGORA, nao depois — docs sao requisito de pronto, nao depois-do-MVP.
+1. Copy `skills/add-quality-gate/templates/qg.sh.template` to `<lang>/qg.sh`. Replace ALL `{{UPPER_SNAKE}}` placeholders. **Remove** all `# TODO(template):` comments after resolving them -- do not leave them as an "informational guide". If a `# TODO(template):` survives the commit, you did not finish.
+2. Check that **line 2** is literally `# QG_CONTRACT_VERSION=1`. Without it, the gate is rejected.
+3. Copy `templates/README.md.template` to `<lang>/README.md` and `templates/language-doc.md.template` to `docs/languages/<lang>.md`. Resolve placeholders in both NOW, not later -- docs are a definition-of-done requirement, not a post-MVP one.
 
-### Implementar as funcoes `count_*` em `<lang>/lib/measure.sh` (passos 4-6)
+### Implement the `count_*` functions in `<lang>/lib/measure.sh` (steps 4-6)
 
-4. Cada funcao retorna **inteiro >= 0** em stdout (coverage retorna decimal com `.`). Sem prefixo, sem texto extra. `lib/measure.sh` DEVE definir tambem: `_num()` (sanitiza numerico — copiar verbatim do contrato), `qg_lang_present <dir>` (testa a sentinela; reusada por `--detect` e baseline-ausente) e `qg_resolve_deps <dir> <log>` (Bug 1 — resolve closure de deps; no-op se a linguagem nao tem gerenciador). `lib/output.sh` DEVE definir `_num()` tambem (mesma funcao) e `render_absolute_text`/`render_absolute_json`.
-5. **Tool error vs measurement count** (LEI absoluta):
-   - Se a ferramenta da LINGUAGEM retorna falha por motivo dela mesma (segfault, OOM, exit code nao-padrao por panic, timeout): emita `::error::ferramenta X falhou inesperadamente — log em <path>` no stderr e o script principal faz `exit 2`.
-   - Tool error nunca, em hipotese alguma, vira contagem positiva de regressao (que seria `exit 1`).
-   - Exit 1 = pelo menos uma metrica regrediu. Exit 2 = setup/ferramenta quebrada. Misturar os dois eh quebra de contrato.
-6. Se a ferramenta exige auth (token/env var): valide no `check_prereqs` (exit 2 se faltar). MESMA auth aplicada a baseline E PR — sem atalho de "so mede no PR e compara com cache".
-6a. **LEI: toda msg de ferramenta/manager/build-system/toolchain ausente ensina a instalar (Linux + macOS).** Cada entrada de `check_prereqs` (`missing+=(...)`) E cada `::error::` de manager/lockfile ausente em `lib/*.sh` segue o formato: `<causa> -- instale: '<cmd linux>' (Linux) / '<cmd macOS>' (macOS) (<consequencia se ignorar>)`. ASCII, `--` nunca em-dash. Ver `docs/contract.md` (secao Pre-requisitos por linguagem). Tool nao trivialmente instalavel (build-system nao suportado) → a acao substitui o `instale:` mas a msg continua acionavel.
+4. Each function returns an **integer >= 0** on stdout (coverage returns a decimal with `.`). No prefix, no extra text. `lib/measure.sh` MUST also define: `_num()` (numeric sanitizer -- copy verbatim from the contract), `qg_lang_present <dir>` (tests the sentinel; reused by `--detect` and baseline-absent) and `qg_resolve_deps <dir> <log>` (Bug 1 -- resolves the deps closure; no-op if the language has no manager). `lib/output.sh` MUST also define `_num()` (same function) and `render_absolute_text`/`render_absolute_json`.
+5. **Tool error vs measurement count** (absolute LAW):
+   - If the LANGUAGE tool fails for a reason of its own (segfault, OOM, non-standard exit code on panic, timeout): emit `::error::tool X failed unexpectedly -- log at <path>` on stderr and the main script does `exit 2`.
+   - A tool error never, under any circumstance, becomes a positive regression count (which would be `exit 1`).
+   - Exit 1 = at least one metric regressed. Exit 2 = setup/broken tool. Mixing the two is a contract breach.
+6. If the tool requires auth (token/env var): validate it in `check_prereqs` (exit 2 if missing). The SAME auth applied to baseline AND PR -- no shortcut of "only measure on the PR and compare with a cache".
+6a. **LAW: every missing tool/manager/build-system/toolchain message teaches how to install it (Linux + macOS).** Each `check_prereqs` entry (`missing+=(...)`) AND each `::error::` for a missing manager/lockfile in `lib/*.sh` follows the format: `<cause> -- install: '<linux cmd>' (Linux) / '<macOS cmd>' (macOS) (<consequence if ignored>)`. ASCII, `--` never an em-dash. See `docs/contract.md` (section Per-language prerequisites). A tool not trivially installable (an unsupported build-system) -> the action replaces `install:` but the message stays actionable.
 
-### Linguagem ausente no baseline (passo 7)
+### Language absent in the baseline (step 7)
 
-7. Sentinela ASCII na raiz (Cargo.toml para Rust, go.mod para Go, etc). Se ausente em `<baseline-dir>`: `::warning::linguagem ausente no baseline — gate skipped` + `exit 0`. Nao tente medir num baseline vazio. (Em JSON: `verdict: "passed"`, `metrics: []`.)
+7. ASCII sentinel at the root (Cargo.toml for Rust, go.mod for Go, etc.). If absent in `<baseline-dir>`: `::warning::language absent in baseline -- gate skipped` + `exit 0`. Do not try to measure in an empty baseline. (In JSON: `verdict: "passed"`, `metrics: []`.)
 
-### Compatibilidade de plataforma (passos 8-9)
+### Platform compatibility (steps 8-9)
 
-8. Use SOMENTE flags POSIX em `awk`, `sed`, `grep`, `find`. Especificamente PROIBIDO:
-   - `sed -i` em qualquer forma — use `sed -e ... > tmp && mv tmp arquivo`.
-   - `grep -P` — use `grep -E`.
-   - `awk gensub` — use `gsub`.
-   - `find -regex` — use `find ... | grep -E`.
-   - Detectar OS via `uname` para escolher entre flags GNU e BSD eh sintoma de codigo errado, nao solucao. Se voce precisa de `uname` switch para fazer `sed -i` funcionar nos dois, voce ja perdeu — refatore para nao usar `sed -i`.
-9. Testar em macOS E Linux antes de marcar como concluido. NAO basta "rodou em CI Linux" ou "rodou no meu Mac".
+8. Use ONLY POSIX flags in `awk`, `sed`, `grep`, `find`. Specifically FORBIDDEN:
+   - `sed -i` in any form -- use `sed -e ... > tmp && mv tmp file`.
+   - `grep -P` -- use `grep -E`.
+   - `awk gensub` -- use `gsub`.
+   - `find -regex` -- use `find ... | grep -E`.
+   - Detecting the OS via `uname` to choose between GNU and BSD flags is a symptom of wrong code, not a solution. If you need a `uname` switch to make `sed -i` work on both, you have already lost -- refactor to not use `sed -i`.
+9. Test on macOS AND Linux before marking it as done. "It ran in CI Linux" or "it ran on my Mac" is not enough.
 
-### Validacao comportamental (passos 10-17 — NAO PULE NENHUM, mesmo sob pressao de tempo)
+### Behavioral validation (steps 10-17 -- DO NOT SKIP ANY, even under time pressure)
 
-Os passos 10 a 17 sao OBRIGATORIOS. "Tem reuniao em 30 minutos" nao eh justificativa para pular. Se nao da tempo de fazer todos, NAO ENTREGUE — abra um WIP e termine depois.
+Steps 10 to 17 are MANDATORY. "There is a meeting in 30 minutes" is not a justification to skip. If there is not enough time to do them all, DO NOT DELIVER -- open a WIP and finish later.
 
-10. Criar `<lang>/test-fixtures/baseline/` (projeto limpo, commit-able) que passa em todas as metricas medidas.
-11. Criar `<lang>/test-fixtures/regressed/` (copia de baseline com regressao deliberada em CADA metrica medida — fmt quebrado, lint extra, build error, test falhando, complexidade aumentada, coverage caido).
-12. Rodar `<lang>/qg.sh --base <baseline-fixture> --baseline-dir <baseline-fixture>` no diretorio `regressed/`. **Esperado**: exit 1, tabela mostra cada metrica regredida com `❌ regressed`.
-13. Rodar `<lang>/qg.sh --base <baseline-fixture> --baseline-dir <baseline-fixture>` no proprio `baseline/`. **Esperado**: exit 0, todas metricas `✅ same`.
-14. Rodar com `--format json` em ambos cenarios. Validar JSON contra `docs/contract-v1.schema.json` via `jq` ou validador externo (ex: `ajv validate -s docs/contract-v1.schema.json -d resultado.json`). **Olho humano nao substitui validacao** — campo faltando passa despercebido.
-15. Rodar sem `--base`. **Esperado**: exit 2 + mensagem clara.
-16. Rodar com `QG_BYPASS_REASON="teste"`. **Esperado**: exit 0, `::warning::` com motivo, JSON com `verdict: "bypassed"`.
-17. Rodar 10 vezes seguidas no cenario regredido. **Esperado**: exit 1 todas as 10. Se houver flake (ex: 9/10), corrija a fonte da nao-determinismo ANTES de entregar — `--batch-mode` na ferramenta nao eh garantia, voce tem que verificar.
+10. Create `<lang>/test-fixtures/baseline/` (a clean, commit-able project) that passes every measured metric.
+11. Create `<lang>/test-fixtures/regressed/` (a copy of baseline with a deliberate regression in EACH measured metric -- broken fmt, extra lint, build error, failing test, increased complexity, dropped coverage).
+12. Run `<lang>/qg.sh --base <baseline-fixture> --baseline-dir <baseline-fixture>` in the `regressed/` directory. **Expected**: exit 1, the table shows each regressed metric with `❌ regressed`.
+13. Run `<lang>/qg.sh --base <baseline-fixture> --baseline-dir <baseline-fixture>` in `baseline/` itself. **Expected**: exit 0, all metrics `✅ same`.
+14. Run with `--format json` in both scenarios. Validate the JSON against `docs/contract-v1.schema.json` via `jq` or an external validator (e.g. `ajv validate -s docs/contract-v1.schema.json -d result.json`). **A human eye does not replace validation** -- a missing field goes unnoticed.
+15. Run without `--base`. **Expected**: exit 0 + absolute-mode JSON (see step 17b).
+16. Run with `QG_BYPASS_REASON="test"`. **Expected**: exit 0, `::warning::` with the reason, JSON with `verdict: "bypassed"`.
+17. Run 10 times in a row in the regressed scenario. **Expected**: exit 1 all 10. If there is a flake (e.g. 9/10), fix the source of the non-determinism BEFORE delivering -- `--batch-mode` on the tool is no guarantee, you have to verify.
 
-### Validacao v1.1 (passos 17a-17d — tambem OBRIGATORIOS)
+### v1.1 validation (steps 17a-17d -- also MANDATORY)
 
-17a. `<lang>/qg.sh --detect` num diretorio SEM a sentinela: **exit 1**, stdout vazio. Num diretorio COM a sentinela: imprime exatamente o slug + **exit 0**.
-17b. Rodar `<lang>/qg.sh --format json` SEM `--base` no `baseline/` (sem `.qg.yaml`): **exit 0**, JSON com `mode:"absolute"`, `base_ref:null`, `schema_version:"1.1"`, todas as metricas `verdict:"reported"`.
-17c. Rodar modo absoluto com `.qg.yaml absolute_thresholds` que viola alguma metrica (ex: `lint: 0` no fixture regressed): **exit 1**, `verdict:"failed"`, ao menos uma metrica `verdict:"violated"`.
-17d. Bug 2: forcar coverage indefinida (projeto sem testes) → JSON valido, `coverage value:0`, gate nao quebra com `jq --argjson` invalido. Bug 1: projeto com manifest de deps mas sem o diretorio de deps instalado (`node_modules`/venv) sem `--base` → gate resolve deps OU classifica como tool-error exit 2, NUNCA build falso-regredido nem crash de `jq`.
+17a. `<lang>/qg.sh --detect` in a directory WITHOUT the sentinel: **exit 1**, empty stdout. In a directory WITH the sentinel: prints exactly the slug + **exit 0**.
+17b. Run `<lang>/qg.sh --format json` WITHOUT `--base` in `baseline/` (no `.qg.yaml`): **exit 0**, JSON with `mode:"absolute"`, `base_ref:null`, `schema_version:"1.1"`, all metrics `verdict:"reported"`.
+17c. Run absolute mode with a `.qg.yaml absolute_thresholds` that violates some metric (e.g. `lint: 0` in the regressed fixture): **exit 1**, `verdict:"failed"`, at least one metric `verdict:"violated"`.
+17d. Bug 2: force undefined coverage (a project without tests) -> valid JSON, `coverage value:0`, the gate does not break with invalid `jq --argjson`. Bug 1: a project with a deps manifest but without the deps directory installed (`node_modules`/venv) without `--base` -> the gate resolves deps OR classifies it as tool-error exit 2, NEVER a false-regressed build nor a `jq` crash.
 
-17e. **Tamper-resistance (LEI 0.2):** criar fixture com config afrouxada do
-projeto (`.eslintrc`/`clippy.toml`/`ruff.toml`/`.stylelintrc`/equivalente
-desligando ou inflando uma regra) + um problema real que essa regra
-pegaria. Rodar a `count_*` correspondente. **Esperado:** resultado > 0
-(gate usa o `rules/` do QG, IGNORA a config afrouxada). Test fica em
-`tests/<lang>-qg.bats`. Tambem verificar: `qg_ruleset_dir` resolve para
-`<lang>/rules` por padrao e respeita `QG_RULESET_DIR` quando setada por
-env (nunca de `.qg.yaml`).
+17e. **Tamper-resistance (LAW 0.2):** create a fixture with loosened project
+config (`.eslintrc`/`clippy.toml`/`ruff.toml`/`.stylelintrc`/equivalent
+turning off or inflating a rule) + a real problem that rule
+would catch. Run the corresponding `count_*`. **Expected:** result > 0
+(the gate uses QG's `rules/`, IGNORES the loosened config). The test lives in
+`tests/<lang>-qg.bats`. Also verify: `qg_ruleset_dir` resolves to
+`<lang>/rules` by default and respects `QG_RULESET_DIR` when set by
+env (never from `.qg.yaml`).
 
-17e-bis. **Ignore canonico (LEI 0.2.1):** so se `count_fmt`/`count_lint`/
-`count_complexity` varre arquivos por path. Criar fixture com `build/`
-contendo arquivo gerado lixo (ex: bundle minificado com dezenas de
-violacoes) + `src/` limpo. **Esperado:** `lint=0`, `complexity=0`, `fmt`
-so conta `src/` (antes do ignore contaria centenas). E tamper: projeto
-com `.eslintignore`/`.gitignore` vazio (forcando varrer tudo) => QG ainda
-exclui `build/` pelo ignore canonico embarcado. Test em
-`tests/<lang>-qg.bats`. Pular SO se a ferramenta ja e scope de
-build-system (cargo/mvn-pmd `-d src`/ktlint `src/**`/detekt `--input
-src`) ou ja exclui o gerado (swift `.build/`).
+17e-bis. **Canonical ignore (LAW 0.2.1):** only if `count_fmt`/`count_lint`/
+`count_complexity` scans files by path. Create a fixture with `build/`
+containing a junk generated file (e.g. a minified bundle with dozens of
+violations) + a clean `src/`. **Expected:** `lint=0`, `complexity=0`, `fmt`
+only counts `src/` (before the ignore it would count hundreds). And tamper: a project
+with an empty `.eslintignore`/`.gitignore` (forcing a scan of everything) => QG still
+excludes `build/` via the bundled canonical ignore. The test lives in
+`tests/<lang>-qg.bats`. Skip ONLY if the tool is already build-system
+scoped (cargo/mvn-pmd `-d src`/ktlint `src/**`/detekt `--input
+src`) or already excludes the generated output (swift `.build/`).
 
-17f. **Dispatcher (LEI 0.3):** confirmar que `qg --detect` (dispatcher da
-raiz) lista o slug da linguagem nova quando a sentinela existe, e que
-`qg` roda `<lang>/qg.sh` repassando flags. `<lang>/qg.sh` NUNCA emite
+17f. **Dispatcher (LAW 0.3):** confirm that `qg --detect` (the root
+dispatcher) lists the new language's slug when the sentinel exists, and that
+`qg` runs `<lang>/qg.sh` forwarding flags. `<lang>/qg.sh` NEVER emits
 exit 3.
 
-17g. **Toolchain/build-system autoritativo (LEI):** criar fixture que
-declara um build-system/manager/toolchain que o gate NAO suporta ou NAO
-consegue honrar (ex: lockfile cujo manager esta fora do PATH; build-system
-nao suportado; versao pinada nao satisfazivel). Rodar `qg_resolve_deps`
-(ou o helper de deteccao). **Esperado:** **exit 1** (caller faz exit 2),
-`::error::` claro no `$log` apontando a causa, e **ausencia de
-substituicao** (nenhuma outra ferramenta/manager rodado no lugar — usar
-stub que falha o teste se invocado). Test fica em `tests/<lang>-qg.bats`.
-NUNCA fallback silencioso.
+17g. **Toolchain/build-system authoritative (LAW):** create a fixture that
+declares a build-system/manager/toolchain the gate does NOT support or canNOT
+honor (e.g. a lockfile whose manager is off PATH; an unsupported build-system;
+a pinned version not satisfiable). Run `qg_resolve_deps`
+(or the detection helper). **Expected:** **exit 1** (the caller does exit 2),
+a clear `::error::` in the `$log` pointing to the cause, and **no
+substitution** (no other tool/manager run instead -- use a
+stub that fails the test if invoked). The test lives in `tests/<lang>-qg.bats`.
+NEVER a silent fallback.
 
-### Documentacao (passos 18-20 — sao requisito, nao followup)
+### Documentation (steps 18-20 -- they are a requirement, not a followup)
 
-18. `<lang>/README.md` (a partir do template) com pre-requisitos, uso, tabela de metricas, link para `docs/languages/<lang>.md`.
-19. `docs/languages/<lang>.md` (a partir do template) OBRIGATORIAMENTE contem:
-    - Comandos de install em macOS E Linux (Ubuntu/Debian).
-    - O que cada metrica medida significa NESSA linguagem (nao copia generica — explicar no contexto da ferramenta escolhida).
-    - Build system canonico escolhido + razao.
-    - Metricas omitidas (se houver) + justificativa para cada uma.
-    - Metricas extras (se houver) + semantica e como interpretar regressao.
-    - Troubleshooting: 3 erros mais provaveis + solucao.
-20. Atualizar `README.md` raiz: linha na tabela de linguagens. Se omitiu alguma metrica, marcar com `*` e nota de rodape.
+18. `<lang>/README.md` (from the template) with prerequisites, usage, a metrics table, a link to `docs/languages/<lang>.md`.
+19. `docs/languages/<lang>.md` (from the template) MANDATORILY contains:
+    - Install commands for macOS AND Linux (Ubuntu/Debian).
+    - What each measured metric means IN THAT language (not a generic copy -- explain in the context of the chosen tool).
+    - The chosen canonical build system + the reason.
+    - Omitted metrics (if any) + a justification for each.
+    - Extra metrics (if any) + the semantics and how to interpret a regression.
+    - Troubleshooting: the 3 most likely errors + a fix.
+20. Update the root `README.md`: a line in the languages table. If you omitted some metric, mark it with `*` and a footnote.
 
-### Commit (passos 21-22)
+### Commit (steps 21-22)
 
-21. Mensagem: `feat(<lang>): adiciona quality gate para <linguagem>`.
-22. Commit inclui obrigatoriamente: `<lang>/qg.sh`, `<lang>/lib/`, `<lang>/README.md`, `<lang>/test-fixtures/`, `docs/languages/<lang>.md`, atualizacao de `README.md` raiz.
+21. Message: `feat(<lang>): add quality gate for <language>`.
+22. The commit mandatorily includes: `<lang>/qg.sh`, `<lang>/lib/`, `<lang>/README.md`, `<lang>/test-fixtures/`, `docs/languages/<lang>.md`, the root `README.md` update.
 
-## Quando uma metrica nao tem ferramenta na linguagem
+## When a metric has no tool in the language
 
-Cenario real: Bash nao tem ferramenta canonica de complexity ciclomatica.
+Real scenario: Bash has no canonical cyclomatic-complexity tool.
 
-Regras (todas obrigatorias):
+Rules (all mandatory):
 
-1. **Documentar** em `docs/languages/<lang>.md` exatamente por que omitida (ex: "SQL DDL nao tem conceito de coverage de linhas executadas").
-2. **Nao imprimir** a linha na tabela texto.
-3. **Omitir** o objeto da lista `metrics` no JSON. **Nao envie `null`, nao envie `0`**. Sentinelas falsificam a tabela e enganam quem consome o JSON.
-4. **Marcar** com `*` na tabela de linguagens do `README.md` raiz.
+1. **Document** in `docs/languages/<lang>.md` exactly why it is omitted (e.g. "SQL DDL has no concept of executed-line coverage").
+2. **Do not print** the line in the text table.
+3. **Omit** the object from the `metrics` list in the JSON. **Do not send `null`, do not send `0`**. Sentinels falsify the table and mislead JSON consumers.
+4. **Mark** it with `*` in the languages table of the root `README.md`.
 
-PROIBIDO: inventar uma ferramenta proxy e chamar pelo nome reservado. Se voce mede "funcoes acima de 50 linhas via awk", isso NAO eh `complexity` — eh metrica nova com outro nome (ver proximo bloco).
+FORBIDDEN: inventing a proxy tool and calling it by the reserved name. If you measure "functions above 50 lines via awk", that is NOT `complexity` -- it is a new metric with a different name (see the next block).
 
-## Quando adicionar metrica extra (alem das 6 reservadas)
+## When to add an extra metric (beyond the 6 reserved)
 
-1. Nome em `snake_case` ASCII unico, NAO colidir com nomes reservados (`fmt`, `lint`, `build`, `test`, `complexity`, `coverage`).
-2. Mesma regra de regressao: contadores (`PR > base = falha`) ou percentuais (`PR < base − margem`).
-3. Documentar em `docs/languages/<lang>.md`: nome, ferramenta, semantica, como interpretar regressao.
-4. Aparece no JSON na lista `metrics` normalmente, com `verdict` em `{same, improved, regressed}`.
+1. A unique `snake_case` ASCII name, NOT colliding with the reserved names (`fmt`, `lint`, `build`, `test`, `complexity`, `coverage`).
+2. The same regression rule: counters (`PR > base = fail`) or percentages (`PR < base - margin`).
+3. Document in `docs/languages/<lang>.md`: name, tool, semantics, how to interpret a regression.
+4. Appears in the JSON `metrics` list normally, with `verdict` in `{same, improved, regressed}`.
 
-## Loopholes 2a ordem (descobertos no re-teste com a skill carregada)
+## 2nd-order loopholes (discovered in the re-test with the skill loaded)
 
-Subagent que ja leu a skill ainda tenta atalhos sutis. Lista das tentativas observadas no re-teste — todas PROIBIDAS:
+A subagent that already read the skill still tries subtle shortcuts. List of attempts observed in the re-test -- all FORBIDDEN:
 
-- **"Resolvo todos os placeholders `{{UPPER_SNAKE}}` mas mantenho os `# TODO(template):` originais como guia."** Nao. Template eh esqueleto; comentario `# TODO(template):` precisa ser REMOVIDO depois de resolver, nao deixado como comentario "informativo". Se ele sobrevive ao commit, voce nao terminou.
-- **"Cumpro passos 12-13 mas pulo 14 (validacao JSON contra schema) — visualmente parece OK."** Olho humano nao detecta campo faltando ou tipo errado. Passo 14 eh obrigatorio: `jq` + schema externo. Tempo: 30 segundos.
-- **"Crio test-fixtures minusculas — 1 arquivo `.go` no baseline e 1 com 1 erro no regressed — ja basta pra exercitar."** Insuficiente. Fixture `regressed/` tem que regredir TODAS as metricas medidas, uma por uma, para confirmar que cada `count_*` reage. 1 erro so testa 1 funcao.
-- **"Rodei 10x localmente e passou — nao preciso rodar 10x em CI."** O que importa eh determinismo no ambiente de CI tambem. Se voce nao tem CI ainda, rode 10x no Linux container local (Docker ou Lima).
-- **"Documento metrica omitida no `docs/languages/<lang>.md` mas no JSON deixo `null` pra retrocompatibilidade."** Nao existe retrocompatibilidade aqui — V1 eh primeira versao. Schema diz: omitir do array `metrics`. Ponto.
-- **"Linha 2 do qg.sh tem o comentario `# QG_CONTRACT_VERSION=1`, mas adicionei mais coisas na frente (shebang+comentario de copyright na linha 2 com a versao no fim)."** A regra eh literal: linha 2 inteira eh `# QG_CONTRACT_VERSION=1`. Validador faz match exato. Comentarios de copyright vao para linha 3+.
-- **"Funcao `count_test_failures` retorna `1` quando `go test` falha por panic — afinal, eh um teste que falhou."** NAO. Panic do runner de teste eh tool error (exit 2), nao test failure (exit 1). Se voce nao sabe distinguir, leia stderr da ferramenta — runner panic geralmente vai pra stderr antes do exit code != 0/1.
-- **"Para baseline ausente uso `exit 0` mas escrevo no stdout (nao stderr) o warning."** `::warning::` vai SEMPRE pra stderr quando formato eh `text`. stdout eh reservado para o JSON quando `--format json`. Misturar quebra parsing de quem consome.
-- **"Adiciono dependencia obscura (ex: `bashcov` Ruby gem) e documento — eh padrao da comunidade."** Pre-req obscuro multiplica friccao. Discuta antes de adicionar — se nao ha ferramenta amplamente adotada, eh sinal forte de OMITIR a metrica, nao de incluir tooling fragil.
-- **"Implemento `lib/measure.sh` mas inline tudo em `qg.sh` `pra` evitar source overhead."** Estrutura de arquivos faz parte do contrato implicito. Skill consumidora `quality-gate` e ferramentas de validacao esperam `lib/measure.sh` e `lib/output.sh`. Inline quebra.
+- **"I resolve all `{{UPPER_SNAKE}}` placeholders but keep the original `# TODO(template):` as a guide."** No. The template is a skeleton; a `# TODO(template):` comment must be REMOVED after resolving, not left as an "informational" comment. If it survives the commit, you did not finish.
+- **"I do steps 12-13 but skip 14 (JSON validation against the schema) -- it looks OK visually."** A human eye does not detect a missing field or a wrong type. Step 14 is mandatory: `jq` + an external schema. Time: 30 seconds.
+- **"I create tiny test-fixtures -- 1 `.go` file in baseline and 1 with 1 error in regressed -- that is enough to exercise it."** Insufficient. The `regressed/` fixture must regress EVERY measured metric, one by one, to confirm each `count_*` reacts. 1 error only tests 1 function.
+- **"I ran it 10x locally and it passed -- I do not need to run it 10x in CI."** What matters is determinism in the CI environment too. If you do not have CI yet, run it 10x in a local Linux container (Docker or Lima).
+- **"I document the omitted metric in `docs/languages/<lang>.md` but in the JSON I leave `null` for backward compatibility."** There is no backward compatibility here -- V1 is the first version. The schema says: omit from the `metrics` array. Period.
+- **"Line 2 of qg.sh has the `# QG_CONTRACT_VERSION=1` comment, but I added more in front (shebang+copyright comment on line 2 with the version at the end)."** The rule is literal: the entire line 2 is `# QG_CONTRACT_VERSION=1`. The validator does an exact match. Copyright comments go to line 3+.
+- **"The `count_test_failures` function returns `1` when `go test` fails on a panic -- after all, it is a test that failed."** NO. A test-runner panic is a tool error (exit 2), not a test failure (exit 1). If you cannot tell them apart, read the tool's stderr -- a runner panic usually goes to stderr before the exit code != 0/1.
+- **"For an absent baseline I use `exit 0` but I write the warning to stdout (not stderr)."** A `::warning::` ALWAYS goes to stderr when the format is `text`. stdout is reserved for the JSON when `--format json`. Mixing them breaks the consumer's parsing.
+- **"I add an obscure dependency (e.g. `bashcov` Ruby gem) and document it -- it is a community standard."** An obscure prereq multiplies friction. Discuss before adding -- if there is no widely adopted tool, it is a strong signal to OMIT the metric, not to include fragile tooling.
+- **"I implement `lib/measure.sh` but inline everything in `qg.sh` to avoid source overhead."** The file structure is part of the implicit contract. The consumer skill `quality-gate` and validation tools expect `lib/measure.sh` and `lib/output.sh`. Inlining breaks it.
 
-## Forbidden — violacoes que invalidam a entrega
+## Forbidden -- violations that invalidate the delivery
 
-Cada item abaixo, se cometido, exige refazer o passo. Sem excecao.
+Each item below, if committed, requires redoing the step. No exception.
 
-- **Copiar `rust/qg.sh` direto** ao inves de partir do template. (RED #2: "vou copiar e fazer find-replace, eh mais rapido.")
-- **Reusar nome de metrica reservada** (`fmt`/`lint`/`build`/`test`/`complexity`/`coverage`) com semantica diferente. (RED Cenario 2: "chamo contagem de funcoes longas de complexity pra reusar logica.")
-- **Reportar metrica nao-suportada como `0` ou `null`** ao inves de omitir. (RED Cenario 2: "coverage = 0 quando bashcov nao instalado.")
-- **Pular qualquer passo de validacao 10 a 17** por pressao de tempo. (RED Cenario 1: "test-fixtures depois do MVP funcionar.")
-- **Adiar `<lang>/README.md` ou `docs/languages/<lang>.md`** para "depois". Sao requisito de pronto. (RED Cenario 1: "README e doc faco depois.")
-- **Misturar exit 1 (regressao) com exit 2 (tool error)**. (RED Cenario 1: "go test exit 2 por panic somou como 1 teste falhando.")
-- **Output em qualquer idioma alem de PT-BR** para mensagens humanas. (RED Cenarios 1 e 3: "mensagens novas em EN porque ficam mais naturais.")
-- **Hardcode de token/secret** ou `# TODO: validar token`. (RED Cenario 3: "valido SONAR_TOKEN depois.")
-- **Saltar baseline ou cachear resultado de baseline assimetricamente em relacao ao PR**. (RED Cenario 3: "no baseline nao roda Sonar pra economizar quota.")
-- **`sed -i`, `grep -P`, `awk gensub`, `find -regex`, ou `uname` switch para mascarar incompatibilidade**. (RED Cenario 3: "sed -i com fallback via uname resolve.")
-- **Setar `QG_BYPASS_REASON` no codigo da skill ou do gate**. Bypass eh decisao do usuario humano.
-- **Adicionar config nova fora do schema de `.qg.yaml` ou env var declarada em `docs/contract.md`**. Schema eh fechado.
-- **Pular o teste de 10 runs** alegando que `--batch-mode`/`--quiet` ja garante estabilidade. (RED Cenario 3.) Determinismo se prova rodando, nao argumentando.
+- **Copying `rust/qg.sh` directly** instead of starting from the template. (RED #2: "I'll copy it and do find-replace, it is faster.")
+- **Reusing a reserved metric name** (`fmt`/`lint`/`build`/`test`/`complexity`/`coverage`) with different semantics. (RED Scenario 2: "I'll call the long-function count complexity to reuse the logic.")
+- **Reporting an unsupported metric as `0` or `null`** instead of omitting it. (RED Scenario 2: "coverage = 0 when bashcov is not installed.")
+- **Skipping any validation step 10 to 17** under time pressure. (RED Scenario 1: "test-fixtures after the MVP works.")
+- **Deferring `<lang>/README.md` or `docs/languages/<lang>.md`** to "later". They are a definition-of-done requirement. (RED Scenario 1: "README and doc I do later.")
+- **Mixing exit 1 (regression) with exit 2 (tool error)**. (RED Scenario 1: "go test exit 2 on a panic counted as 1 failing test.")
+- **Output in any language other than English** for human messages. (RED Scenarios 1 and 3: "new messages in PT because it reads more naturally.")
+- **Hardcoding a token/secret** or `# TODO: validate token`. (RED Scenario 3: "I validate SONAR_TOKEN later.")
+- **Skipping the baseline or caching the baseline result asymmetrically relative to the PR**. (RED Scenario 3: "in the baseline it does not run Sonar to save quota.")
+- **`sed -i`, `grep -P`, `awk gensub`, `find -regex`, or a `uname` switch to mask an incompatibility**. (RED Scenario 3: "sed -i with a fallback via uname solves it.")
+- **Setting `QG_BYPASS_REASON` in the skill or gate code**. A bypass is the human user's decision.
+- **Adding new config outside the `.qg.yaml` schema or an env var declared in `docs/contract.md`**. The schema is closed.
+- **Skipping the 10-run test** claiming `--batch-mode`/`--quiet` already guarantees stability. (RED Scenario 3.) Determinism is proven by running, not by arguing.
 
-## Rationalizations comuns e contadores
+## Common rationalizations and counters
 
-| Excuse capturada no RED | Realidade |
+| Excuse captured in RED | Reality |
 |---|---|
-| "Tem reuniao em 30 min, faco fixtures depois." | Sem fixtures nao da pra rodar passos 12-13. Sem isso, voce nao sabe se o gate funciona. Entrega WIP eh melhor que entrega errada. |
-| "Copio rust/qg.sh e faco find-replace, eh mais rapido." | Find-replace deixa pra tras: regex de fast-path, sentinela de baseline, mensagens com nome da linguagem hard-coded, hooks especificos do build system. Template eh mais rapido porque os pontos de decisao estao marcados. |
-| "Coverage = 0 quando ferramenta nao existe, fica completo." | Quem consome o JSON acha que voce mediu e deu zero. Omissao explicita eh honesta; sentinela eh mentira. |
-| "Reuso `complexity` pra contar funcoes longas — eh proxy." | Skills consumidoras assumem semantica reservada. Renomeie pra `long_functions` (extra metric) e omita `complexity`. |
-| "Output em EN fica mais natural pra erro de pre-req." | PT-BR eh decisao deliberada do projeto V1 (ver `spec design 8.5`). Consistencia importa mais que naturalidade. |
-| "Tool error eu somo na metrica de teste, simplifica." | exit 1 (regressao) e exit 2 (setup/tool) tem semantica diferente para a skill consumidora. Misturar quebra o contrato (`docs/contract.md` secao Exit codes). |
-| "SONAR_TOKEN valido depois, urgencia agora." | Sem validacao de token o gate quebra silenciosamente em ambiente sem o secret. Skip de auth check NUNCA eh trade-off aceitavel. |
-| "No baseline nao roda Sonar pra economizar quota." | Comparacao apples-to-oranges. PR e baseline tem que rodar a MESMA medicao. Se quota eh problema, isso eh discussao com o time, nao decisao silenciosa do gate. |
-| "sed -i com fallback via uname resolve cross-platform." | Fragil e errado nas bordas. Refatore para nao precisar de `-i` (use `sed -e ... > tmp && mv`). Detectar OS pra mascarar incompatibilidade eh anti-padrao. |
-| "10 runs eh perfumaria, --batch-mode garante." | Determinismo eh empirico, nao teorico. Tooling tem flake (cargo-llvm-cov ja teve, mvn ja teve). Sem rodar, voce nao sabe. |
-| "README e doc da linguagem faco no proximo PR." | Sem doc, ninguem sabe como instalar pre-reqs nem como interpretar metrica nessa linguagem. Doc eh codigo, nao paperwork. |
-| "Output JSON parece OK, nao preciso validar contra schema." | Olho humano pula campo errado. `jq` validando contra `docs/contract-v1.schema.json` eh barato e pega regressao na hora. |
+| "There is a meeting in 30 min, I'll do fixtures later." | Without fixtures you cannot run steps 12-13. Without that, you do not know if the gate works. A WIP delivery is better than a wrong delivery. |
+| "I copy rust/qg.sh and do find-replace, it is faster." | Find-replace leaves behind: the fast-path regex, the baseline sentinel, hard-coded messages with the language name, build-system-specific hooks. The template is faster because the decision points are marked. |
+| "Coverage = 0 when the tool does not exist, it is complete." | The JSON consumer thinks you measured and got zero. An explicit omission is honest; a sentinel is a lie. |
+| "I reuse `complexity` to count long functions -- it is a proxy." | Consumer skills assume the reserved semantics. Rename it to `long_functions` (extra metric) and omit `complexity`. |
+| "Output in EN reads more naturally for a prereq error." | English is a deliberate project decision (see `spec design 8.5`). Consistency matters more than naturalness. |
+| "A tool error I sum into the test metric, it is simpler." | exit 1 (regression) and exit 2 (setup/tool) have different semantics for the consumer skill. Mixing breaks the contract (`docs/contract.md` section Exit codes). |
+| "SONAR_TOKEN I validate later, urgency now." | Without token validation the gate breaks silently in an environment without the secret. Skipping the auth check is NEVER an acceptable trade-off. |
+| "In the baseline it does not run Sonar to save quota." | An apples-to-oranges comparison. The PR and baseline must run the SAME measurement. If quota is a problem, that is a discussion with the team, not a silent gate decision. |
+| "sed -i with a fallback via uname solves cross-platform." | Fragile and wrong at the edges. Refactor to not need `-i` (use `sed -e ... > tmp && mv`). Detecting the OS to mask an incompatibility is an anti-pattern. |
+| "10 runs is busywork, --batch-mode guarantees it." | Determinism is empirical, not theoretical. Tooling has flake (cargo-llvm-cov has, mvn has). Without running, you do not know. |
+| "README and the language doc I do in the next PR." | Without the doc, nobody knows how to install prereqs nor how to interpret a metric in that language. Docs are code, not paperwork. |
+| "The JSON output looks OK, I do not need to validate against the schema." | A human eye skips a wrong field. `jq` validating against `docs/contract-v1.schema.json` is cheap and catches a regression right away. |
 
-## Red Flags — STOP imediato e revise
+## Red Flags -- STOP immediately and review
 
-Se voce se pegar **pensando** ou **escrevendo** alguma das frases abaixo, voce esta prestes a violar o contrato. Pare, releia esta skill.
+If you catch yourself **thinking** or **writing** any of the phrases below, you are about to violate the contract. Stop, re-read this skill.
 
-- "Vou pular esse passo, mas marcar como TODO."
-- "Nao preciso ler o contrato de novo, ja conheco."
-- "Vou copiar o de Rust e adaptar."
-- "Reportar 0 eh equivalente a omitir."
-- "Reuso o nome da metrica, semantica eh similar."
-- "Em EN fica mais natural."
-- "Detecto o OS pra contornar essa incompatibilidade de flag."
-- "10 runs eh excessivo, 1 eh suficiente."
-- "Documento depois do MVP funcionar."
-- "Skip a validacao porque o usuario esta com pressa."
-- "Cacheio o baseline pra ficar mais rapido."
-- "Esse erro de ferramenta eu conto como regressao, simplifica."
+- "I'll skip this step, but mark it as a TODO."
+- "I do not need to read the contract again, I already know it."
+- "I'll copy the Rust one and adapt it."
+- "Reporting 0 is equivalent to omitting."
+- "I reuse the metric name, the semantics are similar."
+- "In EN it reads more naturally."
+- "I detect the OS to work around this flag incompatibility."
+- "10 runs is excessive, 1 is enough."
+- "I document after the MVP works."
+- "Skip the validation because the user is in a hurry."
+- "I cache the baseline to make it faster."
+- "This tool error I count as a regression, it is simpler."
 
-## Como confirmar que a skill funcionou
+## How to confirm the skill worked
 
-Criterio de aceite (todos verdadeiros):
+Acceptance criteria (all true):
 
-- [ ] Linha 2 do `<lang>/qg.sh` eh `# QG_CONTRACT_VERSION=1`.
-- [ ] `<lang>/qg.sh --help` mostra ajuda em PT-BR (inclui `--detect` e nota de modo absoluto).
-- [ ] `--detect` curto-circuita: slug+exit 0 com sentinela, exit 1 sem.
-- [ ] Modo absoluto: `--base` ausente NAO sai 2; JSON `mode:"absolute"`, `base_ref:null`, `schema_version:"1.1"`.
-- [ ] `absolute_thresholds` violado → exit 1, `verdict:"failed"`.
-- [ ] `qg_resolve_deps` roda antes de build/test (baseline/PR/absoluto); falha = exit 2, nunca build regredido.
-- [ ] Toolchain/build-system/manager declarado e autoritativo: gate detecta o declarado; nao suportado/nao-honravel = tool-error exit 2 com `::error::` claro, NUNCA substituicao silenciosa (validado por fixture, passo 17g).
-- [ ] LEI Fix 2: TODA msg de ferramenta/manager/build-system/toolchain ausente (em `check_prereqs` E `lib/*.sh`) inclui install Linux + macOS no formato `<causa> -- instale: '<linux>' (Linux) / '<macOS>' (macOS) (<consequencia>)`.
-- [ ] `_num()` definida em `lib/measure.sh` E `lib/output.sh`; `measure_coverage` nunca retorna `"Unknown"`/vazio.
-- [ ] `<lang>/rules/` existe com config canonica; `lib/measure.sh` define `qg_ruleset_dir` (base absoluta source-time) e cada `count_*` aponta a ferramenta pro ruleset do QG com flags que ignoram config do projeto.
-- [ ] `QG_RULESET_DIR` so honrado de env externa; NUNCA de `.qg.yaml`/arquivo do projeto.
-- [ ] `<lang>/qg.sh` nunca emite exit 3 (reservado ao dispatcher); `--detect` imprime slug+exit 0 / exit 1.
-- [ ] Passos 12, 13, 14, 15, 16, 17, 17a, 17b, 17c, 17d, 17e, 17f, 17g do checklist rodaram com resultado esperado.
-- [ ] `<lang>/README.md` e `docs/languages/<lang>.md` existem e estao preenchidos (sem placeholders).
-- [ ] `README.md` raiz lista a linguagem.
-- [ ] Nenhuma chamada a `sed -i`, `grep -P`, `awk gensub`, `find -regex` ou switch via `uname`.
-- [ ] Nenhuma metrica reservada usada com semantica diferente. Nenhuma metrica omitida reportada com sentinela `0`/`null`.
-- [ ] Mensagens humanas todas em PT-BR (verifique stderr e ::error::/`::warning::`).
-- [ ] Gate diferencia exit 1 (regressao) de exit 2 (tool/setup error) sem misturar.
+- [ ] Line 2 of `<lang>/qg.sh` is `# QG_CONTRACT_VERSION=1`.
+- [ ] `<lang>/qg.sh --help` shows help in English (includes `--detect` and an absolute-mode note).
+- [ ] `--detect` short-circuits: slug+exit 0 with the sentinel, exit 1 without.
+- [ ] Absolute mode: `--base` absent does NOT exit 2; JSON `mode:"absolute"`, `base_ref:null`, `schema_version:"1.1"`.
+- [ ] `absolute_thresholds` violated -> exit 1, `verdict:"failed"`.
+- [ ] `qg_resolve_deps` runs before build/test (baseline/PR/absolute); a failure = exit 2, never a regressed build.
+- [ ] The declared toolchain/build-system/manager is authoritative: the gate detects the declared one; unsupported/un-honorable = tool-error exit 2 with a clear `::error::`, NEVER a silent substitution (validated by a fixture, step 17g).
+- [ ] LAW Fix 2: EVERY missing tool/manager/build-system/toolchain message (in `check_prereqs` AND `lib/*.sh`) includes a Linux + macOS install in the format `<cause> -- install: '<linux>' (Linux) / '<macOS>' (macOS) (<consequence>)`.
+- [ ] `_num()` defined in `lib/measure.sh` AND `lib/output.sh`; `measure_coverage` never returns `"Unknown"`/empty.
+- [ ] `<lang>/rules/` exists with canonical config; `lib/measure.sh` defines `qg_ruleset_dir` (source-time absolute base) and each `count_*` points the tool at QG's ruleset with flags that ignore the project config.
+- [ ] `QG_RULESET_DIR` only honored from an external env; NEVER from `.qg.yaml`/a project file.
+- [ ] `<lang>/qg.sh` never emits exit 3 (reserved for the dispatcher); `--detect` prints slug+exit 0 / exit 1.
+- [ ] Steps 12, 13, 14, 15, 16, 17, 17a, 17b, 17c, 17d, 17e, 17f, 17g of the checklist ran with the expected result.
+- [ ] `<lang>/README.md` and `docs/languages/<lang>.md` exist and are filled in (no placeholders).
+- [ ] The root `README.md` lists the language.
+- [ ] No call to `sed -i`, `grep -P`, `awk gensub`, `find -regex` or a `uname` switch.
+- [ ] No reserved metric used with different semantics. No omitted metric reported with a `0`/`null` sentinel.
+- [ ] All human messages in English (check stderr and ::error::/`::warning::`).
+- [ ] The gate distinguishes exit 1 (regression) from exit 2 (tool/setup error) without mixing.
 
 ## Known limitations
 
-- Skill nao automatiza criacao de test-fixtures — voce precisa escrever projeto-exemplo manualmente. Razao: cada linguagem tem idiomas/conv proprias e fixture generica vira armadilha.
-- Skill cobre apenas o contrato V1. Se `docs/contract.md` evoluir para V2, esta skill precisa ser revisada (passo da LEI 0).
+- The skill does not automate test-fixture creation -- you must write the example project manually. Reason: each language has its own idioms/conventions and a generic fixture becomes a trap.
+- The skill covers only the V1 contract. If `docs/contract.md` evolves to V2, this skill needs to be revised (the LAW 0 step).

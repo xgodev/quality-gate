@@ -1,18 +1,18 @@
-# Quality Gate — {{LANGUAGE_NAME}}
+# Quality Gate -- {{LANGUAGE_NAME}}
 
-Documentacao especifica do gate {{LANGUAGE_NAME}}. Para o contrato comum, ver [`../contract.md`](../contract.md).
+{{LANGUAGE_NAME}}-specific gate documentation. For the common contract, see [`../contract.md`](../contract.md).
 
 ## Build system
 
-Quality Gate {{LANGUAGE_NAME}} assume **{{BUILD_SYSTEM}}** ({{BUILD_SYSTEM_RATIONALE}}).
+Quality Gate {{LANGUAGE_NAME}} assumes **{{BUILD_SYSTEM}}** ({{BUILD_SYSTEM_RATIONALE}}).
 
 <!--
-TODO(template): explique a escolha. Se a linguagem tem multiplos build systems
-(pip vs poetry vs uv; npm vs pnpm vs bun; mvn vs gradle), diga qual foi escolhido
-e por que. V1 NAO suporta multiplos.
+TODO(template): explain the choice. If the language has several build systems
+(pip vs poetry vs uv; npm vs pnpm vs bun; mvn vs gradle), say which one was chosen
+and why. V1 does NOT support several.
 -->
 
-## Pre-requisitos com instalacao
+## Prerequisites with install
 
 ### macOS
 
@@ -27,84 +27,84 @@ e por que. V1 NAO suporta multiplos.
 ```
 
 <!--
-TODO(template): comandos verificaveis (rode no shell antes de commitar).
-Exemplo (Rust macOS):
+TODO(template): verifiable commands (run them in the shell before committing).
+Example (Rust macOS):
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
   cargo install cargo-llvm-cov
   brew install jq
 -->
 
-## Metricas — o que cada uma mede em {{LANGUAGE_NAME}}
+## Metrics -- what each one measures in {{LANGUAGE_NAME}}
 
 {{METRIC_DETAILS}}
 
 <!--
-TODO(template): bloco POR METRICA MEDIDA, nao copia generica.
-Para CADA metrica usar este formato:
+TODO(template): a block PER MEASURED METRIC, not a generic copy.
+For EACH metric use this format:
 
-### `<nome>` — <descricao curta>
+### `<name>` -- <short description>
 
-Roda `<comando exato>`. Conta `<o que conta>`.
+Runs `<exact command>`. Counts `<what it counts>`.
 
-**Configuracao:** <referencia ao arquivo de config se houver, ou "defaults da ferramenta">
+**Configuration:** <reference to the config file if any, or "tool defaults">
 
-**Como interpretar regressao:** <explicacao + comando de fix sugerido>
+**How to interpret a regression:** <explanation + suggested fix command>
 
-Exemplo (Rust, fmt):
+Example (Rust, fmt):
 
-### `fmt` — formatacao
-Roda `cargo fmt --all -- --check`. Conta linhas iniciando com `Diff in `.
-**Configuracao:** se o projeto tem `rustfmt.toml`, eh respeitado.
-**Como interpretar regressao:** PR introduziu arquivo desformatado. Solucao: `cargo fmt --all`.
+### `fmt` -- formatting
+Runs `cargo fmt --all -- --check`. Counts lines starting with `Diff in `.
+**Configuration:** if the project has a `rustfmt.toml`, it is respected.
+**How to interpret a regression:** the PR introduced an unformatted file. Fix: `cargo fmt --all`.
 -->
 
-## Troubleshooting comum
+## Common troubleshooting
 
 {{TROUBLESHOOTING}}
 
 <!--
-TODO(template): obrigatorio listar OS 3 ERROS MAIS PROVAVEIS + solucao para cada.
-Erros tipicos a considerar:
-- Cache de baseline stale (`--refresh-baseline` ou `rm -rf /tmp/qg-baseline-*`).
-- `git archive` falhando ("not a valid object name") → `git fetch origin`.
-- Ferramenta de coverage muito lenta ou travando → versao especifica conhecida boa.
-- (se aplicavel) auth missing → instrucao de setar env var corretamente.
-- (se aplicavel) tooling diferente entre macOS BSD e Linux GNU.
+TODO(template): mandatory to list THE 3 MOST LIKELY ERRORS + a fix for each.
+Typical errors to consider:
+- Stale baseline cache (`--refresh-baseline` or `rm -rf /tmp/qg-baseline-*`).
+- `git archive` failing ("not a valid object name") -> `git fetch origin`.
+- A coverage tool very slow or hanging -> a specific known-good version.
+- (if applicable) auth missing -> instruction to set the env var correctly.
+- (if applicable) different tooling between macOS BSD and Linux GNU.
 -->
 
-## Metricas omitidas
+## Omitted metrics
 
 {{OMITTED_METRICS}}
 
 <!--
-TODO(template): se voce omitiu alguma das 6 reservadas (fmt, lint, build, test,
-complexity, coverage), liste AQUI com justificativa por linguagem. Exemplo:
+TODO(template): if you omitted one of the 6 reserved metrics (fmt, lint, build, test,
+complexity, coverage), list it HERE with a per-language justification. Example:
 
-- `coverage`: SQL DDL nao tem conceito de coverage de linhas executadas.
-- `complexity`: bash nao tem ferramenta canonica de complexidade ciclomatica.
+- `coverage`: SQL DDL has no concept of executed-line coverage.
+- `complexity`: bash has no canonical cyclomatic-complexity tool.
 
-Se nao omitiu nada, escreva: "Nenhuma. {{LANGUAGE_NAME}} suporta as 6 metricas
-reservadas com ferramentas oficiais."
+If you omitted nothing, write: "None. {{LANGUAGE_NAME}} supports the 6 reserved
+metrics with official tools."
 
-LEMBRETE: metrica omitida NAO aparece no JSON nem na tabela texto. Sentinela
-0 ou null eh PROIBIDO.
+REMINDER: an omitted metric does NOT appear in the JSON nor in the text table. A 0
+or null sentinel is FORBIDDEN.
 -->
 
-## Metricas extras
+## Extra metrics
 
 {{EXTRA_METRICS}}
 
 <!--
-TODO(template): se voce adicionou metrica alem das 6 reservadas, documente:
-- Nome (snake_case ASCII, nao colidir com nomes reservados).
-- Ferramenta usada.
-- Semantica (o que conta exatamente).
-- Como interpretar regressao.
-- Como o usuario faz fix.
+TODO(template): if you added a metric beyond the 6 reserved, document:
+- Name (snake_case ASCII, not colliding with reserved names).
+- The tool used.
+- The semantics (what exactly it counts).
+- How to interpret a regression.
+- How the user fixes it.
 
-Se nao adicionou nada, escreva: "Nenhuma em V1. Candidatos futuros:" e liste.
+If you added nothing, write: "None in V1. Future candidates:" and list them.
 
-Exemplo (Rust):
-- `audit` via `cargo audit` — vulnerabilidades em dependencias.
-- `unsafe_count` via `cargo geiger` — uso de blocks `unsafe`.
+Example (Rust):
+- `audit` via `cargo audit` -- vulnerabilities in dependencies.
+- `unsafe_count` via `cargo geiger` -- use of `unsafe` blocks.
 -->

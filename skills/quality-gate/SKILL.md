@@ -1,106 +1,105 @@
 ---
 name: quality-gate
-description: Use ao verificar qualidade do codigo antes de abrir um PR. Triggers verbatim em PT-BR — "rodar quality gate", "rodar QG", "verificar qualidade", "checar qualidade antes do PR", "validar antes do PR", "esta pronto para PR", "qa antes do push", "rodar gate", "rodar o gate" — e em EN — "run quality gate", "run QG", "check quality before PR". Invoca o dispatcher do gate empacotado neste plugin, interpreta o JSON e renderiza analise em PT-BR. NUNCA seta `QG_BYPASS_REASON` por iniciativa propria. NUNCA edita codigo para "fazer passar" o gate. NUNCA roda `gh pr create` ou `git push` automaticamente.
+description: Use when checking code quality before opening a PR. Triggers -- "run quality gate", "run QG", "check quality", "check quality before PR", "validate before PR", "is it ready for PR", "qa before push", "run gate", "run the gate". Invokes the gate dispatcher bundled in this plugin, interprets the JSON and renders an analysis. NEVER sets `QG_BYPASS_REASON` on its own. NEVER edits code to "make the gate pass". NEVER runs `gh pr create` or `git push` automatically.
 ---
 
 # Quality Gate
 
-Skill que invoca o **dispatcher** do gate compartilhado
-(`quality-gate`) localmente, interpreta o resultado e orienta o
-usuario. O gate (dispatcher + scripts das linguagens) e empacotado
-neste mesmo plugin.
+Skill that invokes the shared gate's **dispatcher**
+(`quality-gate`) locally, interprets the result and guides the
+user. The gate (dispatcher + per-language scripts) is bundled
+in this same plugin.
 
-A deteccao de linguagem NAO e mais responsabilidade desta skill nem da
-IA. O dispatcher `${CLAUDE_PLUGIN_ROOT}/qg` detecta a(s)
-linguagem(s) sozinho (100% shell, zero IA) e roda o(s) gate(s)
-correspondente(s). Esta skill so chama o dispatcher e interpreta o JSON.
+Language detection is NO longer the responsibility of this skill nor of
+the AI. The dispatcher `${CLAUDE_PLUGIN_ROOT}/qg` detects the
+language(s) on its own (100% shell, zero AI) and runs the matching
+gate(s). This skill only calls the dispatcher and interprets the JSON.
 
-## LEI — bypass NUNCA e decisao da skill
+## LAW -- a bypass is NEVER the skill's decision
 
-Se o gate retorna `regressed`/`failed`, a skill **REPORTA**. Ela:
+If the gate returns `regressed`/`failed`, the skill **REPORTS**. It:
 
-- NAO passa `QG_BYPASS_REASON` automaticamente.
-- NAO edita codigo (testes, asserts, configs) para "fazer passar" o gate.
-- NAO marca testes com `#[ignore]` / `skip` / `xit` para o gate verdejar.
-- NAO adiciona arquivos em `extra_fast_path_paths` para o gate ignorar
-  o trecho em regressao.
-- NAO edita config de qualidade do projeto (`.eslintrc`, `clippy.toml`,
-  `.stylelintrc`, etc.) para afrouxar regra. **Inutil de qualquer forma:**
-  o gate impoe o proprio ruleset (tamper-resistance) e ignora a config do
-  projeto-alvo por padrao.
-- NAO roda `gh pr create`, `git push`, `git push --no-verify` ou
-  `--force` apos veredito verde. Verde e **sinal de luz**, nao **acao**.
+- does NOT pass `QG_BYPASS_REASON` automatically.
+- does NOT edit code (tests, asserts, configs) to "make the gate pass".
+- does NOT mark tests with `#[ignore]` / `skip` / `xit` to make the gate go green.
+- does NOT add files to `extra_fast_path_paths` to make the gate ignore
+  the regressed section.
+- does NOT edit the project's quality config (`.eslintrc`, `clippy.toml`,
+  `.stylelintrc`, etc.) to loosen a rule. **Useless anyway:**
+  the gate enforces its own ruleset (tamper-resistance) and ignores the
+  target project's config by default.
+- does NOT run `gh pr create`, `git push`, `git push --no-verify` or
+  `--force` after a green verdict. Green is a **signal**, not an **action**.
 
-Bypass governado existe (`QG_BYPASS_REASON=...`), mas e **decisao do
-humano**. Quando a skill detecta que o usuario esta sob pressao e
-sugerindo bypass, ela **confirma o motivo por escrito antes** e **avisa
-que isso fica em audit log**. Nunca seta a variavel sozinha.
+A governed bypass exists (`QG_BYPASS_REASON=...`), but it is the **human's
+decision**. When the skill detects that the user is under pressure and
+suggesting a bypass, it **confirms the reason in writing first** and **warns
+that this goes into an audit log**. It never sets the variable on its own.
 
-## Quando usar
+## When to use
 
-Triggers explicitos do usuario:
-- "rodar quality gate", "rodar QG", "rodar gate", "rodar o gate"
-- "verificar qualidade", "checar qualidade antes do PR"
-- "validar antes do PR", "esta pronto para PR"
-- "qa antes do push"
-- equivalentes EN: "run quality gate", "run QG", "check quality before PR"
+Explicit user triggers:
+- "run quality gate", "run QG", "run gate", "run the gate"
+- "check quality", "check quality before PR"
+- "validate before PR", "is it ready for PR"
+- "qa before push"
 
-Tambem fire automatico quando o usuario diz "vou abrir PR" / "abrir PR
-agora" / "vamos fazer push". Nesses casos, ofereca rodar o gate
-**antes** do PR, mas pergunte se o usuario ja rodou.
+Also auto-fire when the user says "I'll open a PR" / "open PR
+now" / "let's push". In those cases, offer to run the gate
+**before** the PR, but ask whether the user has already run it.
 
-Nao usar:
-- Se o usuario **explicitamente** disse "skip o gate" / "nao rode o QG"
-  / "ja rodei o gate" nesta sessao. Confie e siga. **NAO inferir** a
-  partir de pistas vagas (ex: "ta tudo verde aqui" nao e dispensa).
+Do not use:
+- If the user **explicitly** said "skip the gate" / "do not run the QG"
+  / "I already ran the gate" in this session. Trust and proceed. **Do NOT
+  infer** from vague hints (e.g. "everything is green here" is not a waiver).
 
-## Pre-requisitos
+## Prerequisites
 
-- `git` instalado (o dispatcher usa para resolver a base ref).
-- Pre-requisitos de cada linguagem suportada (documentados em
+- `git` installed (the dispatcher uses it to resolve the base ref).
+- Prerequisites of each supported language (documented in
   `${CLAUDE_PLUGIN_ROOT}/<lang>/README.md`).
 
-## Fluxo (passos obrigatorios — nao pular)
+## Flow (mandatory steps -- do not skip)
 
-### 1. Localizar o dispatcher (empacotado neste plugin)
+### 1. Locate the dispatcher (bundled in this plugin)
 
-O gate (dispatcher `qg` + os scripts `<lang>/qg.sh` + contrato) e
-**empacotado dentro deste plugin**. NAO ha clone nem `git pull` em
-runtime — o dispatcher vive em `${CLAUDE_PLUGIN_ROOT}/qg` e e atualizado
-junto com o plugin (`claude plugin update` / auto-update). Isso elimina
-qualquer janela de staleness e divergencia de cache.
+The gate (dispatcher `qg` + the `<lang>/qg.sh` scripts + contract) is
+**bundled inside this plugin**. There is NO clone or `git pull` at
+runtime -- the dispatcher lives at `${CLAUDE_PLUGIN_ROOT}/qg` and is updated
+together with the plugin (`claude plugin update` / auto-update). This eliminates
+any staleness window and cache divergence.
 
 ```bash
 GATE_PATH="${QG_PATH:-$CLAUDE_PLUGIN_ROOT}"
-test -x "$GATE_PATH/qg" || { echo "::error::dispatcher 'qg' nao encontrado em $GATE_PATH -- instalacao do plugin corrompida (reinstale: /plugin install)"; exit 2; }
+test -x "$GATE_PATH/qg" || { echo "::error::dispatcher 'qg' not found in $GATE_PATH -- corrupted plugin install (reinstall: /plugin install)"; exit 2; }
 ```
 
-**Override de desenvolvedor:** se a env var `QG_PATH` esta setada, use
-esse path direto (util para quem esta editando o proprio gate localmente
-fora do plugin instalado).
+**Developer override:** if the env var `QG_PATH` is set, use
+that path directly (useful for someone editing the gate itself locally
+outside the installed plugin).
 
-### 2. Detectar `--base`
+### 2. Detect `--base`
 
-Tente em ordem (primeiro que existir vence):
+Try in order (first one that exists wins):
 
-1. `git symbolic-ref refs/remotes/origin/HEAD` (default branch real do remote).
+1. `git symbolic-ref refs/remotes/origin/HEAD` (the remote's real default branch).
 2. `git rev-parse --verify --quiet origin/main`.
 3. `git rev-parse --verify --quiet origin/master`.
 4. `git rev-parse --verify --quiet origin/develop`.
 
-Se **nenhum** existir: rode em **modo absoluto** (sem `--base`) — ver
-secao 4. NAO chute `HEAD~1`/`HEAD^`/SHA generico. Em duvida entre
-absoluto e perguntar, prefira **perguntar** ao usuario qual ref usar.
+If **none** exists: run in **absolute mode** (no `--base`) -- see
+section 4. Do NOT guess `HEAD~1`/`HEAD^`/a generic SHA. When in doubt between
+absolute and asking, prefer to **ask** the user which ref to use.
 
-**Override:** se o usuario disse "rodar QG contra `release/2026-Q2`" ou
-similar, use `--base origin/release/2026-Q2`. Sempre prefixar com
-`origin/` se nao tiver, exceto se o usuario passou um SHA absoluto.
+**Override:** if the user said "run QG against `release/2026-Q2`" or
+similar, use `--base origin/release/2026-Q2`. Always prefix with
+`origin/` if it is missing, except if the user passed an absolute SHA.
 
-### 3. Invocar o dispatcher com `--format json`
+### 3. Invoke the dispatcher with `--format json`
 
-Sempre o **dispatcher** `qg` (nunca `<lang>/qg.sh` direto — a deteccao
-de linguagem e do dispatcher, 100% shell). Sempre `--format json`. Use
-um `--log-dir` timestamped para nao colidir entre execucoes:
+Always the **dispatcher** `qg` (never `<lang>/qg.sh` directly -- language
+detection is the dispatcher's, 100% shell). Always `--format json`. Use
+a timestamped `--log-dir` so runs do not collide:
 
 ```bash
 LOG_DIR="/tmp/qg-$(date -u +%Y%m%dT%H%M%S)"
@@ -116,7 +115,7 @@ GATE_PATH="${QG_PATH:-$CLAUDE_PLUGIN_ROOT}"
 GATE_EXIT=$?
 ```
 
-Em **modo absoluto** (sem base ref disponivel), omita `--base`:
+In **absolute mode** (no base ref available), omit `--base`:
 
 ```bash
 "$GATE_PATH/qg" --format json --log-dir "$LOG_DIR" \
@@ -124,215 +123,214 @@ Em **modo absoluto** (sem base ref disponivel), omita `--base`:
 GATE_EXIT=$?
 ```
 
-#### Mapa de exit codes do dispatcher
+#### Dispatcher exit-code map
 
-| Exit | Significado | O que a skill faz |
+| Exit | Meaning | What the skill does |
 |------|-------------|-------------------|
-| `0`  | `passed` / `bypassed` / fast-path / modo absoluto sem violacao | Renderiza verde. NAO abre PR. |
-| `1`  | `regressed` (comparativo) ou `failed` (threshold absoluto violado) | Renderiza tabela + analise dos logs. NAO abre PR. NAO sugere bypass. |
-| `2`  | Erro de ferramenta / pre-requisito faltando / `.qg.yaml` invalido | Repassa a msg de `stderr.log` literalmente. NAO interpreta JSON. NAO instala pre-req. PARA. |
-| `3`  | **Nenhuma linguagem suportada detectada** (exclusivo do dispatcher) | Reporta: "nenhuma linguagem suportada — abra issue em `quality-gate` ou rode a skill `add-quality-gate` no repo do gate". NAO improvisa gate ad-hoc. |
+| `0`  | `passed` / `bypassed` / fast-path / absolute mode with no violation | Render green. Do NOT open a PR. |
+| `1`  | `regressed` (comparative) or `failed` (absolute threshold violated) | Render table + analysis of the logs. Do NOT open a PR. Do NOT suggest a bypass. |
+| `2`  | Tool error / missing prerequisite / invalid `.qg.yaml` | Relay the `stderr.log` message literally. Do NOT interpret the JSON. Do NOT install the prereq. STOP. |
+| `3`  | **No supported language detected** (dispatcher-exclusive) | Report: "no supported language -- open an issue in `quality-gate` or run the `add-quality-gate` skill in the gate repo". Do NOT improvise an ad-hoc gate. |
 
-Se `GATE_EXIT == 2`: **NAO interprete o JSON como veredito**. Reporte o
-erro de ferramenta literalmente (`$LOG_DIR/stderr.log`) e PARE. **NAO
-instale o pre-requisito por iniciativa propria** (toolchain global do
-usuario); sugira o comando e espere confirmacao. **NAO re-rode** ate o
-pre-requisito ser instalado pelo usuario.
+If `GATE_EXIT == 2`: **do NOT interpret the JSON as a verdict**. Report the
+tool error literally (`$LOG_DIR/stderr.log`) and STOP. **Do NOT
+install the prerequisite on your own** (the user's global toolchain); suggest the command and wait for confirmation. **Do NOT re-run** until the
+prerequisite is installed by the user.
 
-Se `GATE_EXIT == 3`: linguagem fora do escopo. NAO rode `npm test +
-eslint` e chame de "gate". NAO escreva `<lang>/qg.sh` no projeto. PARE e
-oriente abrir issue / usar `add-quality-gate`.
+If `GATE_EXIT == 3`: language out of scope. Do NOT run `npm test +
+eslint` and call it "the gate". Do NOT write `<lang>/qg.sh` into the project. STOP and
+guide opening an issue / using `add-quality-gate`.
 
-### 4. Interpretar o JSON (single ou monorepo)
+### 4. Interpret the JSON (single or monorepo)
 
-O dispatcher emite **um de dois formatos**:
+The dispatcher emits **one of two formats**:
 
-- **1 linguagem** → o JSON do `<lang>/qg.sh` direto (single object):
+- **1 language** -> the `<lang>/qg.sh` JSON directly (single object):
   `{ schema_version, mode, language, branch, base_ref, verdict,
   metrics:[...] }`.
-- **N linguagens / monorepo** → envelope:
+- **N languages / monorepo** -> envelope:
   `{ schema_version, aggregate_verdict, results:[ <single>, ... ] }`.
 
 ```bash
 if jq -e 'has("results")' "$LOG_DIR/result.json" >/dev/null 2>&1; then
-  # monorepo: itere .results[]; veredito global = .aggregate_verdict
+  # monorepo: iterate .results[]; global verdict = .aggregate_verdict
 else
-  # single: use o objeto direto; veredito = .verdict
+  # single: use the object directly; verdict = .verdict
 fi
 ```
 
-**Campo `mode`:**
-- `"comparative"` (ou ausente, legacy 1.0): metricas
-  `{name, base, pr, delta, verdict}`; `verdict` global ∈
+**`mode` field:**
+- `"comparative"` (or absent, legacy 1.0): metrics
+  `{name, base, pr, delta, verdict}`; global `verdict` in
   `passed|regressed|bypassed`.
-- `"absolute"` (modo absoluto, sem `--base`): metricas
-  `{name, value, threshold, verdict}`; `base_ref: null`; `verdict`
-  global ∈ `passed|failed|bypassed`. Exit 0 salvo se `.qg.yaml`
-  definir `absolute_thresholds` e algum for violado (exit 1).
+- `"absolute"` (absolute mode, no `--base`): metrics
+  `{name, value, threshold, verdict}`; `base_ref: null`; global `verdict`
+  in `passed|failed|bypassed`. Exit 0 unless `.qg.yaml`
+  defines `absolute_thresholds` and one is violated (exit 1).
 
-### 5. Renderizar resultado em PT-BR (com analise, nao so tabela)
+### 5. Render the result (with analysis, not just a table)
 
-Para cada metrica em regressao/violacao, ler o log correspondente em
-`$LOG_DIR/pr-<metric>.log` (ou `abs-<metric>.log` no modo absoluto) e:
+For every regressed/violated metric, read the corresponding log in
+`$LOG_DIR/pr-<metric>.log` (or `abs-<metric>.log` in absolute mode) and:
 
-1. Citar o arquivo:linha exato do erro.
-2. Sugerir uma correcao especifica (ex: "cobrir o branch de retry em
-   `payment::charge()`", nao "aumentar coverage").
-3. Apontar arquivos novos do PR sem teste correspondente (`git diff
-   --name-only <base>...HEAD`) — so no modo comparativo.
+1. Cite the exact file:line of the error.
+2. Suggest a specific fix (e.g. "cover the retry branch in
+   `payment::charge()`", not "increase coverage").
+3. Point out the PR's new files without a corresponding test (`git diff
+   --name-only <base>...HEAD`) -- only in comparative mode.
 
-Formato sugerido (modo comparativo):
+Suggested format (comparative mode):
 
 ```
-Quality Gate — <branch> vs <base>
+Quality Gate -- <branch> vs <base>
 
 ✅ fmt        0 → 0      same
 ✅ lint       3 → 2      improved
-❌ test       0 → 1      REGREDIU
-   → Falha em: tests/api_integration::test_user_creation
+❌ test       0 → 1      REGRESSED
+   → Failure in: tests/api_integration::test_user_creation
    → Log: <LOG_DIR>/pr-test.log:142
-❌ coverage  82.3% → 79.8%  REGREDIU (margem 1.0pp, queda 2.5pp)
-   → ~120 linhas novas em src/services/payment.rs sem teste.
-   → Sugestao: cobrir o branch de retry de payment::charge().
+❌ coverage  82.3% → 79.8%  REGRESSED (margin 1.0pp, drop 2.5pp)
+   → ~120 new lines in src/services/payment.rs without a test.
+   → Suggestion: cover the retry branch of payment::charge().
 
-Veredito: NAO ABRA O PR. Corrija test + coverage primeiro.
+Verdict: DO NOT OPEN THE PR. Fix test + coverage first.
 ```
 
-Modo absoluto (sem `--base`): renderize valor x limite, `verdict` por
-metrica ∈ `ok|violated|reported`. Sem `absolute_thresholds` no
-`.qg.yaml`, tudo vira `reported` e o gate sai 0 — reporte como
-"snapshot informativo, sem base para comparar; exit 0".
+Absolute mode (no `--base`): render value vs threshold, per-metric
+`verdict` in `ok|violated|reported`. Without `absolute_thresholds` in
+`.qg.yaml`, everything becomes `reported` and the gate exits 0 -- report it as
+"informational snapshot, no base to compare against; exit 0".
 
-Monorepo: renderize um bloco por `results[]` (cabecalho com
-`.language`) e um veredito final = `.aggregate_verdict`.
+Monorepo: render one block per `results[]` (header with
+`.language`) and a final verdict = `.aggregate_verdict`.
 
-A analise (sugestoes + apontamento de arquivo) **vem do Claude lendo os
-logs `pr-*.log`/`abs-*.log`** quando ha regressao. Nao vem do gate.
+The analysis (suggestions + file pointers) **comes from Claude reading the
+`pr-*.log`/`abs-*.log` logs** when there is a regression. It does not come from the gate.
 
-### 6. Comportamento por veredito
+### 6. Behavior per verdict
 
-- `passed` → tabela verde + uma linha "OK pra abrir PR". NAO roda
-  `gh pr create`. NAO roda `git push`. Verde = sinal, nao acao.
-- `regressed` / `failed` → tabela com analise + sugestoes. NAO abra PR.
-  NAO sugira `QG_BYPASS_REASON`. Pergunte: "quer que eu te ajude a
-  corrigir <metrica>?"
-- `bypassed` → warning explicando que bypass esta ativo, o motivo
-  declarado (`QG_BYPASS_REASON`), e lembre que isso fica em audit log.
-  NAO comemore o "verde".
+- `passed` -> green table + a single line "OK to open the PR". Do NOT run
+  `gh pr create`. Do NOT run `git push`. Green = signal, not action.
+- `regressed` / `failed` -> table with analysis + suggestions. Do NOT open a PR.
+  Do NOT suggest `QG_BYPASS_REASON`. Ask: "do you want me to help you
+  fix <metric>?"
+- `bypassed` -> a warning explaining that a bypass is active, the declared
+  reason (`QG_BYPASS_REASON`), and a reminder that this goes into an audit log.
+  Do NOT celebrate the "green".
 
-## Forbidden (regras anti-burla)
+## Forbidden (anti-circumvention rules)
 
-A skill NUNCA faz nenhuma das seguintes acoes — limites duros, sem
-excecao por urgencia, hotfix, ou pedido vago:
+The skill NEVER does any of the following actions -- hard limits, no
+exception for urgency, hotfix, or a vague request:
 
-1. **Setar `QG_BYPASS_REASON` por iniciativa propria.** Mesmo com
-   "producao caiu". Confirme por escrito; oriente o usuario a exportar a
-   variavel ele mesmo; avise sobre audit log.
-2. **Editar codigo / testes / config para "fazer passar".** Sem teste
-   fake, sem `#[ignore]`, sem remover assercao, sem comentar teste flakey.
-3. **Editar `.qg.yaml`** para `extra_fast_path_paths`/margens com fim de
-   passar. So se o usuario pediu explicitamente E justificou.
-4. **Editar config de qualidade do projeto** (`.eslintrc`, `clippy.toml`,
-   `.stylelintrc`, etc.) para afrouxar regra. Alem de proibido, e inutil:
-   o gate impoe o proprio ruleset e ignora a config do projeto.
-5. **Chamar `<lang>/qg.sh` direto** em vez do dispatcher `qg`. A deteccao
-   e do dispatcher. So use `<lang>/qg.sh` se o usuario explicitamente
-   pediu para depurar um gate especifico.
-6. **Inventar gate ad-hoc para exit 3.** Nao roda `npm test + eslint`,
-   nao escreve `<lang>/qg.sh` local. PARE e oriente abrir issue.
-7. **Rodar `gh pr create` / `git push` / `--no-verify` / `--force`**
-   apos qualquer veredito. Verde libera **opcao**, nao executa o PR.
-8. **Auto-corrigir warnings/erros sem permissao.** Apos rodar o gate,
-   se houver ajustes triviais, **proponha** com diff antes de commitar.
-9. **Confundir saida de ferramentas locais com veredito do gate.** So
-   afirme verde apos o JSON do dispatcher retornar `passed`.
-10. **Reduzir/desabilitar suite para apertar prazo.**
-11. **Reportar verde sem ter rodado o gate.**
-12. **Desqualificar o resultado do gate.** Se ha suspeita real de bug no
-    gate, abra issue em `quality-gate` E ainda assim reporte a
-    regressao; quem decide ignorar e o humano via `QG_BYPASS_REASON`.
-13. **Instalar pre-requisitos do gate por iniciativa propria.** Sugira o
-    comando, espere confirmacao.
-14. **Inferir consentimento de pular o gate.** Dispensa precisa de
-    afirmacao explicita ("nao rode o QG", "skip o gate", "ja rodei").
+1. **Set `QG_BYPASS_REASON` on its own.** Even with
+   "production is down". Confirm in writing; guide the user to export the
+   variable themselves; warn about the audit log.
+2. **Edit code / tests / config to "make it pass".** No fake test,
+   no `#[ignore]`, no removing an assertion, no commenting out a flaky test.
+3. **Edit `.qg.yaml`** for `extra_fast_path_paths`/margins with the goal of
+   passing. Only if the user explicitly asked AND justified it.
+4. **Edit the project's quality config** (`.eslintrc`, `clippy.toml`,
+   `.stylelintrc`, etc.) to loosen a rule. Besides being forbidden, it is useless:
+   the gate enforces its own ruleset and ignores the project's config.
+5. **Call `<lang>/qg.sh` directly** instead of the dispatcher `qg`. Detection
+   is the dispatcher's. Only use `<lang>/qg.sh` if the user explicitly
+   asked to debug a specific gate.
+6. **Invent an ad-hoc gate for exit 3.** Does not run `npm test + eslint`,
+   does not write a local `<lang>/qg.sh`. STOP and guide opening an issue.
+7. **Run `gh pr create` / `git push` / `--no-verify` / `--force`**
+   after any verdict. Green unlocks the **option**, it does not execute the PR.
+8. **Auto-fix warnings/errors without permission.** After running the gate,
+   if there are trivial adjustments, **propose** them with a diff before committing.
+9. **Confuse local tool output with the gate's verdict.** Only
+   assert green after the dispatcher's JSON returns `passed`.
+10. **Reduce/disable the suite to meet a deadline.**
+11. **Report green without having run the gate.**
+12. **Disqualify the gate's result.** If there is a real suspicion of a bug in the
+    gate, open an issue in `quality-gate` AND still report the
+    regression; the human decides to ignore it via `QG_BYPASS_REASON`.
+13. **Install the gate's prerequisites on its own.** Suggest the
+    command, wait for confirmation.
+14. **Infer consent to skip the gate.** A waiver needs an
+    explicit statement ("do not run the QG", "skip the gate", "I already ran it").
 
-## Rationalizations capturadas (RED phase) — contadores explicitos
+## Captured rationalizations (RED phase) -- explicit counters
 
-### Cenario 1 — Dev impaciente
+### Scenario 1 -- Impatient dev
 
-| Rationalization | Refutacao da skill |
+| Rationalization | Skill's rebuttal |
 |---|---|
-| "Rodei `cargo test` e passou, ta pronto pra PR." | `cargo test` e 1 das metricas. Sem o dispatcher comparando tudo com baseline, nao e o gate. |
-| "Vou ja rodar `gh pr create` enquanto isso." | Verde libera **opcao** de PR. NUNCA executar `gh pr create` automaticamente. |
-| "O fmt deu diff, vou rodar `fmt` e commitar junto." | NAO autocorrigir misturado com verificacao. Reporte, proponha, peca confirmacao. |
-| "Esse warning ja existia antes, nao e do PR." | O gate compara base vs PR. Se aponta como regressao, leve ao usuario. |
-| "Coverage caiu 0,3pp, e ruido." | Margem e do contrato/`.qg.yaml`. Skill nao redefine. |
+| "I ran `cargo test` and it passed, it's ready for the PR." | `cargo test` is 1 of the metrics. Without the dispatcher comparing everything against the baseline, it is not the gate. |
+| "I'll just run `gh pr create` meanwhile." | Green unlocks the PR **option**. NEVER execute `gh pr create` automatically. |
+| "fmt showed a diff, I'll run `fmt` and commit it together." | Do NOT auto-fix mixed with verification. Report, propose, ask for confirmation. |
+| "That warning already existed, it is not from the PR." | The gate compares base vs PR. If it flags it as a regression, bring it to the user. |
+| "Coverage dropped 0.3pp, it's noise." | The margin comes from the contract/`.qg.yaml`. The skill does not redefine it. |
 
-### Cenario 2 — Hotfix sob pressao
+### Scenario 2 -- Hotfix under pressure
 
-| Rationalization | Refutacao da skill |
+| Rationalization | Skill's rebuttal |
 |---|---|
-| "Producao caiu, vou de `--no-verify`." | `--no-verify` pula hooks locais, nao bypassa o gate. Bypass = `QG_BYPASS_REASON` setado pelo humano. |
-| "Vou setar `QG_BYPASS_REASON=hotfix`." | A skill NUNCA seta a variavel. Oriente o usuario a exportar no shell. |
-| "Afrouxo o `.eslintrc` so nesse arquivo." | Inutil: o gate impoe o ruleset do QG e ignora config do projeto. Alem de proibido. |
-| "Marco esse teste com `#[ignore]`." | Reduzir suite e burlar o gate. Proibido. |
-| "Sobe agora, abro issue depois." | Sem rastro. Se vai pular, vai com `QG_BYPASS_REASON` (audit log). |
+| "Production is down, I'll use `--no-verify`." | `--no-verify` skips local hooks, it does not bypass the gate. A bypass = `QG_BYPASS_REASON` set by the human. |
+| "I'll set `QG_BYPASS_REASON=hotfix`." | The skill NEVER sets the variable. Guide the user to export it in their shell. |
+| "I'll loosen the `.eslintrc` just in this file." | Useless: the gate enforces QG's ruleset and ignores the project config. Also forbidden. |
+| "I'll mark that test with `#[ignore]`." | Reducing the suite is circumventing the gate. Forbidden. |
+| "Ship now, open an issue later." | No trace. If you are going to skip, do it with `QG_BYPASS_REASON` (audit log). |
 
-### Cenario 3 — Linguagem nao suportada (exit 3)
+### Scenario 3 -- Unsupported language (exit 3)
 
-| Rationalization | Refutacao da skill |
+| Rationalization | Skill's rebuttal |
 |---|---|
-| "Aqui e Node, mas `npm test + eslint` cobre bem." | Gate ad-hoc sem contrato. PARE, oriente issue / `add-quality-gate`. |
-| "Vou rodar `<lang>/qg.sh` mesmo sem sentinela." | A deteccao e do dispatcher. Exit 3 = fora do escopo. PARE. |
-| "A linguagem X ja deve ser suportada." | Atualize o plugin (claude plugin update) e re-rode o dispatcher. Se exit 3 persiste, PARE e oriente issue. |
-| "Crio um `<lang>/qg.sh` aqui rapidao." | Adicionar linguagem e tarefa do repo do gate, com `add-quality-gate`. |
-| "Falo que rodou OK porque os testes passaram." | Reportar verde sem JSON do dispatcher e mentira. PARE. |
+| "This is Node, but `npm test + eslint` covers it well." | An ad-hoc gate without a contract. STOP, guide an issue / `add-quality-gate`. |
+| "I'll run `<lang>/qg.sh` even without a sentinel." | Detection is the dispatcher's. Exit 3 = out of scope. STOP. |
+| "Language X should already be supported." | Update the plugin (claude plugin update) and re-run the dispatcher. If exit 3 persists, STOP and guide an issue. |
+| "I'll quickly create a `<lang>/qg.sh` here." | Adding a language is the gate repo's task, with `add-quality-gate`. |
+| "I'll say it ran OK because the tests passed." | Reporting green without the dispatcher's JSON is a lie. STOP. |
 
-## Padroes cross-cenario (resumo)
+## Cross-scenario patterns (summary)
 
-1. **Confunde ferramentas locais com o gate.** O gate e o dispatcher
+1. **Confusing local tools with the gate.** The gate is the dispatcher
    `${CLAUDE_PLUGIN_ROOT}/qg --format json`.
-2. **Auto-corrige sob pressao.** So **propor** ao usuario.
-3. **Toma decisao de bypass por iniciativa propria.** Nunca.
-4. **Inventa abstracoes faltantes.** Exit 3 vira "abra issue", nao
-   "improviso".
-5. **Pula da medicao para a acao.** Verde nao chama `gh pr create`.
+2. **Auto-fixing under pressure.** Only **propose** to the user.
+3. **Making a bypass decision on its own.** Never.
+4. **Inventing missing abstractions.** Exit 3 becomes "open an issue", not
+   "improvise".
+5. **Jumping from measurement to action.** Green does not call `gh pr create`.
 
-## Red Flags — STOP imediato
+## Red Flags -- STOP immediately
 
-- "Vou setar QG_BYPASS_REASON pra ele, ja que e hotfix."
-- "Vou rodar o formatador antes do gate pra nao acusar diff."
-- "O coverage caiu pouquinho, da pra ignorar."
-- "Vou comentar esse teste flakey."
-- "Afrouxo o .eslintrc/.stylelintrc do projeto." (Inutil — gate impoe o
-  proprio ruleset.)
-- "Exit 3? Vou improvisar um gate aqui." (PARE — abra issue.)
-- "Rodei os testes, ta verde."
-- "Verde, ja vou abrir o PR pra adiantar."
-- "Esse gate tem algum bug, ignora a regressao."
-- "Vou instalar o pre-req pra ele rapidinho e re-rodo."
-- "O usuario disse que ta tudo verde, posso pular."
+- "I'll set QG_BYPASS_REASON for them, since it's a hotfix."
+- "I'll run the formatter before the gate so it doesn't flag a diff."
+- "Coverage dropped a tiny bit, it's fine to ignore."
+- "I'll comment out that flaky test."
+- "I'll loosen the project's .eslintrc/.stylelintrc." (Useless -- the gate enforces its
+  own ruleset.)
+- "Exit 3? I'll improvise a gate here." (STOP -- open an issue.)
+- "I ran the tests, it's green."
+- "Green, I'll go open the PR to save time."
+- "This gate has some bug, ignore the regression."
+- "I'll quickly install the prereq for them and re-run."
+- "The user said everything is green, I can skip it."
 
-## Limitacoes conhecidas (V1)
+## Known limitations (V1)
 
-- Linguagens suportadas: fonte de verdade e a tabela "Linguagens
-  suportadas" no `README.md` do repo do gate. Hoje: Rust, Go, Python,
-  Node.js, Java, Swift, Kotlin, **Web (HTML/CSS estatico)**. O gate
-  `web` so mede `fmt`+`lint` e so dispara em projeto SEM `package.json`;
-  React/Vue/etc. com `package.json` = projeto nodejs.
-- A deteccao e 100% do dispatcher (`qg --detect`); a skill NAO mantem
-  tabela de sentinelas.
-- Gate empacotado no plugin; atualiza junto com o plugin (`claude plugin update` / auto-update). Sem clone/cache em runtime. Override para dev local: env `QG_PATH`.
-- A skill nao instala pre-requisitos do gate. Exit 2 → repassa a
-  mensagem do gate ao usuario.
+- Supported languages: the source of truth is the "Supported
+  languages" table in the gate repo's `README.md`. Today: Rust, Go, Python,
+  Node.js, Java, Swift, Kotlin, **Web (static HTML/CSS)**. The `web`
+  gate only measures `fmt`+`lint` and only fires in a project WITHOUT a `package.json`;
+  React/Vue/etc. with a `package.json` = a nodejs project.
+- Detection is 100% the dispatcher's (`qg --detect`); the skill does NOT keep
+  a sentinel table.
+- The gate is bundled in the plugin; it updates with the plugin (`claude plugin update` / auto-update). No runtime clone/cache. Override for local dev: env `QG_PATH`.
+- The skill does not install the gate's prerequisites. Exit 2 -> relay the gate's
+  message to the user.
 
-## Detalhes do contrato
+## Contract details
 
-Documentacao de referencia (no repo do gate, apos clone):
+Reference documentation (in the gate repo, bundled in the plugin):
 
-- `${CLAUDE_PLUGIN_ROOT}/docs/contract.md` — contrato CLI, dispatcher,
+- `${CLAUDE_PLUGIN_ROOT}/docs/contract.md` -- CLI contract, dispatcher,
   tamper-resistance, `.qg.yaml projects:`.
-- `${CLAUDE_PLUGIN_ROOT}/docs/output-format.md` — formato JSON/texto,
-  incluindo o envelope de monorepo (`aggregate_verdict`/`results`).
-- `${CLAUDE_PLUGIN_ROOT}/docs/consume.md` — como usar localmente.
-- `${CLAUDE_PLUGIN_ROOT}/<lang>/README.md` — pre-requisitos da linguagem.
+- `${CLAUDE_PLUGIN_ROOT}/docs/output-format.md` -- JSON/text format,
+  including the monorepo envelope (`aggregate_verdict`/`results`).
+- `${CLAUDE_PLUGIN_ROOT}/docs/consume.md` -- how to use it locally.
+- `${CLAUDE_PLUGIN_ROOT}/<lang>/README.md` -- the language's prerequisites.

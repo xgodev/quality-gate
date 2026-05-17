@@ -1,59 +1,59 @@
-# Quality Gate — {{LANGUAGE_NAME}}
+# Quality Gate -- {{LANGUAGE_NAME}}
 
-Gate de qualidade para projetos {{LANGUAGE_NAME}}. Cumpre o [contrato v1](../docs/contract.md).
+Quality gate for {{LANGUAGE_NAME}} projects. Complies with the [v1 contract](../docs/contract.md).
 
-## Pre-requisitos
+## Prerequisites
 
 {{PREREQ_LIST}}
 
 <!--
-TODO(template): preencha PREREQ_LIST com bullets, um por ferramenta. Inclua:
-- Comando para verificar versao instalada.
-- One-liner de install para macOS e Linux (Ubuntu/Debian).
-- Se a ferramenta exige token/env var (ex: SONAR_TOKEN), cite aqui.
-Exemplo (Rust):
-- `cargo` (toolchain Rust — instale via [rustup.rs](https://rustup.rs))
-- `cargo-llvm-cov` — `cargo install cargo-llvm-cov`
-- `jq` — `brew install jq` (macOS) ou `apt install jq` (Linux)
-- `git`, `bash 4+`, `awk`, `tar` (sistema)
+TODO(template): fill PREREQ_LIST with bullets, one per tool. Include:
+- A command to check the installed version.
+- A one-liner install for macOS and Linux (Ubuntu/Debian).
+- If the tool requires a token/env var (e.g. SONAR_TOKEN), cite it here.
+Example (Rust):
+- `cargo` (Rust toolchain -- install via [rustup.rs](https://rustup.rs))
+- `cargo-llvm-cov` -- `cargo install cargo-llvm-cov`
+- `jq` -- `brew install jq` (macOS) or `apt install jq` (Linux)
+- `git`, `bash 4+`, `awk`, `tar` (system)
 -->
 
-## Uso
+## Usage
 
 ```bash
 ~/.quality-gate/{{LANGUAGE_SLUG}}/qg.sh --base origin/main
 ```
 
-Ver [`docs/consume.md`](../docs/consume.md) para uso completo.
+See [`docs/consume.md`](../docs/consume.md) for full usage.
 
-## Metricas medidas
+## Measured metrics
 
 {{METRICS_TABLE}}
 
 <!--
-TODO(template): preencha METRICS_TABLE com tabela markdown. Colunas: Metrica | Ferramenta | Conta.
-Lista APENAS as metricas que voce REALMENTE mede. Metricas omitidas vao em
-docs/languages/{{LANGUAGE_SLUG}}.md, secao "Metricas omitidas".
-Exemplo (Rust):
-| Metrica | Ferramenta | Conta |
+TODO(template): fill METRICS_TABLE with a markdown table. Columns: Metric | Tool | Counts.
+List ONLY the metrics you ACTUALLY measure. Omitted metrics go in
+docs/languages/{{LANGUAGE_SLUG}}.md, section "Omitted metrics".
+Example (Rust):
+| Metric | Tool | Counts |
 |---|---|---|
-| `fmt` | `cargo fmt --check` | linhas `Diff in` |
-| `lint` | `cargo clippy -D warnings` (sem complexity) | linhas `^error` |
+| `fmt` | `cargo fmt --check` | `Diff in` lines |
+| `lint` | `cargo clippy -D warnings` (without complexity) | `^error` lines |
 -->
 
-## Estrutura
+## Structure
 
-- [`qg.sh`](qg.sh) — script principal.
-- [`lib/measure.sh`](lib/measure.sh) — funcoes `count_*` e `measure_coverage`.
-- [`lib/output.sh`](lib/output.sh) — render texto e JSON.
-- [`test-fixtures/baseline/`](test-fixtures/baseline/) — projeto {{LANGUAGE_NAME}} limpo.
-- [`test-fixtures/regressed/`](test-fixtures/regressed/) — projeto com regressoes deliberadas em CADA metrica medida.
+- [`qg.sh`](qg.sh) -- main script.
+- [`lib/measure.sh`](lib/measure.sh) -- `count_*` functions and `measure_coverage`.
+- [`lib/output.sh`](lib/output.sh) -- text and JSON render.
+- [`test-fixtures/baseline/`](test-fixtures/baseline/) -- a clean {{LANGUAGE_NAME}} project.
+- [`test-fixtures/regressed/`](test-fixtures/regressed/) -- a project with deliberate regressions in EACH measured metric.
 
-## Detalhes e troubleshooting
+## Details and troubleshooting
 
-Ver [`docs/languages/{{LANGUAGE_SLUG}}.md`](../docs/languages/{{LANGUAGE_SLUG}}.md).
+See [`docs/languages/{{LANGUAGE_SLUG}}.md`](../docs/languages/{{LANGUAGE_SLUG}}.md).
 
-## Testes do proprio script
+## Tests for the script itself
 
 ```bash
 bats tests/{{LANGUAGE_SLUG}}-qg.bats
