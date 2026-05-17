@@ -55,7 +55,7 @@
       },
       "allOf": [
         {
-          "comment": "mode ausente OU comparative => metricas comparativas {name,base,pr,delta,verdict}",
+          "comment": "mode absent OR comparative => comparative metrics {name,base,pr,delta,verdict}",
           "if": {
             "not": {
               "properties": { "mode": { "const": "absolute" } },
@@ -77,7 +77,7 @@
           }
         },
         {
-          "comment": "mode absolute => metricas absolutas {name,value,threshold,verdict}, base_ref null, verdict global passed|failed|bypassed",
+          "comment": "mode absolute => absolute metrics {name,value,threshold,verdict}, base_ref null, global verdict passed|failed|bypassed",
           "if": {
             "properties": { "mode": { "const": "absolute" } },
             "required": ["mode"]
