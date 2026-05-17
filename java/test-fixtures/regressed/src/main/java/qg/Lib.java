@@ -1,6 +1,6 @@
 package qg;
 
-// REGRESSION fmt: indentacao + brace style nao-google.
+// REGRESSION fmt: indentation + non-google brace style.
 public class Lib
 {
 public static int add(int a,int b){
@@ -11,12 +11,12 @@ return a + b;
     return a * b;
   }
 
-  // REGRESSION coverage: metodo publico sem teste.
+  // REGRESSION coverage: public method without a test.
   public static int uncovered() {
     return 99;
   }
 
-  // REGRESSION complexity: metodo com complexidade ciclomatica > 15.
+  // REGRESSION complexity: method with cyclomatic complexity > 15.
   public static int complexFunction(int x, int y) {
     int r = 0;
     if (x > 0) {

@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <!--
-  Ruleset canonico Quality Gate (Java, PMD).
-  Imposto pelo QG via pmd -R este arquivo. Ruleset do projeto-alvo e IGNORADO.
-  Defaults da comunidade (errorprone + design); calibracao fina em V2.
+  Canonical Quality Gate ruleset (Java, PMD).
+  Enforced by QG via pmd -R this file. The target project's ruleset is IGNORED.
+  Community defaults (errorprone + design); fine calibration in V2.
 -->
 <ruleset name="qg-java"
          xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"

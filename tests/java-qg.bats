@@ -8,7 +8,7 @@ setup() {
   qg_clean_env
 }
 
-@test "java/qg.sh --help mostra usage" {
+@test "java/qg.sh --help shows usage" {
   run "$(qg_script_path java)" --help
   [ "$status" -eq 0 ]
   [[ "$output" == *"--base"* ]]
@@ -16,34 +16,34 @@ setup() {
   [[ "$output" == *"--help"* ]]
 }
 
-@test "java/qg.sh -h equivalente a --help" {
+@test "java/qg.sh -h equivalent to --help" {
   run "$(qg_script_path java)" -h
   [ "$status" -eq 0 ]
   [[ "$output" == *"--base"* ]]
 }
 
-@test "java/qg.sh declara QG_CONTRACT_VERSION=1 no header" {
+@test "java/qg.sh declares QG_CONTRACT_VERSION=1 in the header" {
   run grep -E "^# QG_CONTRACT_VERSION=1$" "$(qg_script_path java)"
   [ "$status" -eq 0 ]
 }
 
-@test "java/qg.sh sem --base NAO sai 2 por falta de --base (modo absoluto)" {
+@test "java/qg.sh without --base does NOT exit 2 due to missing --base (absolute mode)" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
   run "$(qg_script_path java)"
-  [[ "$output" != *"--base eh obrigatorio"* ]]
+  [[ "$output" != *"--base is required"* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp"
 }
 
-@test "java/qg.sh respeita QG_BASE_REF env var quando --base ausente" {
+@test "java/qg.sh respects the QG_BASE_REF env var when --base is absent" {
   export QG_BASE_REF="origin/main"
   run "$(qg_script_path java)"
-  [[ "$output" != *"--base eh obrigatorio"* ]]
+  [[ "$output" != *"--base is required"* ]]
 }
 
-@test "java/qg.sh --detect sem sentinela sai 1" {
+@test "java/qg.sh --detect without a sentinel exits 1" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -54,7 +54,7 @@ setup() {
   rm -rf "$tmp"
 }
 
-@test "java/qg.sh --detect com sentinela imprime slug e sai 0" {
+@test "java/qg.sh --detect with a sentinel prints the slug and exits 0" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -66,7 +66,7 @@ setup() {
   rm -rf "$tmp"
 }
 
-@test "java _num: sanitiza nao-numerico para 0 (Bug 2)" {
+@test "java _num: sanitizes non-numeric to 0 (Bug 2)" {
   source "$QG_REPO_ROOT/java/lib/measure.sh"
   [ "$(_num "Unknown")" = "0" ]
   [ "$(_num "")" = "0" ]
@@ -75,19 +75,19 @@ setup() {
   [ "$(_num "7")" = "7" ]
 }
 
-@test "java LEI: projeto Gradle (build.gradle sem pom.xml) = tool-error, sem rodar mvn" {
+@test "java LAW: Gradle project (build.gradle without pom.xml) = tool-error, without running mvn" {
   source "$QG_REPO_ROOT/java/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
   echo "plugins { id 'java' }" > "$tmp/build.gradle"
   mkdir -p "$tmp/src/main/java"
   echo "package x; class X {}" > "$tmp/src/main/java/X.java"
-  # Stub que falha se 'mvn' for invocado (substituicao silenciosa).
+  # Stub that fails if 'mvn' is invoked (silent substitution).
   local stubdir="$logdir/stub"
   mkdir -p "$stubdir"
   cat > "$stubdir/mvn" <<EOF
 #!/usr/bin/env bash
-echo "MVN-FOI-INVOCADO" >> "$logdir/mvn-called"
+echo "MVN-WAS-INVOKED" >> "$logdir/mvn-called"
 exit 0
 EOF
   chmod +x "$stubdir/mvn"
@@ -95,12 +95,12 @@ EOF
   [ "$status" -eq 1 ]
   grep -q '::error::' "$logdir/abs-deps.log"
   grep -q 'Gradle\|gradle' "$logdir/abs-deps.log"
-  grep -q 'apenas Maven' "$logdir/abs-deps.log"
+  grep -q 'only supports Maven' "$logdir/abs-deps.log"
   [ ! -f "$logdir/mvn-called" ]
   rm -rf "$tmp" "$logdir"
 }
 
-@test "java LEI: ./mvnw presente e usado em vez do mvn do sistema" {
+@test "java LAW: ./mvnw present and used instead of the system mvn" {
   source "$QG_REPO_ROOT/java/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -113,7 +113,7 @@ EOF
 EOF
   cat > "$tmp/mvnw" <<EOF
 #!/usr/bin/env bash
-echo "MVNW-INVOCADO" > "$logdir/mvnw-called"
+echo "MVNW-INVOKED" > "$logdir/mvnw-called"
 exit 0
 EOF
   chmod +x "$tmp/mvnw"
@@ -123,7 +123,7 @@ EOF
   rm -rf "$tmp" "$logdir"
 }
 
-@test "java LEI: pom.xml mas nem ./mvnw nem mvn no PATH = tool-error claro" {
+@test "java LAW: pom.xml but neither ./mvnw nor mvn on PATH = clear tool-error" {
   source "$QG_REPO_ROOT/java/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -134,8 +134,8 @@ EOF
   <groupId>x</groupId><artifactId>x</artifactId><version>0.1.0</version>
 </project>
 EOF
-  # PATH so com diretorio vazio: 'mvn' ausente, mas bash ainda resolve
-  # (run via bash absoluto). Sem ./mvnw e sem mvn => tool-error.
+  # PATH with only an empty dir: 'mvn' absent, but bash still resolves
+  # (run via absolute bash). Without ./mvnw and without mvn => tool-error.
   local emptydir="$logdir/emptybin"
   mkdir -p "$emptydir"
   run env PATH="$emptydir" "$(command -v bash)" -c "source '$QG_REPO_ROOT/java/lib/measure.sh'; qg_resolve_deps '$tmp' '$logdir/abs-deps.log'"
@@ -145,7 +145,7 @@ EOF
   rm -rf "$tmp" "$logdir"
 }
 
-@test "java/qg.sh modo absoluto sem .qg.yaml: exit 0, JSON mode absolute base_ref null" {
+@test "java/qg.sh absolute mode without .qg.yaml: exit 0, JSON mode absolute base_ref null" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path java baseline)"
@@ -160,7 +160,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "java/qg.sh modo absoluto com absolute_thresholds violado: exit 1, metrica violated" {
+@test "java/qg.sh absolute mode with absolute_thresholds violated: exit 1, metric violated" {
   local logdir tmp
   logdir=$(qg_tmp_dir)
   tmp=$(qg_tmp_dir)
@@ -180,26 +180,26 @@ EOF
   rm -rf "$logdir" "$tmp"
 }
 
-@test "java/qg.sh --format invalido sai 2" {
+@test "java/qg.sh --format invalid exits 2" {
   run "$(qg_script_path java)" --base origin/main --format xml
   [ "$status" -eq 2 ]
   [[ "$output" == *"--format"* ]]
 }
 
-@test "java/qg.sh --cov-margin nao-numerico sai 2" {
+@test "java/qg.sh --cov-margin non-numeric exits 2" {
   run "$(qg_script_path java)" --base origin/main --cov-margin abc
   [ "$status" -eq 2 ]
   [[ "$output" == *"--cov-margin"* ]]
 }
 
-@test "java/qg.sh detecta ferramenta faltando e sai 2 com mensagem instalavel" {
+@test "java/qg.sh detects a missing tool and exits 2 with an installable message" {
   run env PATH="/usr/bin:/bin" "$(qg_script_path java)" --base origin/main
   [ "$status" -eq 2 ]
   [[ "$output" == *"java"* ]]
-  [[ "$output" == *"instale"* ]] || [[ "$output" == *"install"* ]]
+  [[ "$output" == *"install"* ]]
 }
 
-@test "java/qg.sh com QG_BYPASS_REASON sai 0 e emite warning" {
+@test "java/qg.sh with QG_BYPASS_REASON exits 0 and emits a warning" {
   export QG_BYPASS_REASON="teste de bypass"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -213,7 +213,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "java/qg.sh com QG_BYPASS_REASON --format json retorna verdict bypassed" {
+@test "java/qg.sh with QG_BYPASS_REASON --format json returns verdict bypassed" {
   export QG_BYPASS_REASON="teste"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -225,7 +225,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "java/qg.sh fast-path quando so docs mudaram" {
+@test "java/qg.sh fast-path when only docs changed" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -236,7 +236,7 @@ EOF
   git add README.md
   git commit -qm "initial"
   git checkout -qb feature
-  echo "novo conteudo" >> README.md
+  echo "new content" >> README.md
   git add README.md
   git commit -qm "edit docs"
 
@@ -247,7 +247,7 @@ EOF
   rm -rf "$tmp"
 }
 
-@test "java/qg.sh --force-full pula fast-path" {
+@test "java/qg.sh --force-full skips fast-path" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -268,13 +268,13 @@ EOF
   rm -rf "$tmp"
 }
 
-@test "baseline: --baseline-dir inexistente sai 2" {
-  run "$(qg_script_path java)" --base origin/main --baseline-dir /tmp/qg-java-nao-existe-xyz --force-full
+@test "baseline: --baseline-dir nonexistent exits 2" {
+  run "$(qg_script_path java)" --base origin/main --baseline-dir /tmp/qg-java-does-not-exist-xyz --force-full
   [ "$status" -eq 2 ]
   [[ "$output" == *"baseline"* ]] || [[ "$output" == *"--baseline-dir"* ]]
 }
 
-@test "baseline: linguagem ausente no baseline emite warning + exit 0" {
+@test "baseline: language absent in baseline emits a warning + exit 0" {
   local tmp baseline
   tmp=$(qg_tmp_dir)
   baseline=$(qg_tmp_dir)
@@ -301,12 +301,12 @@ EOF
 
   run "$(qg_script_path java)" --base master --baseline-dir "$baseline"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"linguagem ausente"* ]] || [[ "$output" == *"skipped"* ]]
+  [[ "$output" == *"language absent"* ]] || [[ "$output" == *"skipped"* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp" "$baseline"
 }
 
-@test "count_fmt: 0 no fixture baseline" {
+@test "count_fmt: 0 in the baseline fixture" {
   source "$QG_REPO_ROOT/java/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -315,7 +315,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_fmt: > 0 no fixture regressed" {
+@test "count_fmt: > 0 in the regressed fixture" {
   source "$QG_REPO_ROOT/java/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -324,7 +324,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_lint: 0 no baseline" {
+@test "count_lint: 0 in baseline" {
   source "$QG_REPO_ROOT/java/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -333,7 +333,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_lint: > 0 no regressed" {
+@test "count_lint: > 0 in regressed" {
   source "$QG_REPO_ROOT/java/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -342,7 +342,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_build: 0 no baseline" {
+@test "count_build: 0 in baseline" {
   source "$QG_REPO_ROOT/java/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -351,7 +351,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_test: 0 no baseline" {
+@test "count_test: 0 in baseline" {
   source "$QG_REPO_ROOT/java/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -360,7 +360,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_test: 1 no regressed" {
+@test "count_test: 1 in regressed" {
   source "$QG_REPO_ROOT/java/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -369,7 +369,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_complexity: 0 no baseline" {
+@test "count_complexity: 0 in baseline" {
   source "$QG_REPO_ROOT/java/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -378,7 +378,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_complexity: > 0 no regressed" {
+@test "count_complexity: > 0 in regressed" {
   source "$QG_REPO_ROOT/java/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -406,7 +406,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "e2e: rodando regressed contra baseline -> exit 1, JSON com verdict regressed" {
+@test "e2e: running regressed against baseline -> exit 1, JSON with verdict regressed" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path java regressed)"
@@ -422,7 +422,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "e2e: rodando baseline contra ele mesmo -> exit 0" {
+@test "e2e: running baseline against itself -> exit 0" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path java baseline)"
@@ -438,7 +438,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "e2e: --format text mostra tabela com colunas esperadas" {
+@test "e2e: --format text shows the table with expected columns" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path java baseline)"
@@ -449,15 +449,15 @@ EOF
     --format text \
     --force-full
   [ "$status" -eq 0 ]
-  [[ "$output" == *"metrica"* ]]
-  [[ "$output" == *"veredito"* ]]
+  [[ "$output" == *"metric"* ]]
+  [[ "$output" == *"verdict"* ]]
   [[ "$output" == *"fmt"* ]]
   [[ "$output" == *"coverage"* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$logdir"
 }
 
-@test "e2e: 10 runs identicas no regressed devem retornar exit 1 todas as vezes" {
+@test "e2e: 10 identical runs in regressed must return exit 1 every time" {
   for i in $(seq 1 10); do
     local logdir
     logdir=$(qg_tmp_dir)
@@ -474,8 +474,8 @@ EOF
   done
 }
 
-@test "tamper-resistance: pmd ignora ruleset afrouxado do projeto (gate usa ruleset do QG)" {
-  command -v pmd >/dev/null 2>&1 || skip "pmd nao disponivel"
+@test "tamper-resistance: pmd ignores the project's loosened ruleset (gate uses QG's ruleset)" {
+  command -v pmd >/dev/null 2>&1 || skip "pmd not available"
   source "$QG_REPO_ROOT/java/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -488,7 +488,7 @@ EOF
 </ruleset>
 EOF
   result=$(count_complexity "$tmp" "$logdir/cx.log")
-  # Gate usa o ruleset do QG (threshold 10), nao o vazio do projeto.
-  [ "$result" -gt 0 ] || { echo "esperava >0 mesmo com ruleset vazio; got $result"; cat "$logdir/cx.log"; return 1; }
+  # Gate uses QG's ruleset (threshold 10), not the project's empty one.
+  [ "$result" -gt 0 ] || { echo "expected >0 even with an empty ruleset; got $result"; cat "$logdir/cx.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }

@@ -1,50 +1,50 @@
 # Quality Gate -- Java
 
-Gate de qualidade para projetos Java (Maven). Cumpre o [contrato v1](../docs/contract.md).
+Quality gate for Java (Maven) projects. Complies with the [v1 contract](../docs/contract.md).
 
-## Pre-requisitos
+## Prerequisites
 
 - `java` 17+ (JDK -- `brew install openjdk@21` ou `apt install openjdk-17-jdk`)
 - `mvn` (Apache Maven -- `brew install maven` ou `apt install maven`)
 - `google-java-format` (`brew install google-java-format`; em Linux baixe o jar)
 - `pmd` (`brew install pmd`; em Linux baixe o tarball)
-- `jq` -- `brew install jq` (macOS) ou `apt install jq` (Linux)
-- `git`, `bash 4+`, `awk`, `tar` (sistema)
+- `jq` -- `brew install jq` (macOS) or `apt install jq` (Linux)
+- `git`, `bash 4+`, `awk`, `tar` (system)
 
 O projeto-alvo precisa ter `org.jacoco:jacoco-maven-plugin` configurado para a metrica `coverage` funcionar.
 
-## Uso
+## Usage
 
 ```bash
 ~/.quality-gate/java/qg.sh --base origin/main
 ```
 
-Ver [`docs/consume.md`](../docs/consume.md) para uso completo.
+See [`docs/consume.md`](../docs/consume.md) for full usage.
 
-## Metricas medidas
+## Measured metrics
 
-| Metrica | Ferramenta | Conta |
+| Metric | Tool | Counts |
 |---|---|---|
-| `fmt` | `google-java-format --dry-run` em cada `.java` | arquivos com diff (saida nao-vazia) |
-| `lint` | `pmd check -R category/java/errorprone.xml` | linhas no formato `file:line: rule:` |
-| `build` | `mvn -q -B -DskipTests compile` | linhas `[ERROR] ... .java:[L,C]` ou exit !=0 |
-| `test` | `mvn -q -B -Dmaven.test.failure.ignore=true test` | resumo final `Failures + Errors` |
+| `fmt` | `google-java-format --dry-run` on each `.java` | files with a diff (non-empty output) |
+| `lint` | `pmd check -R category/java/errorprone.xml` | lines in the format `file:line: rule:` |
+| `build` | `mvn -q -B -DskipTests compile` | `[ERROR] ... .java:[L,C]` lines or exit !=0 |
+| `test` | `mvn -q -B -Dmaven.test.failure.ignore=true test` | final summary `Failures + Errors` |
 | `complexity` | `pmd check -R category/java/design.xml/CyclomaticComplexity` | matches `CyclomaticComplexity:` |
-| `coverage` | `jacoco-maven-plugin` -> parse `target/site/jacoco/jacoco.xml` | `% LINE` do contador raiz |
+| `coverage` | `jacoco-maven-plugin` -> parse `target/site/jacoco/jacoco.xml` | `% LINE` of the root counter |
 
-## Estrutura
+## Structure
 
-- [`qg.sh`](qg.sh) -- script principal.
-- [`lib/measure.sh`](lib/measure.sh) -- funcoes `count_*` e `measure_coverage`.
-- [`lib/output.sh`](lib/output.sh) -- render texto e JSON.
-- [`test-fixtures/baseline/`](test-fixtures/baseline/) -- projeto Maven limpo (JUnit 5 + jacoco).
-- [`test-fixtures/regressed/`](test-fixtures/regressed/) -- projeto com regressoes deliberadas em fmt, lint, test, complexity, coverage.
+- [`qg.sh`](qg.sh) -- main script.
+- [`lib/measure.sh`](lib/measure.sh) -- `count_*` functions and `measure_coverage`.
+- [`lib/output.sh`](lib/output.sh) -- text and JSON render.
+- [`test-fixtures/baseline/`](test-fixtures/baseline/) -- a clean Maven project (JUnit 5 + jacoco).
+- [`test-fixtures/regressed/`](test-fixtures/regressed/) -- a project with deliberate regressions in fmt, lint, test, complexity, coverage.
 
-## Detalhes e troubleshooting
+## Details and troubleshooting
 
-Ver [`docs/languages/java.md`](../docs/languages/java.md).
+See [`docs/languages/java.md`](../docs/languages/java.md).
 
-## Testes do proprio script
+## Tests for the script itself
 
 ```bash
 bats tests/java-qg.bats

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Funcoes de medicao do gate Java (Maven).
-# Source este arquivo a partir de java/qg.sh.
-# Cada funcao SEMPRE retorna inteiro >= 0 em stdout, sem prefixos.
+# Measurement functions for the Java (Maven).
+# Source this file from java/qg.sh.
+# Each function ALWAYS returns an integer >= 0 on stdout, with no prefixes.
 
 _grep_count() {
   local pattern="$1" file="$2"
@@ -11,7 +11,7 @@ _grep_count() {
   printf '%d\n' "${n:-0}"
 }
 
-# Garante numero; qualquer coisa nao-numerica (vazio, "Unknown", "N/A") -> 0
+# Ensures a number; anything non-numeric (empty, "Unknown", "N/A") -> 0
 _num() {
   local v="${1:-}"
   if printf '%s' "$v" | grep -qE '^-?[0-9]+(\.[0-9]+)?$'; then
@@ -21,10 +21,10 @@ _num() {
   fi
 }
 
-# Tamper-resistance (contrato): o gate impoe o PROPRIO ruleset PMD. Ruleset
-# do projeto-alvo e IGNORADO. Override SO via env externa QG_RULESET_DIR
-# -- NUNCA de .qg.yaml/arquivo do projeto. google-java-format nao tem config
-# (estilo fixo) -> trivialmente tamper-proof.
+# Tamper-resistance (contract): the gate enforces ITS OWN PMD ruleset. The
+# target project's ruleset is IGNORED. Override ONLY via the external env var
+# QG_RULESET_DIR -- NEVER from .qg.yaml/a project file. google-java-format has
+# no config (fixed style) -> trivially tamper-proof.
 _QG_RULES_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/rules"
 qg_ruleset_dir() {
   if [ -n "${QG_RULESET_DIR:-}" ]; then
@@ -34,24 +34,24 @@ qg_ruleset_dir() {
   fi
 }
 
-# Sentinela da linguagem na raiz do diretorio dado (reusada por --detect,
-# fast-path e check de "linguagem ausente no baseline"). Slug: java.
+# Language sentinel at the root of the given directory (reused by --detect,
+# fast-path and the "language absent in baseline" check). Slug: java.
 qg_lang_present() {
   local dir="$1"
   [ -f "$dir/pom.xml" ] || [ -f "$dir/build.gradle" ] \
     || [ -f "$dir/build.gradle.kts" ]
 }
 
-# Build-system declarado e autoritativo (LEI): o gate Java suporta apenas
-# Maven (pom.xml). Projeto Gradle (build.gradle[.kts] sem pom.xml) = tool-error,
-# NUNCA rodar mvn (mediria artefato incorreto). Se ./mvnw presente, usar o
-# wrapper (versao pinada do Maven), nao o mvn do sistema.
+# The declared build-system is authoritative (LAW): the Java gate only supports
+# Maven (pom.xml). A Gradle project (build.gradle[.kts] without pom.xml) = tool-error,
+# NEVER run mvn (it would measure an incorrect artifact). If ./mvnw is present, use the
+# wrapper (the pinned Maven version), not the system mvn.
 # Ecoa o binario Maven a ser usado em stdout; tool-error => return 1.
 qg_maven_cmd() {
   local dir="$1" log="$2"
   if [ ! -f "$dir/pom.xml" ]; then
     if [ -f "$dir/build.gradle" ] || [ -f "$dir/build.gradle.kts" ]; then
-      echo "::error::build.gradle presente mas o gate Java suporta apenas Maven (pom.xml) -- abra issue em quality-gate ou rode add-quality-gate para suporte Gradle (rodar mvn num projeto Gradle mediria artefato incorreto)" >> "$log"
+      echo "::error::build.gradle present but the Java gate only supports Maven (pom.xml) -- open an issue in quality-gate or run add-quality-gate for Gradle support (running mvn in a Gradle project would measure an incorrect artifact)" >> "$log"
       return 1
     fi
     # Sem pom.xml e sem build.gradle: nada a resolver (sentinela ja validou).
@@ -62,15 +62,15 @@ qg_maven_cmd() {
   elif command -v mvn >/dev/null 2>&1; then
     printf 'mvn\n'
   else
-    echo "::error::pom.xml presente mas nem ./mvnw nem 'mvn' no PATH -- instale: 'apt install maven' (Linux) / 'brew install maven' (macOS) ou versione o Maven Wrapper ./mvnw (sem Maven nao ha como medir o build do projeto)" >> "$log"
+    echo "::error::pom.xml present but neither ./mvnw nor 'mvn' on PATH -- install: 'apt install maven' (Linux) / 'brew install maven' (macOS) or commit the Maven Wrapper ./mvnw (without Maven there is no way to measure the project build)" >> "$log"
     return 1
   fi
   return 0
 }
 
-# Bug 1: resolve o closure de dependencias antes de medir build/test.
-# mvn resolve no compile/test; garantimos -o (offline) NAO usado e
-# pre-resolvemos. Falha de resolucao = tool-error (return 1).
+# Bug 1: resolves the dependency closure before measuring build/test.
+# mvn resolves on compile/test; we ensure -o (offline) is NOT used and
+# pre-resolve. A resolution failure = tool-error (return 1).
 qg_resolve_deps() {
   local dir="$1" log="$2"
   : > "$log"
@@ -133,8 +133,8 @@ count_lint_errors() {
   fi
   local rules
   rules=$(qg_ruleset_dir)
-  # Tamper-resistance: -R aponta para o pmd.xml do QG, ignorando ruleset do
-  # projeto-alvo.
+  # Tamper-resistance: -R points at QG's pmd.xml, ignoring the target
+  # project's ruleset.
   ( cd "$dir" && pmd check --no-cache --no-progress \
       -R "$rules/pmd.xml" \
       -d src/main/java -f text ) > "$log" 2>&1 || true
@@ -153,7 +153,7 @@ count_build_errors() {
     printf '0\n'
     return
   fi
-  # mvn imprime [ERROR] /path/to/Foo.java:[L,C] mensagem
+  # mvn prints [ERROR] /path/to/Foo.java:[L,C] message
   _grep_count '^\[ERROR\] .*\.java:\[' "$log"
 }
 
@@ -165,7 +165,7 @@ count_test_failures() {
   ( cd "$dir" && "$mvn_cmd" -q -B \
       -Dmaven.test.failure.ignore=true \
       test ) > "$log" 2>&1 || true
-  # surefire imprime UMA linha "Tests run: N, Failures: F, Errors: E, Skipped: S" por test class.
+  # surefire prints ONE line "Tests run: N, Failures: F, Errors: E, Skipped: S" per test class.
   # O resumo final eh "Tests run: <total>, Failures: <total>, Errors: <total>, Skipped: <total>"
   # tipicamente apos "[INFO] Results:".
   # Para evitar dupla-contagem, coletamos APENAS o ULTIMO match (que eh o resumo final).
@@ -198,7 +198,7 @@ count_complexity() {
   fi
   local rules
   rules=$(qg_ruleset_dir)
-  # Tamper-resistance: threshold de complexidade vem do pmd.xml do QG.
+  # Tamper-resistance: the complexity threshold comes from QG's pmd.xml.
   ( cd "$dir" && pmd check --no-cache --no-progress \
       -R "$rules/pmd.xml" \
       -d src/main/java -f text ) > "$log" 2>&1 || true
@@ -238,6 +238,6 @@ measure_coverage() {
     ' "$xml")
     cp "$xml" "$out" 2>/dev/null || true
   fi
-  # Bug 2: nunca retorna vazio/"Unknown" -> 0.
+  # Bug 2: never returns empty/"Unknown" -> 0.
   printf '%s\n' "$(_num "$pct")"
 }
