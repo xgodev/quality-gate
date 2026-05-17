@@ -1,9 +1,9 @@
-# Ruleset canonico Quality Gate -- Swift (SwiftLint).
-# Imposto pelo QG via swiftlint --config <este>.
-# Config do projeto-alvo (.swiftlint.yml) e IGNORADA.
-# Defaults da comunidade ajustados; calibracao fina em V2.
+# Canonical Quality Gate ruleset -- Swift (SwiftLint).
+# Enforced by QG via swiftlint --config <this>.
+# The target project's config (.swiftlint.yml) is IGNORED.
+# Adjusted community defaults; fine calibration in V2.
 
-# Build artifacts nunca sao codigo do projeto.
+# Build artifacts are never project code.
 excluded:
   - .build
   - Pods
@@ -11,11 +11,11 @@ excluded:
 
 disabled_rules:
   - todo
-  # Parametros idiomaticos curtos (a, b, x, y) sao comuns e nao sao defeito.
+  # Short idiomatic parameters (a, b, x, y) are common and not a defect.
   - identifier_name
-  # swift-format (fmt) EXIGE trailing comma em literais multilinha; o default
-  # do swiftlint PROIBE. Para os dois nao se contradizerem, o gate adota a
-  # convencao do swift-format e desliga trailing_comma no swiftlint.
+  # swift-format (fmt) REQUIRES a trailing comma in multi-line literals; the
+  # swiftlint default FORBIDS it. So they do not contradict each other, the
+  # gate adopts the swift-format convention and disables trailing_comma in swiftlint.
   - trailing_comma
 
 opt_in_rules:

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Funcoes de medicao do gate Swift (SwiftPM).
-# Source este arquivo a partir de swift/qg.sh.
-# Cada funcao SEMPRE retorna inteiro >= 0 em stdout, sem prefixos.
+# Measurement functions for the Swift gate (SwiftPM).
+# Source this file from swift/qg.sh.
+# Each function ALWAYS returns an integer >= 0 on stdout, with no prefixes.
 #
-# OBSERVACAO: a metrica `complexity` NAO eh implementada para Swift -- nao ha
-# ferramenta canonica estavel (swiftlint cyclomatic_complexity existe mas o threshold
-# nao eh customizavel de forma simples e o conjunto de regras de "complexity" varia
-# entre versoes). Documentado em docs/languages/swift.md.
+# NOTE: the `complexity` metric is NOT implemented for Swift -- there is no
+# stable canonical tool (swiftlint cyclomatic_complexity exists but the threshold
+# is not simply customizable and the set of "complexity" rules varies
+# between versions). Documented in docs/languages/swift.md.
 
 _grep_count() {
   local pattern="$1" file="$2"
@@ -16,7 +16,7 @@ _grep_count() {
   printf '%d\n' "${n:-0}"
 }
 
-# Garante numero; qualquer coisa nao-numerica (vazio, "Unknown", "N/A") -> 0
+# Ensures a number; anything non-numeric (empty, "Unknown", "N/A") -> 0
 _num() {
   local v="${1:-}"
   if printf '%s' "$v" | grep -qE '^-?[0-9]+(\.[0-9]+)?$'; then
@@ -26,9 +26,9 @@ _num() {
   fi
 }
 
-# Tamper-resistance (contrato): o gate impoe o PROPRIO ruleset. .swiftlint.yml
-# / .swift-format do projeto-alvo sao IGNORADOS. Override SO via env externa
-# QG_RULESET_DIR -- NUNCA de .qg.yaml/arquivo do projeto.
+# Tamper-resistance (contract): the gate enforces ITS OWN ruleset. .swiftlint.yml
+# / .swift-format of the target project are IGNORED. Override ONLY via the external env var
+# QG_RULESET_DIR -- NEVER from .qg.yaml/a project file.
 _QG_RULES_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/rules"
 qg_ruleset_dir() {
   if [ -n "${QG_RULESET_DIR:-}" ]; then
@@ -38,25 +38,25 @@ qg_ruleset_dir() {
   fi
 }
 
-# Sentinela da linguagem na raiz do diretorio dado (reusada por --detect,
-# fast-path e check de "linguagem ausente no baseline"). Slug: swift.
+# Language sentinel at the root of the given directory (reused by --detect,
+# fast-path and the "language absent in baseline" check). Slug: swift.
 qg_lang_present() {
   local dir="$1"
   [ -f "$dir/Package.swift" ]
 }
 
-# swift-tools-version do Package.swift e autoritativo (LEI): a 1a linha
-# `// swift-tools-version:X.Y` declara a versao minima do toolchain SwiftPM
-# que o projeto exige. Se o `swift` do PATH e mais antigo, SwiftPM falha com
-# erro confuso -- o gate emite tool-error claro, NUNCA build degradado.
-# Retorna 0 se honravel/sem declaracao; 1 = tool-error (msg no $log).
+# Package.swift's swift-tools-version is authoritative (LAW): the 1st line
+# `// swift-tools-version:X.Y` declares the minimum SwiftPM toolchain version
+# the project requires. If the PATH `swift` is older, SwiftPM fails with a
+# confusing error -- the gate emits a clear tool-error, NEVER a degraded build.
+# Returns 0 if honorable/no declaration; 1 = tool-error (message in $log).
 qg_check_swift_tools_version() {
   local dir="$1" log="$2"
   command -v swift >/dev/null 2>&1 || return 0
   local required
   required=$(head -1 "$dir/Package.swift" 2>/dev/null \
     | sed -E 's@^//[[:space:]]*swift-tools-version:?[[:space:]]*([0-9]+\.[0-9]+).*@\1@' )
-  # Sem match valido (linha nao e a diretiva) => nada a checar.
+  # No valid match (the line is not the directive) => nothing to check.
   printf '%s' "$required" | grep -qE '^[0-9]+\.[0-9]+$' || return 0
   local have
   have=$( swift --version 2>/dev/null \
@@ -66,14 +66,14 @@ qg_check_swift_tools_version() {
   norm_req=$( printf '%s' "$required" | awk -F. '{printf "%03d%03d", $1, $2}' )
   norm_have=$( printf '%s' "$have" | awk -F. '{printf "%03d%03d", $1, $2}' )
   if [ "$norm_have" -lt "$norm_req" ]; then
-    echo "::error::Package.swift declara swift-tools-version:${required} mas o 'swift' do PATH e ${have} (mais antigo) -- instale Swift >= ${required} (build com toolchain abaixo do declarado mediria artefato incorreto)" >> "$log"
+    echo "::error::Package.swift declares swift-tools-version:${required} but the PATH 'swift' is ${have} (older) -- install Swift >= ${required} (building with a toolchain below the declared one would measure an incorrect artifact)" >> "$log"
     return 1
   fi
   return 0
 }
 
-# Bug 1: SwiftPM resolve sozinho no swift build. Sem mudanca; mantido por
-# simetria de contrato. Falha de resolucao = tool-error (return 1).
+# Bug 1: SwiftPM resolves on its own in swift build. No change; kept for
+# contract symmetry. A resolution failure = tool-error (return 1).
 qg_resolve_deps() {
   local dir="$1" log="$2"
   : > "$log"
@@ -83,7 +83,7 @@ qg_resolve_deps() {
   return 0
 }
 
-# Lista de fontes Swift sob Sources/ e Tests/ (excluindo .build).
+# List of Swift sources under Sources/ and Tests/ (excluding .build).
 _qg_swift_sources() {
   local dir="$1"
   find "$dir" -type d -name '.build' -prune -o -type f -name '*.swift' -print 2>/dev/null \
@@ -102,9 +102,9 @@ count_fmt_errors() {
   fi
   while IFS= read -r f; do
     [ -z "$f" ] && continue
-    # swift-format lint imprime warnings; --strict transforma em exit !=0.
-    # $f ja vem com o path completo a partir de $dir -> NAO fazer cd (senao
-    # o path relativo nao resolve no novo cwd). Tamper: --configuration do QG.
+    # swift-format lint prints warnings; --strict turns them into exit !=0.
+    # $f already comes with the full path from $dir -> do NOT cd (otherwise
+    # the relative path does not resolve in the new cwd). Tamper: QG's --configuration.
     local out
     out=$( swift-format lint --strict \
         --configuration "$(qg_ruleset_dir)/.swift-format" "$f" 2>&1 )
@@ -120,18 +120,18 @@ count_lint_errors() {
   local dir="$1" log="$2"
   : > "$log"
   if ! command -v swiftlint >/dev/null 2>&1; then
-    echo "::error::swiftlint nao encontrado -- instale: 'git clone https://github.com/realm/SwiftLint && cd SwiftLint && swift build -c release && cp .build/release/swiftlint /usr/local/bin/' (Linux) / 'brew install swiftlint' (macOS) (sem swiftlint a metrica lint nao roda)" >&2
+    echo "::error::swiftlint not found -- install: 'git clone https://github.com/realm/SwiftLint && cd SwiftLint && swift build -c release && cp .build/release/swiftlint /usr/local/bin/' (Linux) / 'brew install swiftlint' (macOS) (without swiftlint the lint metric does not run)" >&2
     printf '0\n'
     return
   fi
-  # Tamper-resistance: --config do QG, ignorando .swiftlint.yml do projeto.
-  # Passa as fontes explicitamente (exclui .build/ -- artefato de build
-  # gerado, NUNCA codigo do projeto; swiftlint resolve `excluded` relativo
-  # ao --config, entao nao basta a chave excluded no ruleset).
+  # Tamper-resistance: QG's --config, ignoring the project's .swiftlint.yml.
+  # Passes the sources explicitly (excludes .build/ -- a generated build
+  # artifact, NEVER project code; swiftlint resolves `excluded` relative
+  # to --config, so the excluded key in the ruleset is not enough).
   local rules
   rules=$(qg_ruleset_dir)
-  # Lint so as fontes reais (Sources/Tests), passadas explicitamente, para
-  # nunca varrer .build/ (codigo gerado). swiftlint aceita paths posicionais.
+  # Lint only the real sources (Sources/Tests), passed explicitly, so it
+  # never scans .build/ (generated code). swiftlint accepts positional paths.
   local -a srcs=()
   while IFS= read -r f; do
     [ -n "$f" ] && srcs+=("$f")
@@ -142,7 +142,7 @@ count_lint_errors() {
   fi
   swiftlint lint --no-cache --quiet \
     --config "$rules/.swiftlint.yml" "${srcs[@]}" > "$log" 2>&1 || true
-  # swiftlint imprime: path:linha:col: warning|error: msg (rule)
+  # swiftlint prints: path:line:col: warning|error: msg (rule)
   _grep_count '\.swift:[0-9]+:[0-9]+: (warning|error):' "$log"
 }
 
@@ -155,7 +155,7 @@ count_build_errors() {
     printf '0\n'
     return
   fi
-  # swiftc imprime "path:linha:col: error: msg"
+  # swiftc prints "path:line:col: error: msg"
   _grep_count '\.swift:[0-9]+:[0-9]+: error:' "$log"
 }
 
@@ -163,8 +163,8 @@ count_test_failures() {
   local dir="$1" log="$2"
   : > "$log"
   ( cd "$dir" && swift test --enable-code-coverage ) > "$log" 2>&1 || true
-  # XCTest imprime "Executed N tests, with F failures (UF unexpected)" no resumo.
-  # Soma todos os "with F failures" -- pega a ultima ocorrencia (resumo all tests).
+  # XCTest prints "Executed N tests, with F failures (UF unexpected)" in the summary.
+  # Sums all "with F failures" -- takes the last occurrence (all-tests summary).
   local n
   n=$(awk '
     /Executed [0-9]+ tests?, with [0-9]+ failures?/ {
@@ -181,13 +181,13 @@ count_test_failures() {
   printf '%d\n' "$n"
 }
 
-# count_complexity OMITIDA -- ver header do arquivo + docs/languages/swift.md.
+# count_complexity OMITTED -- see the file header + docs/languages/swift.md.
 
 measure_coverage() {
   local dir="$1" out="$2"
-  # swift test --enable-code-coverage gera profraw files em .build/<arch>/debug/codecov/.
-  # Quando os testes PASSAM, swift gera tambem default.profdata + JSONs por modulo.
-  # Quando FALHAM, so os profraw existem -- precisamos gerar profdata manualmente.
+  # swift test --enable-code-coverage produces profraw files in .build/<arch>/debug/codecov/.
+  # When the tests PASS, swift also generates default.profdata + per-module JSONs.
+  # When they FAIL, only the profraw exist -- we need to generate profdata manually.
   ( cd "$dir" && swift test --enable-code-coverage ) >/dev/null 2>&1 || true
   local cov_dir
   cov_dir=$(find "$dir/.build" -type d -name codecov 2>/dev/null | head -1)
@@ -197,7 +197,7 @@ measure_coverage() {
     return
   fi
 
-  # Merge profraw -> profdata se ainda nao existe ou se ha profraw novos.
+  # Merge profraw -> profdata if it does not exist yet or if there are new profraw.
   local profdata="$cov_dir/default.profdata"
   if [ ! -f "$profdata" ] || ls "$cov_dir"/*.profraw >/dev/null 2>&1; then
     if ls "$cov_dir"/*.profraw >/dev/null 2>&1; then
@@ -226,7 +226,7 @@ measure_coverage() {
     return
   fi
 
-  # Caminhos absolutos para nao depender do cwd da subshell xcrun.
+  # Absolute paths so it does not depend on the xcrun subshell cwd.
   local abs_dir
   abs_dir=$(cd "$dir" && pwd)
   local abs_profdata
@@ -258,6 +258,6 @@ measure_coverage() {
   pct=$(_num "$pct")
   printf '{"total_count": %s, "total_covered": %s, "coverage_percent": %s}\n' \
     "$(_num "$total_count")" "$(_num "$total_covered")" "$pct" > "$out"
-  # Bug 2: nunca retorna vazio/"Unknown" -> 0.
+  # Bug 2: never returns empty/"Unknown" -> 0.
   printf '%s\n' "$pct"
 }

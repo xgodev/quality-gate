@@ -3,7 +3,7 @@ import XCTest
 @testable import QGRegressed
 
 final class LibTests: XCTestCase {
-  // REGRESSION test: assertion errada de proposito.
+  // REGRESSION test: assertion wrong on purpose.
   func testAddFailingOnPurpose() {
     XCTAssertEqual(qgAdd(2, 3), 999)
   }

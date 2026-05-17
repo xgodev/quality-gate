@@ -1,52 +1,52 @@
 # Quality Gate -- Swift*
 
-Gate de qualidade para projetos Swift (SwiftPM). Cumpre o [contrato v1](../docs/contract.md).
+Quality gate for Swift (SwiftPM) projects. Complies with the [v1 contract](../docs/contract.md).
 
-\* A metrica `complexity` esta **omitida** -- ver [`docs/languages/swift.md`](../docs/languages/swift.md).
+\* The `complexity` metric is **omitted** -- see [`docs/languages/swift.md`](../docs/languages/swift.md).
 
-## Pre-requisitos
+## Prerequisites
 
-- `swift` 5.9+ (toolchain Swift -- via Xcode/Command Line Tools no macOS, swift.org no Linux)
-- `swift-format` -- `brew install swift-format` (macOS) ou compile do source (Linux)
-- `swiftlint` -- `brew install swiftlint` (macOS) ou compile do source (Linux)
-- `xcrun llvm-cov` + `xcrun llvm-profdata` (vem com Command Line Tools no macOS)
-- `jq` -- `brew install jq` (macOS) ou `apt install jq` (Linux)
-- `git`, `bash 4+`, `awk`, `tar`, `find` (sistema)
+- `swift` 5.9+ (Swift toolchain -- via Xcode/Command Line Tools on macOS, swift.org on Linux)
+- `swift-format` -- `brew install swift-format` (macOS) or build from source (Linux)
+- `swiftlint` -- `brew install swiftlint` (macOS) or build from source (Linux)
+- `xcrun llvm-cov` + `xcrun llvm-profdata` (comes with Command Line Tools on macOS)
+- `jq` -- `brew install jq` (macOS) or `apt install jq` (Linux)
+- `git`, `bash 4+`, `awk`, `tar`, `find` (system)
 
-**Observacao:** O gate eh primariamente desenhado para macOS (xcrun). Em Linux, swift coverage funciona mas requer adaptacao de paths e `llvm-cov` standalone (nao xcrun).
+**Note:** The gate is primarily designed for macOS (xcrun). On Linux, swift coverage works but requires path adaptation and standalone `llvm-cov` (not xcrun).
 
-## Uso
+## Usage
 
 ```bash
 ~/.quality-gate/swift/qg.sh --base origin/main
 ```
 
-Ver [`docs/consume.md`](../docs/consume.md) para uso completo.
+See [`docs/consume.md`](../docs/consume.md) for full usage.
 
-## Metricas medidas
+## Measured metrics
 
-| Metrica | Ferramenta | Conta |
+| Metric | Tool | Counts |
 |---|---|---|
-| `fmt` | `swift-format lint --strict` em cada `.swift` | arquivos com warnings/errors |
-| `lint` | `swiftlint lint --no-cache --quiet` | linhas no formato `file:linha:col: warning|error:` |
-| `build` | `swift build` | linhas `file:linha:col: error:` |
-| `test` | `swift test --enable-code-coverage` | resumo `with N failures` |
-| `complexity` | **OMITIDA** -- ver [`docs/languages/swift.md`](../docs/languages/swift.md) | -- |
-| `coverage` | `swift test --enable-code-coverage` + `xcrun llvm-cov export` (Sources/) | `% lines` somando todos modulos |
+| `fmt` | `swift-format lint --strict` on each `.swift` | files with warnings/errors |
+| `lint` | `swiftlint lint --no-cache --quiet` | lines in the format `file:line:col: warning|error:` |
+| `build` | `swift build` | `file:line:col: error:` lines |
+| `test` | `swift test --enable-code-coverage` | `with N failures` summary |
+| `complexity` | **OMITTED** -- see [`docs/languages/swift.md`](../docs/languages/swift.md) | -- |
+| `coverage` | `swift test --enable-code-coverage` + `xcrun llvm-cov export` (Sources/) | `% lines` summing all modules |
 
-## Estrutura
+## Structure
 
-- [`qg.sh`](qg.sh) -- script principal.
-- [`lib/measure.sh`](lib/measure.sh) -- funcoes `count_*` e `measure_coverage` (sem `count_complexity`).
-- [`lib/output.sh`](lib/output.sh) -- render texto e JSON (sem campo `complexity`).
-- [`test-fixtures/baseline/`](test-fixtures/baseline/) -- pacote SwiftPM limpo (XCTest).
-- [`test-fixtures/regressed/`](test-fixtures/regressed/) -- pacote com regressoes em fmt, lint, test, coverage.
+- [`qg.sh`](qg.sh) -- main script.
+- [`lib/measure.sh`](lib/measure.sh) -- `count_*` functions and `measure_coverage` (no `count_complexity`).
+- [`lib/output.sh`](lib/output.sh) -- text and JSON render (no `complexity` field).
+- [`test-fixtures/baseline/`](test-fixtures/baseline/) -- a clean SwiftPM package (XCTest).
+- [`test-fixtures/regressed/`](test-fixtures/regressed/) -- a package with regressions in fmt, lint, test, coverage.
 
-## Detalhes e troubleshooting
+## Details and troubleshooting
 
-Ver [`docs/languages/swift.md`](../docs/languages/swift.md).
+See [`docs/languages/swift.md`](../docs/languages/swift.md).
 
-## Testes do proprio script
+## Tests for the script itself
 
 ```bash
 bats tests/swift-qg.bats
