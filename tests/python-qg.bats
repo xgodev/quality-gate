@@ -8,7 +8,7 @@ setup() {
   qg_clean_env
 }
 
-@test "python/qg.sh --help mostra usage" {
+@test "python/qg.sh --help shows usage" {
   run "$(qg_script_path python)" --help
   [ "$status" -eq 0 ]
   [[ "$output" == *"--base"* ]]
@@ -16,18 +16,18 @@ setup() {
   [[ "$output" == *"--help"* ]]
 }
 
-@test "python/qg.sh -h equivalente a --help" {
+@test "python/qg.sh -h equivalent to --help" {
   run "$(qg_script_path python)" -h
   [ "$status" -eq 0 ]
   [[ "$output" == *"--base"* ]]
 }
 
-@test "python/qg.sh declara QG_CONTRACT_VERSION=1 no header" {
+@test "python/qg.sh declares QG_CONTRACT_VERSION=1 in the header" {
   run grep -E "^# QG_CONTRACT_VERSION=1$" "$(qg_script_path python)"
   [ "$status" -eq 0 ]
 }
 
-@test "python/qg.sh sem --base NAO sai 2 por falta de --base (modo absoluto)" {
+@test "python/qg.sh without --base does NOT exit 2 due to missing --base (absolute mode)" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -37,13 +37,13 @@ setup() {
   rm -rf "$tmp"
 }
 
-@test "python/qg.sh respeita QG_BASE_REF env var quando --base ausente" {
+@test "python/qg.sh respects the QG_BASE_REF env var when --base is absent" {
   export QG_BASE_REF="origin/main"
   run "$(qg_script_path python)"
   [[ "$output" != *"--base eh obrigatorio"* ]]
 }
 
-@test "python/qg.sh --detect sem sentinela sai 1" {
+@test "python/qg.sh --detect without a sentinel exits 1" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -54,7 +54,7 @@ setup() {
   rm -rf "$tmp"
 }
 
-@test "python/qg.sh --detect com sentinela imprime slug e sai 0" {
+@test "python/qg.sh --detect with a sentinel prints the slug and exits 0" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -66,7 +66,7 @@ setup() {
   rm -rf "$tmp"
 }
 
-@test "python LEI: poetry.lock presente mas poetry fora do PATH = tool-error, sem pip" {
+@test "python LAW: poetry.lock present but poetry off PATH = tool-error, no pip" {
   source "$QG_REPO_ROOT/python/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -85,7 +85,7 @@ echo "PIP-FOI-INVOCADO" >> "$logdir/pip-called"
 exit 0
 EOF
   chmod +x "$stubdir/pip"
-  # PATH sem poetry; pip stub presente mas NAO deve ser usado.
+  # PATH without poetry; pip stub present but must NOT be used.
   run env PATH="$stubdir:/usr/bin:/bin" "$(command -v bash)" -c "source '$QG_REPO_ROOT/python/lib/measure.sh'; qg_resolve_deps '$tmp' '$logdir/abs-deps.log'"
   [ "$status" -eq 1 ]
   grep -q '::error::' "$logdir/abs-deps.log"
@@ -95,7 +95,7 @@ EOF
   rm -rf "$tmp" "$logdir"
 }
 
-@test "python LEI: uv.lock sem uv = tool-error claro" {
+@test "python LAW: uv.lock without uv = clear tool-error" {
   source "$QG_REPO_ROOT/python/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -110,7 +110,7 @@ EOF
   rm -rf "$tmp" "$logdir"
 }
 
-@test "python LEI: requirements.txt sem lockfile de manager -> pip legitimo (sem tool-error)" {
+@test "python LAW: requirements.txt without a manager lockfile -> legitimate pip (no tool-error)" {
   source "$QG_REPO_ROOT/python/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -122,7 +122,7 @@ EOF
   rm -rf "$tmp" "$logdir"
 }
 
-@test "python/qg.sh modo absoluto sem .qg.yaml: exit 0, JSON mode absolute base_ref null" {
+@test "python/qg.sh absolute mode without .qg.yaml: exit 0, JSON mode absolute base_ref null" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path python baseline)"
@@ -137,7 +137,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "python/qg.sh modo absoluto com absolute_thresholds violado: exit 1, metrica violated" {
+@test "python/qg.sh absolute mode with absolute_thresholds violated: exit 1, metric violated" {
   local logdir tmp
   logdir=$(qg_tmp_dir)
   tmp=$(qg_tmp_dir)
@@ -157,12 +157,12 @@ EOF
   rm -rf "$logdir" "$tmp"
 }
 
-@test "Bug 2: coverage indefinida vira 0, JSON valido, gate nao quebra (modo absoluto)" {
+@test "Bug 2: undefined coverage becomes 0, valid JSON, gate does not break (absolute mode)" {
   local logdir tmp
   logdir=$(qg_tmp_dir)
   tmp=$(qg_tmp_dir)
   cd "$tmp"
-  # Projeto python sem testes -> coverage indefinida.
+  # Python project without tests -> undefined coverage.
   cat > pyproject.toml <<EOF
 [project]
 name = "x"
@@ -180,26 +180,26 @@ EOF
   rm -rf "$logdir" "$tmp"
 }
 
-@test "python/qg.sh --format invalido sai 2" {
+@test "python/qg.sh --format invalid exits 2" {
   run "$(qg_script_path python)" --base origin/main --format xml
   [ "$status" -eq 2 ]
   [[ "$output" == *"--format"* ]]
 }
 
-@test "python/qg.sh --cov-margin nao-numerico sai 2" {
+@test "python/qg.sh --cov-margin non-numeric exits 2" {
   run "$(qg_script_path python)" --base origin/main --cov-margin abc
   [ "$status" -eq 2 ]
   [[ "$output" == *"--cov-margin"* ]]
 }
 
-@test "python/qg.sh detecta ferramenta faltando e sai 2 com mensagem instalavel" {
+@test "python/qg.sh detects a missing tool and exits 2 with an installable message" {
   run env PATH="/usr/bin:/bin" "$(qg_script_path python)" --base origin/main
   [ "$status" -eq 2 ]
   [[ "$output" == *"python"* ]]
-  [[ "$output" == *"instale"* ]] || [[ "$output" == *"install"* ]]
+  [[ "$output" == *"install"* ]] || [[ "$output" == *"install"* ]]
 }
 
-@test "python/qg.sh com QG_BYPASS_REASON sai 0 e emite warning" {
+@test "python/qg.sh with QG_BYPASS_REASON exits 0 and emits a warning" {
   export QG_BYPASS_REASON="teste de bypass"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -213,7 +213,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "python/qg.sh com QG_BYPASS_REASON --format json retorna verdict bypassed" {
+@test "python/qg.sh with QG_BYPASS_REASON --format json returns verdict bypassed" {
   export QG_BYPASS_REASON="teste"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -225,7 +225,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "python/qg.sh fast-path quando so docs mudaram" {
+@test "python/qg.sh fast-path when only docs changed" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -236,7 +236,7 @@ EOF
   git add README.md
   git commit -qm "initial"
   git checkout -qb feature
-  echo "novo conteudo" >> README.md
+  echo "new content" >> README.md
   git add README.md
   git commit -qm "edit docs"
 
@@ -247,7 +247,7 @@ EOF
   rm -rf "$tmp"
 }
 
-@test "python/qg.sh --force-full pula fast-path" {
+@test "python/qg.sh --force-full skips fast-path" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -268,13 +268,13 @@ EOF
   rm -rf "$tmp"
 }
 
-@test "baseline: --baseline-dir inexistente sai 2" {
-  run "$(qg_script_path python)" --base origin/main --baseline-dir /tmp/qg-py-nao-existe-xyz --force-full
+@test "baseline: --baseline-dir nonexistent exits 2" {
+  run "$(qg_script_path python)" --base origin/main --baseline-dir /tmp/qg-py-does-not-exist-xyz --force-full
   [ "$status" -eq 2 ]
   [[ "$output" == *"baseline"* ]] || [[ "$output" == *"--baseline-dir"* ]]
 }
 
-@test "baseline: linguagem ausente no baseline emite warning + exit 0" {
+@test "baseline: language absent in baseline emits a warning + exit 0" {
   local tmp baseline
   tmp=$(qg_tmp_dir)
   baseline=$(qg_tmp_dir)
@@ -296,12 +296,12 @@ EOF
 
   run "$(qg_script_path python)" --base master --baseline-dir "$baseline"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"linguagem ausente"* ]] || [[ "$output" == *"skipped"* ]]
+  [[ "$output" == *"language absent"* ]] || [[ "$output" == *"skipped"* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp" "$baseline"
 }
 
-@test "count_fmt: 0 no fixture baseline" {
+@test "count_fmt: 0 in the baseline fixture" {
   source "$QG_REPO_ROOT/python/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -310,7 +310,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_fmt: > 0 no fixture regressed" {
+@test "count_fmt: > 0 in the regressed fixture" {
   source "$QG_REPO_ROOT/python/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -319,7 +319,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_lint: 0 no baseline" {
+@test "count_lint: 0 in baseline" {
   source "$QG_REPO_ROOT/python/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -328,7 +328,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_lint: > 0 no regressed" {
+@test "count_lint: > 0 in regressed" {
   source "$QG_REPO_ROOT/python/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -337,7 +337,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_build: 0 no baseline" {
+@test "count_build: 0 in baseline" {
   source "$QG_REPO_ROOT/python/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -346,7 +346,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_test: 0 no baseline" {
+@test "count_test: 0 in baseline" {
   source "$QG_REPO_ROOT/python/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -355,7 +355,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_test: 1 no regressed" {
+@test "count_test: 1 in regressed" {
   source "$QG_REPO_ROOT/python/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -364,7 +364,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_complexity: 0 no baseline" {
+@test "count_complexity: 0 in baseline" {
   source "$QG_REPO_ROOT/python/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -373,7 +373,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_complexity: > 0 no regressed" {
+@test "count_complexity: > 0 in regressed" {
   source "$QG_REPO_ROOT/python/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -382,7 +382,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "measure_coverage: 100% no baseline" {
+@test "measure_coverage: 100% in baseline" {
   source "$QG_REPO_ROOT/python/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -391,7 +391,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "measure_coverage: < 100% no regressed" {
+@test "measure_coverage: < 100% in regressed" {
   source "$QG_REPO_ROOT/python/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -400,7 +400,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "e2e: rodando regressed contra baseline -> exit 1, JSON com verdict regressed" {
+@test "e2e: running regressed against baseline -> exit 1, JSON with verdict regressed" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path python regressed)"
@@ -416,7 +416,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "e2e: rodando baseline contra ele mesmo -> exit 0" {
+@test "e2e: running baseline against itself -> exit 0" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path python baseline)"
@@ -432,7 +432,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "e2e: --format text mostra tabela com colunas esperadas" {
+@test "e2e: --format text shows the table with expected columns" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path python baseline)"
@@ -443,15 +443,15 @@ EOF
     --format text \
     --force-full
   [ "$status" -eq 0 ]
-  [[ "$output" == *"metrica"* ]]
-  [[ "$output" == *"veredito"* ]]
+  [[ "$output" == *"metric"* ]]
+  [[ "$output" == *"verdict"* ]]
   [[ "$output" == *"fmt"* ]]
   [[ "$output" == *"coverage"* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$logdir"
 }
 
-@test "e2e: 10 runs identicas no regressed devem retornar exit 1 todas as vezes" {
+@test "e2e: 10 identical runs in regressed must return exit 1 every time" {
   for i in $(seq 1 10); do
     local logdir
     logdir=$(qg_tmp_dir)
@@ -468,7 +468,7 @@ EOF
   done
 }
 
-@test "Bug build/: lint/complexity/fmt ignoram dirs gerados (mede fonte, nao artefato)" {
+@test "Bug build/: lint/complexity/fmt ignore generated dirs (measures source, not artifact)" {
   source "$QG_REPO_ROOT/python/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -478,7 +478,7 @@ EOF
 def add(a, b):
     return a + b
 EOF
-  # build/ + dist/ GERADO: Python lixo com import nao usado (F401),
+  # build/ + dist/ GENERATED: Python junk with an unused import (F401),
   # formatacao ruim e funcao de alta complexidade.
   mkdir -p "$tmp/build/lib" "$tmp/dist"
   cat > "$tmp/build/lib/generated.py" <<'EOF'
@@ -503,7 +503,7 @@ EOF
   rm -rf "$tmp" "$logdir"
 }
 
-@test "Bug build/ tamper: .gitignore vazio do projeto NAO afrouxa -- QG exclui build/ pelo ignore canonico" {
+@test "Bug build/ tamper: empty project .gitignore does NOT loosen -- QG excludes build/ via the canonical ignore" {
   source "$QG_REPO_ROOT/python/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -521,14 +521,14 @@ def bad( ):
 EOF
   result_lint=$(count_lint_errors "$tmp" "$logdir/lint.log")
   result_fmt=$(count_fmt_errors "$tmp" "$logdir/fmt.log")
-  # extend-exclude do ruff.toml do QG nao depende de respect-gitignore ->
+  # QG ruff.toml extend-exclude does not depend on respect-gitignore ->
   # build/ excluido mesmo com .gitignore vazio.
   [ "$result_lint" = "0" ] || { echo "tamper: lint deveria ser 0 (extend-exclude do QG); got $result_lint"; cat "$logdir/lint.log"; return 1; }
   [ "$result_fmt" = "0" ] || { echo "tamper: fmt deveria ser 0; got $result_fmt"; cat "$logdir/fmt.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }
 
-@test "Bug build/: violacao REAL em src/ ainda contada (exclusao nao mascara fonte)" {
+@test "Bug build/: REAL violation in src/ still counted (the exclusion does not mask source)" {
   source "$QG_REPO_ROOT/python/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -548,12 +548,12 @@ EOF
   rm -rf "$tmp" "$logdir"
 }
 
-@test "tamper-resistance: ruff ignora config afrouxada do projeto (gate usa ruleset do QG)" {
+@test "tamper-resistance: ruff ignores the project's loosened config (gate uses QG's ruleset)" {
   source "$QG_REPO_ROOT/python/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
   cp -R "$(qg_fixture_path python regressed)/." "$tmp/"
-  # Dev tenta afrouxar: pyproject.toml desliga F401 (import nao usado).
+  # Dev tries to loosen: pyproject.toml turns off F401 (unused import).
   cat > "$tmp/pyproject.toml" <<EOF
 [tool.ruff.lint]
 ignore = ["F401", "E", "F", "W", "I"]

@@ -1,15 +1,15 @@
-# Ruleset canonico Quality Gate -- Python (ruff).
-# Imposto pelo QG via ruff --config <este> --isolated.
-# Config do projeto-alvo (pyproject.toml [tool.ruff]) e IGNORADA.
-# Defaults da comunidade; calibracao fina em V2.
+# Canonical Quality Gate ruleset -- Python (ruff).
+# Enforced by QG via ruff --config <this> --isolated.
+# The target project's config (pyproject.toml [tool.ruff]) is IGNORED.
+# Community defaults; fine calibration in V2.
 line-length = 88
 target-version = "py39"
 
-# LEI (docs/contract.md): metricas de fmt/lint/complexity medem CODIGO-FONTE.
-# Ignore CANONICO do QG (tamper-proof: NUNCA o .gitignore/pyproject do
-# projeto-alvo). `extend-exclude` soma aos defaults do ruff e nao depende de
-# respect-gitignore -- mesmo se o dev esvaziar o .gitignore, dirs gerados/
-# vendored ficam de fora. Lista alinhada ao nodejs/web .prettierignore.
+# LAW (docs/contract.md): the fmt/lint/complexity metrics measure SOURCE CODE.
+# QG's CANONICAL ignore (tamper-proof: NEVER the target project's
+# .gitignore/pyproject). `extend-exclude` adds to ruff's defaults and does not
+# depend on respect-gitignore -- even if the dev empties the .gitignore,
+# generated/vendored dirs stay out. List aligned with nodejs/web .prettierignore.
 extend-exclude = [
   "node_modules",
   "dist",

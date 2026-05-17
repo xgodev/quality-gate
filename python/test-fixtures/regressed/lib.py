@@ -1,6 +1,6 @@
 """Regressed module for the Python quality gate fixture."""
 
-import os  # REGRESSION lint: import nao usado (ruff F401)
+import os  # REGRESSION lint: import unused (ruff F401)
 
 
 # REGRESSION fmt: indentacao inconsistente (ruff format vai reclamar)
