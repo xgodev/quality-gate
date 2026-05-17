@@ -2,28 +2,28 @@ package qgregressed
 
 import "fmt"
 
-// REGRESSION fmt: indentacao com espacos (gofmt vai reclamar).
+// REGRESSION fmt: indentation with spaces (gofmt will complain).
 func Add(a, b int) int {
     return a + b
 }
 
-// Multiply mantem-se formatado.
+// Multiply stays formatted.
 func Multiply(a, b int) int {
 	return a * b
 }
 
-// REGRESSION lint: erro de Printf detectado por go vet/govet (em golangci-lint).
-// Format string %d sem argumento e argumento extra.
+// REGRESSION lint: Printf error detected by go vet/govet (in golangci-lint).
+// Format string %d with a wrong-type argument.
 func BadPrintf() {
-	_ = fmt.Sprintf("%d", "string-em-vez-de-int")
+	_ = fmt.Sprintf("%d", "string-instead-of-int")
 }
 
-// REGRESSION coverage: funcao publica sem teste correspondente.
+// REGRESSION coverage: public function without a corresponding test.
 func Uncovered() int {
 	return 99
 }
 
-// REGRESSION complexity: funcao com complexidade ciclomatica > 15.
+// REGRESSION complexity: function with cyclomatic complexity > 15.
 func ComplexFunction(x, y int) int {
 	r := 0
 	if x > 0 {

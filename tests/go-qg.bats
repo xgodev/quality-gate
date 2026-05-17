@@ -8,7 +8,7 @@ setup() {
   qg_clean_env
 }
 
-@test "go/qg.sh --help mostra usage" {
+@test "go/qg.sh --help shows usage" {
   run "$(qg_script_path go)" --help
   [ "$status" -eq 0 ]
   [[ "$output" == *"--base"* ]]
@@ -16,18 +16,18 @@ setup() {
   [[ "$output" == *"--help"* ]]
 }
 
-@test "go/qg.sh -h equivalente a --help" {
+@test "go/qg.sh -h equivalent to --help" {
   run "$(qg_script_path go)" -h
   [ "$status" -eq 0 ]
   [[ "$output" == *"--base"* ]]
 }
 
-@test "go/qg.sh declara QG_CONTRACT_VERSION=1 no header" {
+@test "go/qg.sh declares QG_CONTRACT_VERSION=1 in the header" {
   run grep -E "^# QG_CONTRACT_VERSION=1$" "$(qg_script_path go)"
   [ "$status" -eq 0 ]
 }
 
-@test "go/qg.sh sem --base NAO sai 2 por falta de --base (modo absoluto)" {
+@test "go/qg.sh without --base does NOT exit 2 due to missing --base (absolute mode)" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -37,13 +37,13 @@ setup() {
   rm -rf "$tmp"
 }
 
-@test "go/qg.sh respeita QG_BASE_REF env var quando --base ausente" {
+@test "go/qg.sh respects the QG_BASE_REF env var when --base is absent" {
   export QG_BASE_REF="origin/main"
   run "$(qg_script_path go)"
   [[ "$output" != *"--base eh obrigatorio"* ]]
 }
 
-@test "go/qg.sh --detect sem sentinela sai 1" {
+@test "go/qg.sh --detect without a sentinel exits 1" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -54,7 +54,7 @@ setup() {
   rm -rf "$tmp"
 }
 
-@test "go/qg.sh --detect com sentinela imprime slug e sai 0" {
+@test "go/qg.sh --detect with a sentinel prints the slug and exits 0" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -66,7 +66,7 @@ setup() {
   rm -rf "$tmp"
 }
 
-@test "go LEI: go.mod pina toolchain futuro + GOTOOLCHAIN=local = tool-error, sem build" {
+@test "go LAW: go.mod pins a future toolchain + GOTOOLCHAIN=local = tool-error, no build" {
   source "$QG_REPO_ROOT/go/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -79,12 +79,12 @@ EOF
   run env GOTOOLCHAIN=local "$(command -v bash)" -c "source '$QG_REPO_ROOT/go/lib/measure.sh'; qg_resolve_deps '$tmp' '$logdir/abs-deps.log'"
   [ "$status" -eq 1 ]
   grep -q '::error::' "$logdir/abs-deps.log"
-  grep -q 'go.mod pina toolchain' "$logdir/abs-deps.log"
+  grep -q 'go.mod pins toolchain' "$logdir/abs-deps.log"
   grep -q '1.99' "$logdir/abs-deps.log"
   rm -rf "$tmp" "$logdir"
 }
 
-@test "go LEI: go.mod com versao satisfeita + GOTOOLCHAIN=local NAO e tool-error" {
+@test "go LAW: go.mod with a satisfied version + GOTOOLCHAIN=local is NOT a tool-error" {
   source "$QG_REPO_ROOT/go/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -99,7 +99,7 @@ EOF
   rm -rf "$tmp" "$logdir"
 }
 
-@test "go/qg.sh modo absoluto sem .qg.yaml: exit 0, JSON mode absolute base_ref null" {
+@test "go/qg.sh absolute mode without .qg.yaml: exit 0, JSON mode absolute base_ref null" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path go baseline)"
@@ -114,7 +114,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "go/qg.sh modo absoluto com absolute_thresholds violado: exit 1, metrica violated" {
+@test "go/qg.sh absolute mode with absolute_thresholds violated: exit 1, metric violated" {
   local logdir tmp
   logdir=$(qg_tmp_dir)
   tmp=$(qg_tmp_dir)
@@ -134,7 +134,7 @@ EOF
   rm -rf "$logdir" "$tmp"
 }
 
-@test "Bug 2: coverage indefinida vira 0, JSON valido, gate nao quebra (modo absoluto)" {
+@test "Bug 2: undefined coverage becomes 0, valid JSON, gate does not break (absolute mode)" {
   local logdir tmp
   logdir=$(qg_tmp_dir)
   tmp=$(qg_tmp_dir)
@@ -155,26 +155,26 @@ EOF
   rm -rf "$logdir" "$tmp"
 }
 
-@test "go/qg.sh --format invalido sai 2" {
+@test "go/qg.sh --format invalid exits 2" {
   run "$(qg_script_path go)" --base origin/main --format xml
   [ "$status" -eq 2 ]
   [[ "$output" == *"--format"* ]]
 }
 
-@test "go/qg.sh --cov-margin nao-numerico sai 2" {
+@test "go/qg.sh --cov-margin non-numeric exits 2" {
   run "$(qg_script_path go)" --base origin/main --cov-margin abc
   [ "$status" -eq 2 ]
   [[ "$output" == *"--cov-margin"* ]]
 }
 
-@test "go/qg.sh detecta ferramenta faltando e sai 2 com mensagem instalavel" {
+@test "go/qg.sh detects a missing tool and exits 2 with an installable message" {
   run env PATH="/usr/bin:/bin" "$(qg_script_path go)" --base origin/main
   [ "$status" -eq 2 ]
   [[ "$output" == *"go"* ]]
-  [[ "$output" == *"instale"* ]] || [[ "$output" == *"install"* ]]
+  [[ "$output" == *"install"* ]] || [[ "$output" == *"install"* ]]
 }
 
-@test "go/qg.sh com QG_BYPASS_REASON sai 0 e emite warning" {
+@test "go/qg.sh with QG_BYPASS_REASON exits 0 and emits a warning" {
   export QG_BYPASS_REASON="teste de bypass"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -188,7 +188,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "go/qg.sh com QG_BYPASS_REASON --format json retorna verdict bypassed" {
+@test "go/qg.sh with QG_BYPASS_REASON --format json returns verdict bypassed" {
   export QG_BYPASS_REASON="teste"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -200,7 +200,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "go/qg.sh fast-path quando so docs mudaram" {
+@test "go/qg.sh fast-path when only docs changed" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -211,7 +211,7 @@ EOF
   git add README.md
   git commit -qm "initial"
   git checkout -qb feature
-  echo "novo conteudo" >> README.md
+  echo "new content" >> README.md
   git add README.md
   git commit -qm "edit docs"
 
@@ -222,7 +222,7 @@ EOF
   rm -rf "$tmp"
 }
 
-@test "go/qg.sh --force-full pula fast-path" {
+@test "go/qg.sh --force-full skips fast-path" {
   local tmp
   tmp=$(qg_tmp_dir)
   cd "$tmp"
@@ -243,13 +243,13 @@ EOF
   rm -rf "$tmp"
 }
 
-@test "baseline: --baseline-dir inexistente sai 2" {
-  run "$(qg_script_path go)" --base origin/main --baseline-dir /tmp/qg-go-nao-existe-xyz --force-full
+@test "baseline: --baseline-dir nonexistent exits 2" {
+  run "$(qg_script_path go)" --base origin/main --baseline-dir /tmp/qg-go-does-not-exist-xyz --force-full
   [ "$status" -eq 2 ]
   [[ "$output" == *"baseline"* ]] || [[ "$output" == *"--baseline-dir"* ]]
 }
 
-@test "baseline: linguagem ausente no baseline emite warning + exit 0" {
+@test "baseline: language absent in baseline emits a warning + exit 0" {
   local tmp baseline
   tmp=$(qg_tmp_dir)
   baseline=$(qg_tmp_dir)
@@ -270,12 +270,12 @@ EOF
 
   run "$(qg_script_path go)" --base master --baseline-dir "$baseline"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"linguagem ausente"* ]] || [[ "$output" == *"skipped"* ]]
+  [[ "$output" == *"language absent"* ]] || [[ "$output" == *"skipped"* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp" "$baseline"
 }
 
-@test "count_fmt: 0 no fixture baseline" {
+@test "count_fmt: 0 in the baseline fixture" {
   source "$QG_REPO_ROOT/go/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -284,7 +284,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_fmt: > 0 no fixture regressed" {
+@test "count_fmt: > 0 in the regressed fixture" {
   source "$QG_REPO_ROOT/go/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -293,7 +293,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_lint: 0 no baseline" {
+@test "count_lint: 0 in baseline" {
   source "$QG_REPO_ROOT/go/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -302,7 +302,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_lint: > 0 no regressed" {
+@test "count_lint: > 0 in regressed" {
   source "$QG_REPO_ROOT/go/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -311,7 +311,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_build: 0 no baseline" {
+@test "count_build: 0 in baseline" {
   source "$QG_REPO_ROOT/go/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -320,7 +320,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_test: 0 no baseline" {
+@test "count_test: 0 in baseline" {
   source "$QG_REPO_ROOT/go/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -329,7 +329,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_test: 1 no regressed" {
+@test "count_test: 1 in regressed" {
   source "$QG_REPO_ROOT/go/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -338,7 +338,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_complexity: 0 no baseline" {
+@test "count_complexity: 0 in baseline" {
   source "$QG_REPO_ROOT/go/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -347,7 +347,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "count_complexity: > 0 no regressed" {
+@test "count_complexity: > 0 in regressed" {
   source "$QG_REPO_ROOT/go/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -356,7 +356,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "measure_coverage: 100% no baseline" {
+@test "measure_coverage: 100% in baseline" {
   source "$QG_REPO_ROOT/go/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -365,7 +365,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "measure_coverage: < 100% no regressed" {
+@test "measure_coverage: < 100% in regressed" {
   source "$QG_REPO_ROOT/go/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -374,7 +374,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "e2e: rodando regressed contra baseline -> exit 1, JSON com verdict regressed" {
+@test "e2e: running regressed against baseline -> exit 1, JSON with verdict regressed" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path go regressed)"
@@ -390,7 +390,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "e2e: rodando baseline contra ele mesmo -> exit 0" {
+@test "e2e: running baseline against itself -> exit 0" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path go baseline)"
@@ -406,7 +406,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "e2e: --format text mostra tabela com colunas esperadas" {
+@test "e2e: --format text shows the table with expected columns" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path go baseline)"
@@ -417,15 +417,15 @@ EOF
     --format text \
     --force-full
   [ "$status" -eq 0 ]
-  [[ "$output" == *"metrica"* ]]
-  [[ "$output" == *"veredito"* ]]
+  [[ "$output" == *"metric"* ]]
+  [[ "$output" == *"verdict"* ]]
   [[ "$output" == *"fmt"* ]]
   [[ "$output" == *"coverage"* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$logdir"
 }
 
-@test "e2e: 10 runs identicas no regressed devem retornar exit 1 todas as vezes" {
+@test "e2e: 10 identical runs in regressed must return exit 1 every time" {
   for i in $(seq 1 10); do
     local logdir
     logdir=$(qg_tmp_dir)
@@ -442,9 +442,9 @@ EOF
   done
 }
 
-@test "Bug vendor/: fmt e complexity ignoram vendor/build (mede fonte, nao vendored)" {
+@test "Bug vendor/: fmt and complexity ignore vendor/build (measures source, not vendored)" {
   source "$QG_REPO_ROOT/go/lib/measure.sh"
-  command -v gocyclo >/dev/null 2>&1 || skip "gocyclo nao disponivel"
+  command -v gocyclo >/dev/null 2>&1 || skip "gocyclo not available"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
   cat > "$tmp/go.mod" <<'EOF'
@@ -475,7 +475,7 @@ EOF
   rm -rf "$tmp" "$logdir"
 }
 
-@test "Bug vendor/: desformatacao REAL em src ainda contada (exclusao nao mascara fonte)" {
+@test "Bug vendor/: REAL unformatting in src still counted (the exclusion does not mask source)" {
   source "$QG_REPO_ROOT/go/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
@@ -492,13 +492,13 @@ EOF
   rm -rf "$tmp" "$logdir"
 }
 
-@test "tamper-resistance: gate aponta golangci-lint pro .golangci.yml do QG (ignora o do projeto)" {
+@test "tamper-resistance: gate points golangci-lint at QG's .golangci.yml (ignores the project's)" {
   source "$QG_REPO_ROOT/go/lib/measure.sh"
   # qg_ruleset_dir resolve para o rules/ embarcado do QG, nunca config do projeto.
   local rd
   rd=$(qg_ruleset_dir)
   [ -f "$rd/.golangci.yml" ] || { echo "ruleset do QG ausente: $rd"; return 1; }
-  command -v golangci-lint >/dev/null 2>&1 || skip "golangci-lint nao disponivel (fallback go vet ja eh sem-config / tamper-proof)"
+  command -v golangci-lint >/dev/null 2>&1 || skip "golangci-lint not available (fallback go vet ja eh sem-config / tamper-proof)"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
   cp -R "$(qg_fixture_path go regressed)/." "$tmp/"
