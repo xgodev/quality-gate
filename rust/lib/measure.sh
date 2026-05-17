@@ -26,7 +26,7 @@ _num() {
 
 # Tamper-resistance (contract): the gate enforces ITS OWN ruleset. clippy.toml /
 # rustfmt.toml of the target project are IGNORED. Override ONLY via the external env var
-# QG_RULESET_DIR (setada por quem RODA o gate) -- NUNCA de .qg.yaml/arquivo
+# QG_RULESET_DIR (set by whoever RUNS the gate) -- NEVER from .qg.yaml/a project
 # Default = rules/ bundled in QG.
 _QG_RULES_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/rules"
 qg_ruleset_dir() {

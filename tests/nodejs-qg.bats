@@ -33,8 +33,8 @@ setup() {
   cd "$tmp"
   run "$(qg_script_path nodejs)"
   # Without package.json/git here it may exit for other reasons, but NEVER
-  # com a mensagem antiga de "--base obrigatorio".
-  [[ "$output" != *"--base eh obrigatorio"* ]]
+  # with the old "--base required" message.
+  [[ "$output" != *"--base is required"* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp"
 }
@@ -42,7 +42,7 @@ setup() {
 @test "nodejs/qg.sh respects the QG_BASE_REF env var when --base is absent" {
   export QG_BASE_REF="origin/main"
   run "$(qg_script_path nodejs)"
-  [[ "$output" != *"--base eh obrigatorio"* ]]
+  [[ "$output" != *"--base is required"* ]]
 }
 
 @test "nodejs/qg.sh --detect without a sentinel exits 1" {
@@ -138,7 +138,7 @@ EOF
   : > "$tmp/yarn.lock"
   # .yarnrc.yml presente => Yarn Berry (v2+).
   echo 'nodeLinker: node-modules' > "$tmp/.yarnrc.yml"
-  # node_modules ausente => resolucao necessaria.
+  # node_modules absent => resolution needed.
   PATH="$bindir:$PATH" run qg_resolve_deps "$tmp" "$logdir/deps.log"
   [ "$status" -eq 0 ]
   grep -q -- '--immutable' "$logdir/yarn-args" || { echo "expected --immutable (Berry); got: $(cat "$logdir/yarn-args")"; return 1; }
@@ -160,7 +160,7 @@ EOF
 { "name": "classic-app", "version": "0.1.0", "private": true }
 EOF
   : > "$tmp/yarn.lock"
-  # Sem .yarnrc.yml => Yarn classic v1.
+  # No .yarnrc.yml => Yarn classic v1.
   PATH="$bindir:$PATH" run qg_resolve_deps "$tmp" "$logdir/deps.log"
   [ "$status" -eq 0 ]
   grep -q -- '--frozen-lockfile' "$logdir/yarn-args" || { echo "expected --frozen-lockfile (classic); got: $(cat "$logdir/yarn-args")"; return 1; }
@@ -190,7 +190,7 @@ EOF
   logdir=$(qg_tmp_dir)
   tmp=$(qg_tmp_dir)
   cd "$tmp"
-  # Repro my-project: package.json com dep, sem node_modules, sem base.
+  # Repro my-project: package.json with a dep, no node_modules, no base.
   cat > package.json <<'EOF'
 { "name": "my-project", "version": "0.1.0", "private": true,
   "dependencies": { "lodash": "4.17.21" } }
@@ -205,7 +205,7 @@ EOF
 EOF
   echo "const _ = require('lodash'); module.exports = _.identity(1);" > index.js
   run --separate-stderr "$(qg_script_path nodejs)" --log-dir "$logdir" --format json
-  # Aceito: exit 0 (deps resolvidas, build ok) OU exit 2 (tool-error de
+  # Accepted: exit 0 (deps resolved, build ok) OR exit 2 (tool-error from
   # resolution). NEVER a crash with invalid jq --argjson (which would be status>2
   # or non-JSON stdout).
   [ "$status" -eq 0 ] || [ "$status" -eq 2 ]
@@ -233,31 +233,31 @@ EOF
   run env PATH="/usr/bin:/bin" "$(qg_script_path nodejs)" --base origin/main
   [ "$status" -eq 2 ]
   [[ "$output" == *"node"* ]]
-  [[ "$output" == *"install"* ]] || [[ "$output" == *"install"* ]]
+  [[ "$output" == *"install"* ]]
 }
 
 @test "nodejs/qg.sh with QG_BYPASS_REASON exits 0 and emits a warning" {
-  export QG_BYPASS_REASON="teste de bypass"
+  export QG_BYPASS_REASON="bypass test"
   local logdir
   logdir=$(qg_tmp_dir)
   run "$(qg_script_path nodejs)" --base origin/main --log-dir "$logdir"
   [ "$status" -eq 0 ]
   [[ "$output" == *"::warning::"* ]]
   [[ "$output" == *"bypass"* ]]
-  [[ "$output" == *"teste de bypass"* ]]
+  [[ "$output" == *"bypass test"* ]]
   [ -f "$logdir/bypass.log" ]
-  grep -q "teste de bypass" "$logdir/bypass.log"
+  grep -q "bypass test" "$logdir/bypass.log"
   rm -rf "$logdir"
 }
 
 @test "nodejs/qg.sh with QG_BYPASS_REASON --format json returns verdict bypassed" {
-  export QG_BYPASS_REASON="teste"
+  export QG_BYPASS_REASON="test"
   local logdir
   logdir=$(qg_tmp_dir)
   run "$(qg_script_path nodejs)" --base origin/main --log-dir "$logdir" --format json
   [ "$status" -eq 0 ]
   echo "$output" | jq -e '.verdict == "bypassed"'
-  echo "$output" | jq -e '.bypass_reason == "teste"'
+  echo "$output" | jq -e '.bypass_reason == "test"'
   echo "$output" | jq -e '.metrics | length == 0'
   rm -rf "$logdir"
 }
@@ -279,7 +279,7 @@ EOF
 
   run "$(qg_script_path nodejs)" --base master
   [ "$status" -eq 0 ]
-  [[ "$output" == *"fast-path"* ]] || [[ "$output" == *"nenhum Node.js"* ]]
+  [[ "$output" == *"fast-path"* ]] || [[ "" == *"no "* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp"
 }
@@ -569,7 +569,7 @@ EOF
   cat > "$tmp/package.json" <<'EOF'
 { "name": "my-project", "version": "0.1.0", "private": true }
 EOF
-  # Dev tenta afrouxar: strict:false + noImplicitAny:false no proprio repo.
+  # Dev tries to loosen: strict:false + noImplicitAny:false in their own repo.
   cat > "$tmp/tsconfig.json" <<'EOF'
 { "compilerOptions": { "strict": false, "noImplicitAny": false, "jsx": "preserve" } }
 EOF
@@ -580,7 +580,7 @@ export function handler(payload) {
 }
 EOF
   result=$(count_build_errors "$tmp" "$logdir/build.log")
-  # Gate impoe strict do QG (ignora strict:false do projeto) -> pega TS7006.
+  # Gate enforces QG strict (ignores the project's strict:false) -> catches TS7006.
   [ "$result" -ge 1 ] || { echo "expected >=1 (QG strict ignores the project strict:false); got $result"; cat "$logdir/build.log"; return 1; }
   grep -qE 'error TS7006:' "$logdir/build.log" || { echo "expected TS7006 (noImplicitAny locked by QG)"; cat "$logdir/build.log"; return 1; }
   rm -rf "$tmp" "$logdir"
@@ -644,7 +644,7 @@ EOF
   cat > "$tmp/package.json" <<'EOF'
 { "name": "x", "version": "0.1.0", "private": true }
 EOF
-  # Dev tenta forcar varredura de tudo: .eslintignore/.prettierignore VAZIOS.
+  # Dev tries to force scanning everything: .eslintignore/.prettierignore EMPTY.
   : > "$tmp/.eslintignore"
   : > "$tmp/.prettierignore"
   mkdir -p "$tmp/src" "$tmp/build/android"
@@ -657,7 +657,7 @@ EOF
   } > "$tmp/build/android/bundle.min.js"
   result_lint=$(count_lint_errors "$tmp" "$logdir/lint.log")
   result_fmt=$(count_fmt_errors "$tmp" "$logdir/fmt.log")
-  # QG ignora o .eslintignore/.prettierignore do projeto e ainda exclui build/
+  # QG ignores the project's .eslintignore/.prettierignore and still excludes build/
   # pelo ignore canonico embarcado -> 0.
   [ "$result_lint" = "0" ] || { echo "tamper: lint should be 0 (QG canonical ignore, not the project's); got $result_lint"; cat "$logdir/lint.log"; return 1; }
   [ "$result_fmt" = "0" ] || { echo "tamper: fmt should be 0; got $result_fmt"; cat "$logdir/fmt.log"; return 1; }
@@ -669,7 +669,7 @@ EOF
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
   cp -R "$(qg_fixture_path nodejs regressed)/." "$tmp/"
-  # Dev tenta afrouxar: eslint.config.mjs do projeto desliga no-unused-vars.
+  # Dev tries to loosen: the project's eslint.config.mjs turns off no-unused-vars.
   cat > "$tmp/eslint.config.mjs" <<EOF
 export default [{ rules: { "no-unused-vars": "off", "no-undef": "off" } }];
 EOF
@@ -677,7 +677,7 @@ EOF
 { "rules": { "no-unused-vars": "off" } }
 EOF
   result=$(count_lint_errors "$tmp" "$logdir/lint.log")
-  # Gate ignora (--no-config-lookup --config QG) e ainda acusa no-unused-vars.
+  # Gate ignores it (--no-config-lookup --config QG) and still flags no-unused-vars.
   [ "$result" -gt 0 ] || { echo "expected >0 even with a loosened .eslintrc; got $result"; cat "$logdir/lint.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }

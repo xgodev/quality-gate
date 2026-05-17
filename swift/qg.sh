@@ -418,7 +418,7 @@ EOF
 === Quality Gate (fast-path) ===
   branch:        $branch
   base ref:      $QG_BASE_REF_ARG
-  scope:         nenhum arquivo Swift tocado -- pulando gates pesados
+  scope:         no Swift files touched -- skipping heavy gates
   override:      QG_FORCE_FULL=1 para rodar gate completo
 
 -- modified files --

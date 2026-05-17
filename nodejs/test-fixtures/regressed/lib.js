@@ -1,4 +1,4 @@
-// REGRESSION fmt: indentacao + sem espaco apos virgula (prettier vai reformatar).
+// REGRESSION fmt: indentation + no space after comma (prettier will reformat).
 export function add(a,b){
     return a + b;
 }
@@ -7,18 +7,18 @@ export function multiply(a, b) {
   return a * b;
 }
 
-// REGRESSION lint: variavel declarada e unused (eslint no-unused-vars).
+// REGRESSION lint: declared and unused variable (eslint no-unused-vars).
 export function unusedDemo() {
   const unused = 42;
   return 100;
 }
 
-// REGRESSION coverage: funcao publica sem teste.
+// REGRESSION coverage: public function without a test.
 export function uncovered() {
   return 99;
 }
 
-// REGRESSION complexity: funcao com complexidade ciclomatica > 15.
+// REGRESSION complexity: function with cyclomatic complexity > 15.
 export function complexFunction(x, y) {
   let r = 0;
   if (x > 0) {

@@ -227,7 +227,7 @@ if [ -f "$QG_YAML_FILE" ]; then
   done < "$QG_YAML_FILE"
 
   # absolute_thresholds (so usado em modo absoluto). Schema fechado:
-  # chaves permitidas = nomes reservados + extras declarados pela linguagem.
+  # allowed keys = reserved names + extras declared by the language.
   in_abs=0
   while IFS= read -r line; do
     if [ "$in_abs" = "1" ]; then
@@ -329,14 +329,14 @@ if [ -f "$QG_YAML_FILE" ]; then
   done < "$QG_YAML_FILE"
 fi
 
-# Lookup de threshold absoluto por nome de metrica. Vazio = nao definido.
+# Absolute-threshold lookup by metric name. Empty = not defined.
 qg_abs_threshold() {
   local name="$1"
   printf '%s' "$QG_ABS_THRESHOLDS_RAW" | grep -E "^${name}=" | head -1 | sed -E "s/^${name}=//"
 }
 
 # --- ABSOLUTE MODE -----------------------------------------------------------
-# Pula baseline, fast-path e check de linguagem-ausente. Mede . uma vez.
+# Skips baseline, fast-path and the language-absent check. Measures . once.
 if [ "$QG_ABSOLUTE_MODE" = "1" ]; then
   mkdir -p "$QG_LOG_DIR_ARG"
   # Bug 1: resolve dependencias antes de medir build/test.
@@ -424,7 +424,7 @@ EOF
 === Quality Gate (fast-path) ===
   branch:        $branch
   base ref:      $QG_BASE_REF_ARG
-  scope:         nenhum arquivo Node.js tocado -- pulando gates pesados
+  scope:         no Node.js files touched -- skipping heavy gates
   override:      QG_FORCE_FULL=1 para rodar gate completo
 
 -- modified files --

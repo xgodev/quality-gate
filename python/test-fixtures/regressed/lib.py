@@ -14,12 +14,12 @@ def multiply(a: int, b: int) -> int:
     return a * b
 
 
-# REGRESSION coverage: funcao publica sem teste correspondente.
+# REGRESSION coverage: public function without a corresponding test.
 def uncovered() -> int:
     return 99
 
 
-# REGRESSION complexity: funcao com complexidade ciclomatica > threshold radon C (>10).
+# REGRESSION complexity: function with cyclomatic complexity > radon C threshold (>10).
 def complex_function(x: int, y: int) -> int:
     r = 0
     if x > 0:

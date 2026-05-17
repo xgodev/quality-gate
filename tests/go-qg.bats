@@ -32,7 +32,7 @@ setup() {
   tmp=$(qg_tmp_dir)
   cd "$tmp"
   run "$(qg_script_path go)"
-  [[ "$output" != *"--base eh obrigatorio"* ]]
+  [[ "$output" != *"--base is required"* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp"
 }
@@ -40,7 +40,7 @@ setup() {
 @test "go/qg.sh respects the QG_BASE_REF env var when --base is absent" {
   export QG_BASE_REF="origin/main"
   run "$(qg_script_path go)"
-  [[ "$output" != *"--base eh obrigatorio"* ]]
+  [[ "$output" != *"--base is required"* ]]
 }
 
 @test "go/qg.sh --detect without a sentinel exits 1" {
@@ -139,7 +139,7 @@ EOF
   logdir=$(qg_tmp_dir)
   tmp=$(qg_tmp_dir)
   cd "$tmp"
-  # Pacote go sem testes -> coverage indefinida.
+  # go package without tests -> undefined coverage.
   echo "module x" > go.mod
   echo "go 1.21" >> go.mod
   cat > lib.go <<EOF
@@ -171,31 +171,31 @@ EOF
   run env PATH="/usr/bin:/bin" "$(qg_script_path go)" --base origin/main
   [ "$status" -eq 2 ]
   [[ "$output" == *"go"* ]]
-  [[ "$output" == *"install"* ]] || [[ "$output" == *"install"* ]]
+  [[ "$output" == *"install"* ]]
 }
 
 @test "go/qg.sh with QG_BYPASS_REASON exits 0 and emits a warning" {
-  export QG_BYPASS_REASON="teste de bypass"
+  export QG_BYPASS_REASON="bypass test"
   local logdir
   logdir=$(qg_tmp_dir)
   run "$(qg_script_path go)" --base origin/main --log-dir "$logdir"
   [ "$status" -eq 0 ]
   [[ "$output" == *"::warning::"* ]]
   [[ "$output" == *"bypass"* ]]
-  [[ "$output" == *"teste de bypass"* ]]
+  [[ "$output" == *"bypass test"* ]]
   [ -f "$logdir/bypass.log" ]
-  grep -q "teste de bypass" "$logdir/bypass.log"
+  grep -q "bypass test" "$logdir/bypass.log"
   rm -rf "$logdir"
 }
 
 @test "go/qg.sh with QG_BYPASS_REASON --format json returns verdict bypassed" {
-  export QG_BYPASS_REASON="teste"
+  export QG_BYPASS_REASON="test"
   local logdir
   logdir=$(qg_tmp_dir)
   run "$(qg_script_path go)" --base origin/main --log-dir "$logdir" --format json
   [ "$status" -eq 0 ]
   echo "$output" | jq -e '.verdict == "bypassed"'
-  echo "$output" | jq -e '.bypass_reason == "teste"'
+  echo "$output" | jq -e '.bypass_reason == "test"'
   echo "$output" | jq -e '.metrics | length == 0'
   rm -rf "$logdir"
 }
@@ -217,7 +217,7 @@ EOF
 
   run "$(qg_script_path go)" --base master
   [ "$status" -eq 0 ]
-  [[ "$output" == *"fast-path"* ]] || [[ "$output" == *"nenhum Go"* ]]
+  [[ "$output" == *"fast-path"* ]] || [[ "" == *"no "* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp"
 }
@@ -470,8 +470,8 @@ EOF
   cp "$tmp/vendor/example.com/dep/dep.go" "$tmp/build/gen.go"
   result_fmt=$(count_fmt_errors "$tmp" "$logdir/fmt.log")
   result_cx=$(count_complexity "$tmp" "$logdir/cx.log")
-  [ "$result_fmt" = "0" ] || { echo "fmt deveria ser 0 (vendor/build ignorados); got $result_fmt"; cat "$logdir/fmt.log"; return 1; }
-  [ "$result_cx" = "0" ] || { echo "complexity deveria ser 0 (vendor/build ignorados); got $result_cx"; cat "$logdir/cx.log"; return 1; }
+  [ "$result_fmt" = "0" ] || { echo "fmt should be 0 (vendor/build ignored); got $result_fmt"; cat "$logdir/fmt.log"; return 1; }
+  [ "$result_cx" = "0" ] || { echo "complexity should be 0 (vendor/build ignored); got $result_cx"; cat "$logdir/cx.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }
 
@@ -488,27 +488,27 @@ EOF
   mkdir -p "$tmp/vendor/dep"
   printf 'package dep\nfunc G(y int)int{return y}\n' > "$tmp/vendor/dep/dep.go"
   result=$(count_fmt_errors "$tmp" "$logdir/fmt.log")
-  [ "$result" -gt 0 ] || { echo "esperava >0 (lib.go desformatado em src); got $result"; cat "$logdir/fmt.log"; return 1; }
+  [ "$result" -gt 0 ] || { echo "expected >0 (unformatted lib.go in src); got $result"; cat "$logdir/fmt.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }
 
 @test "tamper-resistance: gate points golangci-lint at QG's .golangci.yml (ignores the project's)" {
   source "$QG_REPO_ROOT/go/lib/measure.sh"
-  # qg_ruleset_dir resolve para o rules/ embarcado do QG, nunca config do projeto.
+  # qg_ruleset_dir resolves to QG's bundled rules/, never the project's config.
   local rd
   rd=$(qg_ruleset_dir)
-  [ -f "$rd/.golangci.yml" ] || { echo "ruleset do QG ausente: $rd"; return 1; }
+  [ -f "$rd/.golangci.yml" ] || { echo "QG ruleset absent: "; return 1; }
   command -v golangci-lint >/dev/null 2>&1 || skip "golangci-lint not available (fallback go vet ja eh sem-config / tamper-proof)"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
   cp -R "$(qg_fixture_path go regressed)/." "$tmp/"
-  # Dev tenta afrouxar: .golangci.yml do projeto desabilita todos os linters.
+  # Dev tries to loosen: the project's .golangci.yml disables all linters.
   cat > "$tmp/.golangci.yml" <<EOF
 linters:
   disable-all: true
 EOF
   result=$(count_lint_errors "$tmp" "$logdir/lint.log")
-  # Gate usa -c <QG>/go/rules/.golangci.yml; o disable-all do projeto e ignorado.
+  # Gate uses -c <QG>/go/rules/.golangci.yml; the project's disable-all is ignored.
   [ "$result" -ge 0 ]
   rm -rf "$tmp" "$logdir"
 }

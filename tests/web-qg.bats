@@ -63,7 +63,7 @@ setup() {
 }
 
 @test "web/qg.sh with QG_BYPASS_REASON --format json returns verdict bypassed" {
-  export QG_BYPASS_REASON="teste"
+  export QG_BYPASS_REASON="test"
   local logdir
   logdir=$(qg_tmp_dir)
   run "$(qg_script_path web)" --base origin/main --log-dir "$logdir" --format json
@@ -259,7 +259,7 @@ EOF
 { "rules": {} }
 EOF
   result=$(count_lint_errors "$tmp" "$logdir/lint.log")
-  # Gate usa --config <QG>/web/rules/.stylelintrc.json, ignora o do projeto.
+  # Gate uses --config <QG>/web/rules/.stylelintrc.json, ignoring the project's.
   [ "$result" -gt 0 ] || { echo "expected >0 even with an empty .stylelintrc; got $result"; cat "$logdir/lint.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }

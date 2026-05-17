@@ -32,7 +32,7 @@ setup() {
   tmp=$(qg_tmp_dir)
   cd "$tmp"
   run "$(qg_script_path python)"
-  [[ "$output" != *"--base eh obrigatorio"* ]]
+  [[ "$output" != *"--base is required"* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp"
 }
@@ -40,7 +40,7 @@ setup() {
 @test "python/qg.sh respects the QG_BASE_REF env var when --base is absent" {
   export QG_BASE_REF="origin/main"
   run "$(qg_script_path python)"
-  [[ "$output" != *"--base eh obrigatorio"* ]]
+  [[ "$output" != *"--base is required"* ]]
 }
 
 @test "python/qg.sh --detect without a sentinel exits 1" {
@@ -76,7 +76,7 @@ name = "x"
 version = "0.1.0"
 EOF
   echo "# lockfile fake" > "$tmp/poetry.lock"
-  # Stub: falha o teste se 'pip' for invocado (substituicao silenciosa).
+  # Stub: fails the test if 'pip' is invoked (silent substitution).
   local stubdir="$logdir/stub"
   mkdir -p "$stubdir"
   cat > "$stubdir/pip" <<EOF
@@ -196,31 +196,31 @@ EOF
   run env PATH="/usr/bin:/bin" "$(qg_script_path python)" --base origin/main
   [ "$status" -eq 2 ]
   [[ "$output" == *"python"* ]]
-  [[ "$output" == *"install"* ]] || [[ "$output" == *"install"* ]]
+  [[ "$output" == *"install"* ]]
 }
 
 @test "python/qg.sh with QG_BYPASS_REASON exits 0 and emits a warning" {
-  export QG_BYPASS_REASON="teste de bypass"
+  export QG_BYPASS_REASON="bypass test"
   local logdir
   logdir=$(qg_tmp_dir)
   run "$(qg_script_path python)" --base origin/main --log-dir "$logdir"
   [ "$status" -eq 0 ]
   [[ "$output" == *"::warning::"* ]]
   [[ "$output" == *"bypass"* ]]
-  [[ "$output" == *"teste de bypass"* ]]
+  [[ "$output" == *"bypass test"* ]]
   [ -f "$logdir/bypass.log" ]
-  grep -q "teste de bypass" "$logdir/bypass.log"
+  grep -q "bypass test" "$logdir/bypass.log"
   rm -rf "$logdir"
 }
 
 @test "python/qg.sh with QG_BYPASS_REASON --format json returns verdict bypassed" {
-  export QG_BYPASS_REASON="teste"
+  export QG_BYPASS_REASON="test"
   local logdir
   logdir=$(qg_tmp_dir)
   run "$(qg_script_path python)" --base origin/main --log-dir "$logdir" --format json
   [ "$status" -eq 0 ]
   echo "$output" | jq -e '.verdict == "bypassed"'
-  echo "$output" | jq -e '.bypass_reason == "teste"'
+  echo "$output" | jq -e '.bypass_reason == "test"'
   echo "$output" | jq -e '.metrics | length == 0'
   rm -rf "$logdir"
 }
@@ -242,7 +242,7 @@ EOF
 
   run "$(qg_script_path python)" --base master
   [ "$status" -eq 0 ]
-  [[ "$output" == *"fast-path"* ]] || [[ "$output" == *"nenhum Python"* ]]
+  [[ "$output" == *"fast-path"* ]] || [[ "" == *"no "* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp"
 }
@@ -497,9 +497,9 @@ EOF
   result_lint=$(count_lint_errors "$tmp" "$logdir/lint.log")
   result_cx=$(count_complexity "$tmp" "$logdir/cx.log")
   result_fmt=$(count_fmt_errors "$tmp" "$logdir/fmt.log")
-  [ "$result_lint" = "0" ] || { echo "lint deveria ser 0 (build/dist ignorados); got $result_lint"; cat "$logdir/lint.log"; return 1; }
-  [ "$result_cx" = "0" ] || { echo "complexity deveria ser 0 (build/dist ignorados); got $result_cx"; cat "$logdir/cx.log"; return 1; }
-  [ "$result_fmt" = "0" ] || { echo "fmt deveria ser 0 (so src/ limpo); got $result_fmt"; cat "$logdir/fmt.log"; return 1; }
+  [ "$result_lint" = "0" ] || { echo "lint should be 0 (build/dist ignored); got $result_lint"; cat "$logdir/lint.log"; return 1; }
+  [ "$result_cx" = "0" ] || { echo "complexity should be 0 (build/dist ignored); got $result_cx"; cat "$logdir/cx.log"; return 1; }
+  [ "$result_fmt" = "0" ] || { echo "fmt should be 0 (only clean src/); got $result_fmt"; cat "$logdir/fmt.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }
 
@@ -507,7 +507,7 @@ EOF
   source "$QG_REPO_ROOT/python/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
-  # Dev tenta forcar varredura de tudo: .gitignore VAZIO.
+  # Dev tries to force scanning everything: .gitignore EMPTY.
   : > "$tmp/.gitignore"
   mkdir -p "$tmp/src" "$tmp/build"
   cat > "$tmp/src/ok.py" <<'EOF'
@@ -523,8 +523,8 @@ EOF
   result_fmt=$(count_fmt_errors "$tmp" "$logdir/fmt.log")
   # QG ruff.toml extend-exclude does not depend on respect-gitignore ->
   # build/ excluido mesmo com .gitignore vazio.
-  [ "$result_lint" = "0" ] || { echo "tamper: lint deveria ser 0 (extend-exclude do QG); got $result_lint"; cat "$logdir/lint.log"; return 1; }
-  [ "$result_fmt" = "0" ] || { echo "tamper: fmt deveria ser 0; got $result_fmt"; cat "$logdir/fmt.log"; return 1; }
+  [ "$result_lint" = "0" ] || { echo "tamper: lint should be 0 (QG extend-exclude); got $result_lint"; cat "$logdir/lint.log"; return 1; }
+  [ "$result_fmt" = "0" ] || { echo "tamper: fmt should be 0; got $result_fmt"; cat "$logdir/fmt.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }
 
@@ -544,7 +544,7 @@ def g():
     return 2
 EOF
   result=$(count_lint_errors "$tmp" "$logdir/lint.log")
-  [ "$result" -gt 0 ] || { echo "esperava >0 (F401 real em src/); got $result"; cat "$logdir/lint.log"; return 1; }
+  [ "$result" -gt 0 ] || { echo "expected >0 (real F401 in src/); got $result"; cat "$logdir/lint.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }
 
@@ -565,7 +565,7 @@ EOF
 ignore = ["F401", "E", "F", "W", "I"]
 EOF
   result=$(count_lint_errors "$tmp" "$logdir/lint.log")
-  # Gate ignora config afrouxada (--isolated --config QG) e ainda acusa F401.
-  [ "$result" -gt 0 ] || { echo "esperava >0 mesmo com config afrouxada; got $result"; cat "$logdir/lint.log"; return 1; }
+  # Gate ignores the loosened config (--isolated --config QG) and still flags F401.
+  [ "$result" -gt 0 ] || { echo "expected >0 even with a loosened config; got $result"; cat "$logdir/lint.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }

@@ -232,7 +232,7 @@ measure_coverage() {
   local abs_profdata
   abs_profdata=$(cd "$(dirname "$profdata")" && pwd)/$(basename "$profdata")
 
-  # Soma totals de cada binario (cobre os modulos do projeto).
+  # Sums totals of each binary (covers the project's modules).
   local total_count=0
   local total_covered=0
   while IFS= read -r bin; do

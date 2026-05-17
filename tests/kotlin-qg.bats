@@ -32,7 +32,7 @@ setup() {
   tmp=$(qg_tmp_dir)
   cd "$tmp"
   run "$(qg_script_path kotlin)"
-  [[ "$output" != *"--base eh obrigatorio"* ]]
+  [[ "$output" != *"--base is required"* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp"
 }
@@ -40,7 +40,7 @@ setup() {
 @test "kotlin/qg.sh respects the QG_BASE_REF env var when --base is absent" {
   export QG_BASE_REF="origin/main"
   run "$(qg_script_path kotlin)"
-  [[ "$output" != *"--base eh obrigatorio"* ]]
+  [[ "$output" != *"--base is required"* ]]
 }
 
 @test "kotlin/qg.sh --detect without a sentinel exits 1" {
@@ -84,7 +84,7 @@ echo "GRADLEW-INVOCADO" > "$logdir/gradlew-called"
 exit 0
 EOF
   chmod +x "$tmp/gradlew"
-  # Stub 'gradle' do sistema que falha o teste se invocado.
+  # System 'gradle' stub that fails the test if invoked.
   local stubdir="$logdir/stub"
   mkdir -p "$stubdir"
   cat > "$stubdir/gradle" <<EOF
@@ -165,31 +165,31 @@ EOF
   run env PATH="/usr/bin:/bin" "$(qg_script_path kotlin)" --base origin/main
   [ "$status" -eq 2 ]
   [[ "$output" == *"kotlin"* ]]
-  [[ "$output" == *"install"* ]] || [[ "$output" == *"install"* ]]
+  [[ "$output" == *"install"* ]]
 }
 
 @test "kotlin/qg.sh with QG_BYPASS_REASON exits 0 and emits a warning" {
-  export QG_BYPASS_REASON="teste de bypass"
+  export QG_BYPASS_REASON="bypass test"
   local logdir
   logdir=$(qg_tmp_dir)
   run "$(qg_script_path kotlin)" --base origin/main --log-dir "$logdir"
   [ "$status" -eq 0 ]
   [[ "$output" == *"::warning::"* ]]
   [[ "$output" == *"bypass"* ]]
-  [[ "$output" == *"teste de bypass"* ]]
+  [[ "$output" == *"bypass test"* ]]
   [ -f "$logdir/bypass.log" ]
-  grep -q "teste de bypass" "$logdir/bypass.log"
+  grep -q "bypass test" "$logdir/bypass.log"
   rm -rf "$logdir"
 }
 
 @test "kotlin/qg.sh with QG_BYPASS_REASON --format json returns verdict bypassed" {
-  export QG_BYPASS_REASON="teste"
+  export QG_BYPASS_REASON="test"
   local logdir
   logdir=$(qg_tmp_dir)
   run "$(qg_script_path kotlin)" --base origin/main --log-dir "$logdir" --format json
   [ "$status" -eq 0 ]
   echo "$output" | jq -e '.verdict == "bypassed"'
-  echo "$output" | jq -e '.bypass_reason == "teste"'
+  echo "$output" | jq -e '.bypass_reason == "test"'
   echo "$output" | jq -e '.metrics | length == 0'
   rm -rf "$logdir"
 }
@@ -211,7 +211,7 @@ EOF
 
   run "$(qg_script_path kotlin)" --base master
   [ "$status" -eq 0 ]
-  [[ "$output" == *"fast-path"* ]] || [[ "$output" == *"nenhum Kotlin"* ]]
+  [[ "$output" == *"fast-path"* ]] || [[ "" == *"no "* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp"
 }
@@ -442,7 +442,7 @@ EOF
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
   cp -R "$(qg_fixture_path kotlin regressed)/." "$tmp/"
-  # Dev tenta afrouxar: detekt.yml do projeto desliga complexity inteiro.
+  # Dev tries to loosen: the project's detekt.yml turns off complexity entirely.
   cat > "$tmp/detekt.yml" <<EOF
 complexity:
   active: false
@@ -450,7 +450,7 @@ build:
   maxIssues: 999999
 EOF
   result=$(count_complexity "$tmp" "$logdir/cx.log")
-  # Gate usa -c <QG>/kotlin/rules/detekt.yml, ignora o do projeto.
+  # Gate uses -c <QG>/kotlin/rules/detekt.yml, ignoring the project's.
   [ "$result" -gt 0 ] || { echo "expected >0 even with a loosened detekt.yml; got $result"; cat "$logdir/cx.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }

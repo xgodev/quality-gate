@@ -423,7 +423,7 @@ EOF
 === Quality Gate (fast-path) ===
   branch:        $branch
   base ref:      $QG_BASE_REF_ARG
-  scope:         nenhum arquivo Python tocado -- pulando gates pesados
+  scope:         no Python files touched -- skipping heavy gates
   override:      QG_FORCE_FULL=1 para rodar gate completo
 
 -- modified files --

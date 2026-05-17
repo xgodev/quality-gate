@@ -198,27 +198,27 @@ EOF
 }
 
 @test "rust/qg.sh with QG_BYPASS_REASON exits 0 and emits a warning" {
-  export QG_BYPASS_REASON="teste de bypass"
+  export QG_BYPASS_REASON="bypass test"
   local logdir
   logdir=$(qg_tmp_dir)
   run "$(qg_script_path rust)" --base origin/main --log-dir "$logdir"
   [ "$status" -eq 0 ]
   [[ "$output" == *"::warning::"* ]]
   [[ "$output" == *"bypass"* ]]
-  [[ "$output" == *"teste de bypass"* ]]
+  [[ "$output" == *"bypass test"* ]]
   [ -f "$logdir/bypass.log" ]
-  grep -q "teste de bypass" "$logdir/bypass.log"
+  grep -q "bypass test" "$logdir/bypass.log"
   rm -rf "$logdir"
 }
 
 @test "rust/qg.sh with QG_BYPASS_REASON --format json returns verdict bypassed" {
-  export QG_BYPASS_REASON="teste"
+  export QG_BYPASS_REASON="test"
   local logdir
   logdir=$(qg_tmp_dir)
   run "$(qg_script_path rust)" --base origin/main --log-dir "$logdir" --format json
   [ "$status" -eq 0 ]
   echo "$output" | jq -e '.verdict == "bypassed"'
-  echo "$output" | jq -e '.bypass_reason == "teste"'
+  echo "$output" | jq -e '.bypass_reason == "test"'
   echo "$output" | jq -e '.metrics | length == 0'
   rm -rf "$logdir"
 }

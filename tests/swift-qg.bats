@@ -32,7 +32,7 @@ setup() {
   tmp=$(qg_tmp_dir)
   cd "$tmp"
   run "$(qg_script_path swift)"
-  [[ "$output" != *"--base eh obrigatorio"* ]]
+  [[ "$output" != *"--base is required"* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp"
 }
@@ -40,7 +40,7 @@ setup() {
 @test "swift/qg.sh respects the QG_BASE_REF env var when --base is absent" {
   export QG_BASE_REF="origin/main"
   run "$(qg_script_path swift)"
-  [[ "$output" != *"--base eh obrigatorio"* ]]
+  [[ "$output" != *"--base is required"* ]]
 }
 
 @test "swift/qg.sh --detect without a sentinel exits 1" {
@@ -177,31 +177,31 @@ EOF
   run env PATH="/usr/bin:/bin" "$(qg_script_path swift)" --base origin/main
   [ "$status" -eq 2 ]
   [[ "$output" == *"swift"* ]]
-  [[ "$output" == *"install"* ]] || [[ "$output" == *"install"* ]]
+  [[ "$output" == *"install"* ]]
 }
 
 @test "swift/qg.sh with QG_BYPASS_REASON exits 0 and emits a warning" {
-  export QG_BYPASS_REASON="teste de bypass"
+  export QG_BYPASS_REASON="bypass test"
   local logdir
   logdir=$(qg_tmp_dir)
   run "$(qg_script_path swift)" --base origin/main --log-dir "$logdir"
   [ "$status" -eq 0 ]
   [[ "$output" == *"::warning::"* ]]
   [[ "$output" == *"bypass"* ]]
-  [[ "$output" == *"teste de bypass"* ]]
+  [[ "$output" == *"bypass test"* ]]
   [ -f "$logdir/bypass.log" ]
-  grep -q "teste de bypass" "$logdir/bypass.log"
+  grep -q "bypass test" "$logdir/bypass.log"
   rm -rf "$logdir"
 }
 
 @test "swift/qg.sh with QG_BYPASS_REASON --format json returns verdict bypassed" {
-  export QG_BYPASS_REASON="teste"
+  export QG_BYPASS_REASON="test"
   local logdir
   logdir=$(qg_tmp_dir)
   run "$(qg_script_path swift)" --base origin/main --log-dir "$logdir" --format json
   [ "$status" -eq 0 ]
   echo "$output" | jq -e '.verdict == "bypassed"'
-  echo "$output" | jq -e '.bypass_reason == "teste"'
+  echo "$output" | jq -e '.bypass_reason == "test"'
   echo "$output" | jq -e '.metrics | length == 0'
   rm -rf "$logdir"
 }
@@ -223,7 +223,7 @@ EOF
 
   run "$(qg_script_path swift)" --base master
   [ "$status" -eq 0 ]
-  [[ "$output" == *"fast-path"* ]] || [[ "$output" == *"nenhum Swift"* ]]
+  [[ "$output" == *"fast-path"* ]] || [[ "" == *"no "* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp"
 }
@@ -451,13 +451,13 @@ EOF
   done
 }
 
-@test "tamper-resistance: swiftlint ignora .swiftlint.yml afrouxado do projeto (gate usa ruleset do QG)" {
+@test "tamper-resistance: swiftlint ignores the project's loosened .swiftlint.yml (gate uses QG's ruleset)" {
   command -v swiftlint >/dev/null 2>&1 || skip "swiftlint not available"
   source "$QG_REPO_ROOT/swift/lib/measure.sh"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
   cp -R "$(qg_fixture_path swift regressed)/." "$tmp/"
-  # Dev tenta afrouxar: .swiftlint.yml do projeto desabilita TODAS as regras.
+  # Dev tries to loosen: the project's .swiftlint.yml disables ALL rules.
   cat > "$tmp/.swiftlint.yml" <<EOF
 only_rules: []
 disabled_rules:

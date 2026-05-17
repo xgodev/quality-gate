@@ -200,27 +200,27 @@ EOF
 }
 
 @test "java/qg.sh with QG_BYPASS_REASON exits 0 and emits a warning" {
-  export QG_BYPASS_REASON="teste de bypass"
+  export QG_BYPASS_REASON="bypass test"
   local logdir
   logdir=$(qg_tmp_dir)
   run "$(qg_script_path java)" --base origin/main --log-dir "$logdir"
   [ "$status" -eq 0 ]
   [[ "$output" == *"::warning::"* ]]
   [[ "$output" == *"bypass"* ]]
-  [[ "$output" == *"teste de bypass"* ]]
+  [[ "$output" == *"bypass test"* ]]
   [ -f "$logdir/bypass.log" ]
-  grep -q "teste de bypass" "$logdir/bypass.log"
+  grep -q "bypass test" "$logdir/bypass.log"
   rm -rf "$logdir"
 }
 
 @test "java/qg.sh with QG_BYPASS_REASON --format json returns verdict bypassed" {
-  export QG_BYPASS_REASON="teste"
+  export QG_BYPASS_REASON="test"
   local logdir
   logdir=$(qg_tmp_dir)
   run "$(qg_script_path java)" --base origin/main --log-dir "$logdir" --format json
   [ "$status" -eq 0 ]
   echo "$output" | jq -e '.verdict == "bypassed"'
-  echo "$output" | jq -e '.bypass_reason == "teste"'
+  echo "$output" | jq -e '.bypass_reason == "test"'
   echo "$output" | jq -e '.metrics | length == 0'
   rm -rf "$logdir"
 }
@@ -242,7 +242,7 @@ EOF
 
   run "$(qg_script_path java)" --base master
   [ "$status" -eq 0 ]
-  [[ "$output" == *"fast-path"* ]] || [[ "$output" == *"nenhum Java"* ]]
+  [[ "$output" == *"fast-path"* ]] || [[ "" == *"no "* ]]
   cd "$QG_REPO_ROOT"
   rm -rf "$tmp"
 }
@@ -480,10 +480,10 @@ EOF
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
   cp -R "$(qg_fixture_path java regressed)/." "$tmp/"
-  # Dev tenta afrouxar: pmd-ruleset.xml vazio no projeto. Gate usa -R <QG>/java/rules/pmd.xml.
+  # Dev tries to loosen: empty pmd-ruleset.xml in the project. Gate uses -R <QG>/java/rules/pmd.xml.
   cat > "$tmp/pmd-ruleset.xml" <<EOF
 <?xml version="1.0"?>
-<ruleset name="afrouxado" xmlns="http://pmd.sourceforge.net/ruleset/2.0.0">
+<ruleset name="loosened" xmlns="http://pmd.sourceforge.net/ruleset/2.0.0">
   <description>vazio de proposito</description>
 </ruleset>
 EOF
