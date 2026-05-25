@@ -36,10 +36,15 @@ qg_ruleset_dir() {
 
 # Language sentinel at the root of the given directory (reused by --detect,
 # fast-path and the "language absent in baseline" check). Slug: java.
+# pom.xml is unambiguous. For Gradle (build.gradle[.kts]) we also require at
+# least one *.java source under src/: build.gradle[.kts] alone is a build-system
+# sentinel shared with pure-Kotlin projects.
 qg_lang_present() {
   local dir="$1"
-  [ -f "$dir/pom.xml" ] || [ -f "$dir/build.gradle" ] \
-    || [ -f "$dir/build.gradle.kts" ]
+  if [ -f "$dir/pom.xml" ]; then return 0; fi
+  { [ -f "$dir/build.gradle" ] || [ -f "$dir/build.gradle.kts" ]; } || return 1
+  [ -d "$dir/src" ] || return 1
+  [ -n "$(find "$dir/src" -type f -name '*.java' -print -quit 2>/dev/null)" ]
 }
 
 # The declared build-system is authoritative (LAW): the Java gate only supports

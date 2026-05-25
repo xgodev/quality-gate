@@ -6,7 +6,7 @@ Kotlin-specific gate documentation. For the common contract, see [`../contract.m
 
 Quality Gate Kotlin assumes **Gradle (`gradle`/`gradlew`) + `build.gradle.kts`** as the canonical build in V1. The sentinel also detects `build.gradle` (Groovy DSL) but the gate has only been tested with the Kotlin DSL.
 
-The presence sentinel is `build.gradle.kts` or `build.gradle` at the root. If none exists in the baseline, the gate emits a warning and exits 0.
+The presence sentinel is: `build.gradle.kts`/`build.gradle`/`settings.gradle.kts` at the root AND at least one `*.kt` source file under `src/`. Requiring a `*.kt` source under `src/` prevents pure-Java Gradle projects from being misclassified as Kotlin -- `build.gradle[.kts]` alone is a build-system sentinel shared by both languages, and Java projects routinely use the Kotlin Gradle DSL. If neither condition holds in the baseline, the gate emits a warning and exits 0.
 
 ## Prerequisites with install
 

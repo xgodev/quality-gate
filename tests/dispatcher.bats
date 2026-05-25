@@ -164,6 +164,64 @@ EOF
   cd "$QG_REPO_ROOT"; rm -rf "$root" "$proj"
 }
 
+@test "dispatcher (real ROOT): pure Java + build.gradle.kts -> only 'java'" {
+  local proj
+  proj=$(qg_tmp_dir)
+  mkdir -p "$proj/src/main/java"
+  echo "plugins { java }" > "$proj/build.gradle.kts"
+  echo "public class Foo {}" > "$proj/src/main/java/Foo.java"
+  cd "$proj"
+  run "$QG_REPO_ROOT/qg" --detect
+  [ "$status" -eq 0 ]
+  [ "$output" = "java" ]
+  cd "$QG_REPO_ROOT"
+  rm -rf "$proj"
+}
+
+@test "dispatcher (real ROOT): pure Kotlin + build.gradle.kts -> only 'kotlin'" {
+  local proj
+  proj=$(qg_tmp_dir)
+  mkdir -p "$proj/src/main/kotlin"
+  echo "plugins { kotlin(\"jvm\") }" > "$proj/build.gradle.kts"
+  echo "fun main() {}" > "$proj/src/main/kotlin/Main.kt"
+  cd "$proj"
+  run "$QG_REPO_ROOT/qg" --detect
+  [ "$status" -eq 0 ]
+  [ "$output" = "kotlin" ]
+  cd "$QG_REPO_ROOT"
+  rm -rf "$proj"
+}
+
+@test "dispatcher (real ROOT): pure Java + build.gradle (Groovy) -> only 'java'" {
+  local proj
+  proj=$(qg_tmp_dir)
+  mkdir -p "$proj/src/main/java"
+  : > "$proj/build.gradle"
+  echo "public class Foo {}" > "$proj/src/main/java/Foo.java"
+  cd "$proj"
+  run "$QG_REPO_ROOT/qg" --detect
+  [ "$status" -eq 0 ]
+  [ "$output" = "java" ]
+  cd "$QG_REPO_ROOT"
+  rm -rf "$proj"
+}
+
+@test "dispatcher (real ROOT): mixed Java + Kotlin Gradle project -> both 'java' and 'kotlin'" {
+  local proj
+  proj=$(qg_tmp_dir)
+  mkdir -p "$proj/src/main/java" "$proj/src/main/kotlin"
+  echo "plugins { java; kotlin(\"jvm\") }" > "$proj/build.gradle.kts"
+  echo "public class Foo {}" > "$proj/src/main/java/Foo.java"
+  echo "fun bar() {}" > "$proj/src/main/kotlin/Bar.kt"
+  cd "$proj"
+  run "$QG_REPO_ROOT/qg" --detect
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"java"* ]]
+  [[ "$output" == *"kotlin"* ]]
+  cd "$QG_REPO_ROOT"
+  rm -rf "$proj"
+}
+
 @test "dispatcher: forwards --base and --format intact to the gate" {
   local root proj
   root=$(qg_tmp_dir); proj=$(qg_tmp_dir)

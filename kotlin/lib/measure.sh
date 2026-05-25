@@ -35,10 +35,15 @@ qg_ruleset_dir() {
 
 # Language sentinel at the root of the given directory (reused by --detect,
 # fast-path and the "language absent in baseline" check). Slug: kotlin.
+# Requires BOTH a Gradle build descriptor AND at least one *.kt source under
+# src/. build.gradle[.kts] alone is a build-system sentinel, NOT a language
+# sentinel: pure-Java projects routinely use Kotlin Gradle DSL.
 qg_lang_present() {
   local dir="$1"
-  [ -f "$dir/build.gradle.kts" ] || [ -f "$dir/settings.gradle.kts" ] \
-    || [ -f "$dir/build.gradle" ]
+  { [ -f "$dir/build.gradle.kts" ] || [ -f "$dir/build.gradle" ] \
+      || [ -f "$dir/settings.gradle.kts" ]; } || return 1
+  [ -d "$dir/src" ] || return 1
+  [ -n "$(find "$dir/src" -type f -name '*.kt' -print -quit 2>/dev/null)" ]
 }
 
 # The Gradle wrapper is authoritative (LAW): ./gradlew pins the exact Gradle

@@ -6,7 +6,7 @@ Java-specific gate documentation. For the common contract, see [`../contract.md`
 
 Quality Gate Java assumes **Maven (`mvn`) + `pom.xml`** as the canonical build in V1. Gradle is detected by the sentinel (`build.gradle`/`build.gradle.kts`) -- the sentinel only prevents "language absent", but `count_build_errors` and `count_test_failures` run `mvn`. In a Gradle target project, these metrics need to be adapted (future).
 
-The presence sentinel is one of these at the root: `pom.xml`, `build.gradle` or `build.gradle.kts`. If none exists in the baseline, the gate emits a warning and exits 0.
+The presence sentinel is: `pom.xml` at the root, OR (`build.gradle`/`build.gradle.kts` at the root AND at least one `*.java` source file under `src/`). Requiring a `*.java` source under `src/` prevents pure-Kotlin Gradle projects from being misclassified as Java -- `build.gradle[.kts]` alone is a build-system sentinel shared by both languages. If neither condition holds in the baseline, the gate emits a warning and exits 0.
 
 ## Prerequisites with install
 

@@ -66,6 +66,63 @@ setup() {
   rm -rf "$tmp"
 }
 
+@test "java/qg.sh --detect: build.gradle.kts with *.java sources -> 'java'" {
+  local tmp
+  tmp=$(qg_tmp_dir)
+  cd "$tmp"
+  echo "plugins { java }" > build.gradle.kts
+  mkdir -p src/main/java
+  echo "public class Foo {}" > src/main/java/Foo.java
+  run "$(qg_script_path java)" --detect
+  [ "$status" -eq 0 ]
+  [ "$output" = "java" ]
+  cd "$QG_REPO_ROOT"
+  rm -rf "$tmp"
+}
+
+@test "java/qg.sh --detect: build.gradle.kts without *.java sources -> exit 1 (pure Kotlin project must not be classified as Java)" {
+  local tmp
+  tmp=$(qg_tmp_dir)
+  cd "$tmp"
+  echo "plugins { kotlin(\"jvm\") }" > build.gradle.kts
+  mkdir -p src/main/kotlin
+  echo "fun main() {}" > src/main/kotlin/Main.kt
+  run "$(qg_script_path java)" --detect
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+  cd "$QG_REPO_ROOT"
+  rm -rf "$tmp"
+}
+
+@test "java/qg.sh --detect: build.gradle (Groovy DSL) without *.java sources -> exit 1" {
+  local tmp
+  tmp=$(qg_tmp_dir)
+  cd "$tmp"
+  : > build.gradle
+  mkdir -p src/main/kotlin
+  echo "fun main() {}" > src/main/kotlin/Main.kt
+  run "$(qg_script_path java)" --detect
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+  cd "$QG_REPO_ROOT"
+  rm -rf "$tmp"
+}
+
+@test "java/qg.sh --detect: mixed Java + Kotlin Gradle project -> 'java'" {
+  local tmp
+  tmp=$(qg_tmp_dir)
+  cd "$tmp"
+  echo "plugins { java; kotlin(\"jvm\") }" > build.gradle.kts
+  mkdir -p src/main/java src/main/kotlin
+  echo "public class Foo {}" > src/main/java/Foo.java
+  echo "fun bar() {}" > src/main/kotlin/Bar.kt
+  run "$(qg_script_path java)" --detect
+  [ "$status" -eq 0 ]
+  [ "$output" = "java" ]
+  cd "$QG_REPO_ROOT"
+  rm -rf "$tmp"
+}
+
 @test "java _num: sanitizes non-numeric to 0 (Bug 2)" {
   source "$QG_REPO_ROOT/java/lib/measure.sh"
   [ "$(_num "Unknown")" = "0" ]

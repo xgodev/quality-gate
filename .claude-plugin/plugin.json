@@ -1,6 +1,6 @@
 {
   "name": "quality-gate",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Self-contained Claude Code plugin: the Quality Gate dispatcher + per-language gates (Rust, Go, Python, Node.js, Java, Swift, Kotlin, Web) + the `quality-gate` skill. Fails only when a PR worsens a metric vs a chosen base ref; tamper-resistant rulesets; absolute (no-base) mode.",
   "author": {
     "name": "xgodev"

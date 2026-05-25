@@ -43,9 +43,11 @@ Reserved sentinels per language:
 | go | `go.mod` |
 | python | `pyproject.toml` or `setup.py` or `setup.cfg` or `requirements*.txt` |
 | nodejs | `package.json` |
-| java | `pom.xml` or `build.gradle` or `build.gradle.kts` |
+| java | `pom.xml`, OR (`build.gradle`/`build.gradle.kts` AND `>=1 *.java` under `src/`) |
 | swift | `Package.swift` |
-| kotlin | `build.gradle.kts` or `settings.gradle.kts` or `build.gradle` |
+| kotlin | (`build.gradle.kts`/`build.gradle`/`settings.gradle.kts`) AND `>=1 *.kt` under `src/` |
+
+For the JVM gates, `build.gradle[.kts]` alone is a build-system sentinel shared by Java and Kotlin projects (Java projects routinely use the Kotlin Gradle DSL). Detection therefore requires a source file of the language under `src/` so that pure-Java projects are not classified as Kotlin and vice-versa. Mixed Java+Kotlin Gradle projects continue to match both gates.
 
 Consumers (the `quality-gate` skill) iterate `<lang>/qg.sh --detect`, collect the ones that exit 0 and run only those -- no hardcoded sentinel table.
 

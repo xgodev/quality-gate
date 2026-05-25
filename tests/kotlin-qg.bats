@@ -59,6 +59,51 @@ setup() {
   tmp=$(qg_tmp_dir)
   cd "$tmp"
   echo "// gradle" > build.gradle.kts
+  mkdir -p src/main/kotlin
+  echo "fun main() {}" > src/main/kotlin/Main.kt
+  run "$(qg_script_path kotlin)" --detect
+  [ "$status" -eq 0 ]
+  [ "$output" = "kotlin" ]
+  cd "$QG_REPO_ROOT"
+  rm -rf "$tmp"
+}
+
+@test "kotlin/qg.sh --detect: build.gradle.kts without *.kt sources -> exit 1 (pure Java project must not be classified as Kotlin)" {
+  local tmp
+  tmp=$(qg_tmp_dir)
+  cd "$tmp"
+  echo "plugins { java }" > build.gradle.kts
+  mkdir -p src/main/java
+  echo "public class Foo {}" > src/main/java/Foo.java
+  run "$(qg_script_path kotlin)" --detect
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+  cd "$QG_REPO_ROOT"
+  rm -rf "$tmp"
+}
+
+@test "kotlin/qg.sh --detect: build.gradle (Groovy DSL) without *.kt sources -> exit 1" {
+  local tmp
+  tmp=$(qg_tmp_dir)
+  cd "$tmp"
+  : > build.gradle
+  mkdir -p src/main/java
+  echo "public class Foo {}" > src/main/java/Foo.java
+  run "$(qg_script_path kotlin)" --detect
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+  cd "$QG_REPO_ROOT"
+  rm -rf "$tmp"
+}
+
+@test "kotlin/qg.sh --detect: mixed Java + Kotlin Gradle project -> 'kotlin'" {
+  local tmp
+  tmp=$(qg_tmp_dir)
+  cd "$tmp"
+  echo "plugins { java; kotlin(\"jvm\") }" > build.gradle.kts
+  mkdir -p src/main/java src/main/kotlin
+  echo "public class Foo {}" > src/main/java/Foo.java
+  echo "fun bar() {}" > src/main/kotlin/Bar.kt
   run "$(qg_script_path kotlin)" --detect
   [ "$status" -eq 0 ]
   [ "$output" = "kotlin" ]
