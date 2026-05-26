@@ -9,10 +9,10 @@ This repository is **two-in-one**:
 
 ```text
 /plugin marketplace add git@github.com:xgodev/quality-gate.git
-/plugin install quality-gate@xgodev
+/plugin install quality-gate@xgodev-quality-gate
 ```
 
-The marketplace is named `xgodev` (the org); the plugin inside it is `quality-gate`. Another plugin can declare `quality-gate@xgodev` as a dependency, re-listing this repo in its own `marketplace.json`.
+The marketplace is named `xgodev-quality-gate` (scoped to this repo, to avoid colliding with other `xgodev/*` marketplaces); the plugin inside it is `quality-gate`. Another plugin can declare `quality-gate@xgodev-quality-gate` as a dependency, re-listing this repo in its own `marketplace.json`.
 
 ## How it works
 

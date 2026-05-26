@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.4]
+
+BREAKING (marketplace ID, again): renames marketplace `name` from `xgodev` to `xgodev-quality-gate`. The previous `xgodev` collided with other `xgodev/*` marketplaces (e.g. `xgodev/claude-plugin` umbrella, which also declares itself as `xgodev`). Scoping the name to the repo (`xgodev-quality-gate`) removes the collision. Install command is now `/plugin install quality-gate@xgodev-quality-gate`. Anyone who already added the marketplace must remove and re-add it.
+
 ## [0.2.3]
 
 BREAKING (marketplace ID): `marketplace.json` `name` is now `xgodev` (the org), not `quality-gate` (which collided with the plugin name). Install command is now `/plugin install quality-gate@xgodev`. Anyone who already added the marketplace must remove and re-add it: `/plugin marketplace remove quality-gate` then `/plugin marketplace add git@github.com:xgodev/quality-gate.git`. README updated.
