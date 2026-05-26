@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.3]
+
+BREAKING (marketplace ID): `marketplace.json` `name` is now `xgodev` (the org), not `quality-gate` (which collided with the plugin name). Install command is now `/plugin install quality-gate@xgodev`. Anyone who already added the marketplace must remove and re-add it: `/plugin marketplace remove quality-gate` then `/plugin marketplace add git@github.com:xgodev/quality-gate.git`. README updated.
+
 ## [0.2.2]
 
 Fix (#1): all 8 gates (`rust`/`go`/`python`/`nodejs`/`java`/`kotlin`/`swift`/`web`) no longer return a silent `verdict=passed` / `metrics=[]` / `duration_seconds=0` when the default cache directory (`/tmp/qg-baseline-<lang>`) exists but is empty or incomplete (`/tmp` pruned, prior run died mid-extract, etc.). `prepare_baseline` now writes a `.qg-baseline-prepared` sentinel on success; the cache is reused only if the sentinel is present, and a stale/partial directory is re-extracted. Caller-supplied `--baseline-dir` keeps current semantics (no sentinel check). Adds an E2E regression bats in `tests/rust-qg.bats` covering the issue #1 scenario.
