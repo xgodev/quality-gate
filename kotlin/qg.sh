@@ -453,11 +453,12 @@ prepare_baseline() {
     echo "::error::failed to extract '$QG_BASE_REF_ARG' via git archive -- try 'git fetch origin'" >&2
     return 1
   fi
+  : > "$target/.qg-baseline-prepared"
 }
 
 if [ -z "$QG_BASELINE_DIR_ARG" ]; then
   QG_BASELINE_DIR_ARG="/tmp/qg-baseline-kotlin"
-  if [ ! -d "$QG_BASELINE_DIR_ARG" ] || [ "$QG_REFRESH_BASELINE_ARG" = "1" ]; then
+  if [ ! -f "$QG_BASELINE_DIR_ARG/.qg-baseline-prepared" ] || [ "$QG_REFRESH_BASELINE_ARG" = "1" ]; then
     prepare_baseline "$QG_BASELINE_DIR_ARG" || exit 2
   fi
 elif [ ! -d "$QG_BASELINE_DIR_ARG" ]; then

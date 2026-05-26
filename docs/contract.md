@@ -397,9 +397,9 @@ If `git diff --name-only <base>...HEAD` (+ staged + worktree) matches nothing an
 
 ## Baseline
 
-- Without `--baseline-dir`: `git archive <base>` into `/tmp/qg-baseline-<lang>` (cached; `--refresh-baseline` forces re-extraction).
-- With `--baseline-dir`: assumes the directory is ready (CI checked out into a separate path).
-- Language absent in baseline (e.g. PR adds `Cargo.toml` for the 1st time): `::warning::language absent in baseline -- gate skipped` + exit 0.
+- Without `--baseline-dir`: `git archive <base>` into `/tmp/qg-baseline-<lang>` (cached). A successful extract writes a sentinel file `.qg-baseline-prepared`; the cache is reused only if the sentinel is present. A directory that exists without the sentinel (e.g. `/tmp` pruned, prior run died mid-extract) is treated as stale and re-extracted -- never reused. `--refresh-baseline` forces re-extraction regardless.
+- With `--baseline-dir`: assumes the directory is ready (CI checked out into a separate path). No sentinel check.
+- Language absent in baseline (e.g. PR adds `Cargo.toml` for the 1st time): `::warning::language absent in baseline -- gate skipped` + exit 0. Reached only after a successful `prepare_baseline` (or with `--baseline-dir`) -- never as a side-effect of a corrupt cache.
 
 ## Per-language prerequisites
 

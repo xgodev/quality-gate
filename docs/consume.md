@@ -98,7 +98,7 @@ The bypass is recorded in `target/qg-logs/bypass.log`. Use with discretion.
 | `::error::--base is required` | Did not pass a base ref | Add `--base origin/main` |
 | `::error::cargo-llvm-cov not found` | Missing prereq | `cargo install cargo-llvm-cov` |
 | Red gate on a PR that did not touch Rust | Fast-path did not trigger | Check whether some `Cargo.*` or `.rs` was modified |
-| Stale baseline cache | Divergent cache | `--refresh-baseline` or `rm -rf /tmp/qg-baseline-*` |
+| Stale baseline cache | Divergent cache (when the gate's own staleness check is bypassed via `--baseline-dir`) | `--refresh-baseline` or `rm -rf /tmp/qg-baseline-*`. For default-cache runs, staleness is detected automatically via the `.qg-baseline-prepared` sentinel. |
 | `git archive` failed | Ref does not exist locally | `git fetch origin` |
 
 Per-language details in [`languages/<lang>.md`](languages/).

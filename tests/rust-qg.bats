@@ -490,6 +490,43 @@ EOF
   done
 }
 
+@test "baseline (default cache): stale/incomplete cache must NOT silently return passed+[] (issue #1)" {
+  command -v cargo >/dev/null 2>&1 || skip "cargo not available"
+  local tmp cache backup
+  tmp=$(qg_tmp_dir)
+  cache="/tmp/qg-baseline-rust"
+  backup=""
+  if [ -e "$cache" ]; then
+    backup="${cache}.bats-bk-$$"
+    mv "$cache" "$backup"
+  fi
+  cd "$tmp"
+  git -c init.defaultBranch=main init -q
+  git config user.email "t@t"
+  git config user.name "T"
+  cat > Cargo.toml <<EOF
+[package]
+name = "x"
+version = "0.1.0"
+edition = "2021"
+[lib]
+path = "src/lib.rs"
+EOF
+  mkdir src
+  echo "pub fn x() {}" > src/lib.rs
+  git add . && git commit -qm "init"
+  rm -rf "$cache"
+  mkdir -p "$cache"
+  run "$(qg_script_path rust)" --base main --format json
+  local rc=$status
+  local out="$output"
+  rm -rf "$cache"
+  if [ -n "$backup" ]; then mv "$backup" "$cache"; fi
+  cd "$QG_REPO_ROOT"
+  rm -rf "$tmp"
+  ! echo "$out" | jq -e '.verdict == "passed" and (.metrics | length) == 0 and .duration_seconds == 0' >/dev/null 2>&1
+}
+
 @test "baseline: language absent in baseline emits a warning + exit 0" {
   local tmp baseline
   tmp=$(qg_tmp_dir)
