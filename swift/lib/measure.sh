@@ -261,3 +261,33 @@ measure_coverage() {
   # Bug 2: never returns empty/"Unknown" -> 0.
   printf '%s\n' "$pct"
 }
+# Baseline submodule extraction (shared logic across all language gates).
+# `git archive` does NOT expand git submodules: in the baseline checkout the
+# submodule dirs are empty, so a submodule-dependent build fails, the base
+# metrics are undercounted, and every PR is reported as a false `regressed`
+# (issue #2). This walks the submodules registered in <treeish> and, for each
+# one, extracts the exact commit it is pinned to into the baseline tree, using
+# the working tree's already-initialized submodule object store. Recurses into
+# nested submodules. No-op for repos without a .gitmodules. Never aborts the
+# gate: an un-extractable submodule yields a ::warning:: and is skipped.
+_qg_extract_submodules() {
+  local gitdir="$1" treeish="$2" dest="$3" wt="$4"
+  local list
+  list=$(git --git-dir="$gitdir" config --blob "$treeish:.gitmodules" \
+           --get-regexp '^submodule\..*\.path$' 2>/dev/null) || return 0
+  local key path sha subdir
+  while read -r key path; do
+    [ -z "$path" ] && continue
+    sha=$(git --git-dir="$gitdir" rev-parse "$treeish:$path" 2>/dev/null) || continue
+    subdir=$(git -C "$wt/$path" rev-parse --absolute-git-dir 2>/dev/null) || {
+      echo "::warning::baseline: submodule '$path' is not initialized in the working tree -- base build may undercount; run 'git submodule update --init --recursive'" >&2
+      continue
+    }
+    mkdir -p "$dest/$path"
+    if git --git-dir="$subdir" archive "$sha" 2>/dev/null | tar -xC "$dest/$path"; then
+      _qg_extract_submodules "$subdir" "$sha" "$dest/$path" "$wt/$path"
+    else
+      echo "::warning::baseline: failed to extract submodule '$path' at $sha -- base build may undercount" >&2
+    fi
+  done <<< "$list"
+}

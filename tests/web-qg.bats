@@ -263,3 +263,59 @@ EOF
   [ "$result" -gt 0 ] || { echo "expected >0 even with an empty .stylelintrc; got $result"; cat "$logdir/lint.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }
+
+@test "baseline: _qg_extract_submodules populates submodules at the base-ref commit (issue #2)" {
+  source "$QG_REPO_ROOT/web/lib/measure.sh"
+  local sub super target c1
+  sub=$(qg_tmp_dir); super=$(qg_tmp_dir); target=$(qg_tmp_dir)
+
+  # Submodule repo: v1 ships a source file the superproject build globs; v2 changes it.
+  cd "$sub"
+  git -c init.defaultBranch=main init -q
+  git config user.email t@t; git config user.name T
+  mkdir NAM; echo 'int a(){return 0;}' > NAM/core.cpp
+  git add . && git commit -qm v1
+  c1=$(git rev-parse HEAD)
+  echo '// v2 change' >> NAM/core.cpp
+  git add . && git commit -qm v2
+
+  # Superproject pins the submodule at v1 (NOT the tip).
+  cd "$super"
+  git -c init.defaultBranch=main init -q
+  git config user.email t@t; git config user.name T
+  echo root > root.txt
+  git -c protocol.file.allow=always submodule add -q "$sub" deps/core
+  git -C deps/core checkout -q "$c1"
+  git add . && git commit -qm super-v1
+
+  # Emulate prepare_baseline's `git archive` step (does NOT expand submodules).
+  git archive HEAD | tar -xC "$target"
+  [ ! -e "$target/deps/core/NAM/core.cpp" ]   # precondition: archive left the submodule empty
+
+  # The fix under test.
+  _qg_extract_submodules "$(git rev-parse --absolute-git-dir)" HEAD "$target" "$(git rev-parse --show-toplevel)"
+
+  [ -f "$target/deps/core/NAM/core.cpp" ]      # submodule source is now present
+  run cat "$target/deps/core/NAM/core.cpp"
+  [[ "$output" == *"int a()"* ]]
+  [[ "$output" != *"v2 change"* ]]             # pinned to the base-ref commit (v1), not the submodule tip
+
+  cd "$QG_REPO_ROOT"
+  rm -rf "$sub" "$super" "$target"
+}
+
+@test "baseline: _qg_extract_submodules is a no-op for a repo without submodules (issue #2)" {
+  source "$QG_REPO_ROOT/web/lib/measure.sh"
+  local plain target
+  plain=$(qg_tmp_dir); target=$(qg_tmp_dir)
+  cd "$plain"
+  git -c init.defaultBranch=main init -q
+  git config user.email t@t; git config user.name T
+  echo hi > a.txt
+  git add . && git commit -qm init
+  git archive HEAD | tar -xC "$target"
+  run _qg_extract_submodules "$(git rev-parse --absolute-git-dir)" HEAD "$target" "$(git rev-parse --show-toplevel)"
+  [ "$status" -eq 0 ]
+  cd "$QG_REPO_ROOT"
+  rm -rf "$plain" "$target"
+}

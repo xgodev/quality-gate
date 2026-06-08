@@ -398,7 +398,8 @@ If `git diff --name-only <base>...HEAD` (+ staged + worktree) matches nothing an
 ## Baseline
 
 - Without `--baseline-dir`: `git archive <base>` into `/tmp/qg-baseline-<lang>` (cached). A successful extract writes a sentinel file `.qg-baseline-prepared`; the cache is reused only if the sentinel is present. A directory that exists without the sentinel (e.g. `/tmp` pruned, prior run died mid-extract) is treated as stale and re-extracted -- never reused. `--refresh-baseline` forces re-extraction regardless.
-- With `--baseline-dir`: assumes the directory is ready (CI checked out into a separate path). No sentinel check.
+- **Submodules**: `git archive` does not expand git submodules, so after the archive each submodule registered at the base ref is extracted at the exact commit it is pinned to (sourced from the working tree's already-initialized submodule object store, recursing into nested submodules). Without this, a submodule-dependent build fails in the baseline, the base metrics undercount, and every PR is reported as a false `regressed` (#2). No-op for repos without `.gitmodules`; a submodule that cannot be extracted yields a `::warning::` and is skipped (never aborts the gate).
+- With `--baseline-dir`: assumes the directory is ready, **including submodules** (CI checked out into a separate path with `git submodule update --init --recursive`). No sentinel check, no submodule extraction.
 - Language absent in baseline (e.g. PR adds `Cargo.toml` for the 1st time): `::warning::language absent in baseline -- gate skipped` + exit 0. Reached only after a successful `prepare_baseline` (or with `--baseline-dir`) -- never as a side-effect of a corrupt cache.
 
 ## Per-language prerequisites
