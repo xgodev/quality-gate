@@ -455,6 +455,10 @@ prepare_baseline() {
     echo "::error::failed to extract '$QG_BASE_REF_ARG' via git archive -- try 'git fetch origin'" >&2
     return 1
   fi
+  # git archive omits submodules; populate them so submodule-dependent builds do
+  # not undercount the baseline and trigger a false `regressed` (issue #2).
+  _qg_extract_submodules "$(git rev-parse --absolute-git-dir 2>/dev/null)" \
+    "$QG_BASE_REF_ARG" "$target" "$(git rev-parse --show-toplevel 2>/dev/null)"
   : > "$target/.qg-baseline-prepared"
 }
 
