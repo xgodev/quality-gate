@@ -172,3 +172,31 @@ setup() {
   [ -z "$output" ]   # exempt -> allowed without running the gate
   rm -rf "$plug" "$proj"
 }
+
+@test "hook: missing qg at plugin root -> allow (fail open)" {
+  local plug proj
+  plug="$(mktemp -d -t qg-noplug-XXXXXX)"   # empty: no qg binary
+  proj="$(qg_make_git_repo)"
+  CLAUDE_PLUGIN_ROOT="$plug" CLAUDE_PROJECT_DIR="$proj" \
+    run bash -c "printf '%s' '{\"tool_input\":{\"command\":\"git push origin HEAD\"}}' | \"$(qg_hook_path)\" 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]   # no deny JSON on stdout
+  rm -rf "$plug" "$proj"
+}
+
+@test "hook: malformed stdin -> allow (fail open)" {
+  run bash -c "printf '%s' 'not json at all' | \"$(qg_hook_path)\""
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "hook: gated push but project is not a git repo -> allow" {
+  local plug proj
+  plug="$(qg_make_stub_plugin 1)"
+  proj="$(mktemp -d -t qg-norepo-XXXXXX)"   # not a git repo
+  CLAUDE_PLUGIN_ROOT="$plug" CLAUDE_PROJECT_DIR="$proj" \
+    run bash -c "printf '%s' '{\"tool_input\":{\"command\":\"git push origin HEAD\"}}' | \"$(qg_hook_path)\""
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  rm -rf "$plug" "$proj"
+}
