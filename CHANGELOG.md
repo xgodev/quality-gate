@@ -7,8 +7,10 @@ Feature: opt-in pre-push enforcement hook. A bundled `PreToolUse` hook
 and `gh pr create` unless the gate passes for HEAD. It re-runs `qg` against the
 branch upstream (`@{upstream}` -> `origin/HEAD` -> absolute mode), denies on
 `qg` exit 1 (regressed/threshold) or 2 (tool error), and allows on 0
-(passed/bypassed) or 3 (no supported language). Non-code pushes
-(`--delete`/`-d`, `--tags`, `:refspec` delete, `refs/tags/...`) are exempt.
+(passed/bypassed) or 3 (no supported language). Only non-code pushes are
+exempt: a pure deletion (`--delete`/`-d`, or all-`:refspec`/`refs/tags/...`
+refspecs) or a tag-only push (`--tags` with no branch refspec); a tag/delete
+mixed with a real code refspec (e.g. `git push origin main --tags`) is gated.
 Bypass is inherited: exporting `QG_BYPASS_REASON` makes the gate pass. The hook
 fails OPEN on its own errors (missing `jq`/`qg`, malformed stdin, non-repo) so a
 broken hook never bricks git. Adds `tests/hook-prepush.bats`. Docs: `docs/hooks.md`.

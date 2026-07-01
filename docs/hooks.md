@@ -8,8 +8,11 @@ The plugin ships an **opt-in** `PreToolUse` hook that blocks `git push` and
 On any `Bash` tool call, `hooks/pre-push-gate.sh` runs. It fast-exits for
 everything except `git push` / `gh pr create`. For a gated command it:
 
-1. Exempts non-code pushes: `--delete` / `-d`, `--tags`, `git push origin :branch`,
-   and explicit `refs/tags/...` refspecs.
+1. Exempts non-code pushes only: a pure deletion (`--delete` / `-d`, or every
+   refspec is a `:branch` delete or a `refs/tags/...` tag), or a tag-only push
+   (`--tags` with no branch/commit refspec beyond the remote). Mixing a tag or
+   delete with a real code refspec (e.g. `git push origin main --tags`) is still
+   gated.
 2. Resolves the base ref: the branch upstream (`@{upstream}`), else the remote
    default branch (`origin/HEAD`), else **absolute mode** (no base).
 3. Runs `${CLAUDE_PLUGIN_ROOT}/qg [--base <ref>]` in the project.
