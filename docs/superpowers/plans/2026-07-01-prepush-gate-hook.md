@@ -353,7 +353,7 @@ git commit -m "feat(hook): detect gated push/pr-create ops, exempt tag/delete pu
 - Test: `tests/hook-prepush.bats`
 
 **Interfaces:**
-- Consumes: `gated_kind`, `gated_seg`, `$cmd`, env `CLAUDE_PROJECT_DIR`, `CLAUDE_PLUGIN_ROOT`.
+- Consumes: control reaching this point (Task 2 already `exit 0`ed unless `should_gate=1`), plus `$cmd`, env `CLAUDE_PROJECT_DIR`, `CLAUDE_PLUGIN_ROOT`.
 - Produces: the terminal behavior — allow (`exit 0`, no stdout) for `qg` exit 0/3; deny JSON for `qg` exit 1/2.
 
 - [ ] **Step 1: Write the failing tests**
@@ -704,6 +704,6 @@ git commit -m "docs: document pre-push hook; bump 0.2.5 -> 0.3.0 (CHANGELOG + ma
 
 **Placeholder scan:** No TBD/TODO in steps; every code step shows full code. The only conditional ("if the path form does not register, fall back...") is a genuine verification branch, with both concrete forms named.
 
-**Type/name consistency:** helper names (`qg_hook_path`, `qg_make_stub_plugin`, `qg_make_git_repo`), variables (`is_gated`, `gated_kind`, `gated_seg`, `base`, `qg_bin`, `out`, `rc`) are used consistently across Tasks 1-4. JSON shape identical in Task 3 code and Task 5 docs.
+**Type/name consistency:** helper names (`qg_hook_path`, `qg_make_stub_plugin`, `qg_make_git_repo`), the `push_is_exempt()` helper, and variables (`should_gate`, `base`, `qg_bin`, `out`, `rc`) are used consistently across Tasks 1-4. JSON shape identical in Task 3 code and Task 5 docs.
 
 **Known risk:** plugin hook registration form (`plugin.json` path key vs inline vs auto-discovered `hooks/hooks.json`) is verified manually in Task 1 Step 8, not assumed — per CLAUDE.md "do not guess plugin specifics."
