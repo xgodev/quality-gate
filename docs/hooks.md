@@ -41,3 +41,15 @@ Declared in `hooks/hooks.json` (matcher `Bash`) and wired via the top-level
 `"hooks": "./hooks/hooks.json"` path in `.claude-plugin/plugin.json`. The
 script locates the gate through `${CLAUDE_PLUGIN_ROOT}` and the project
 through `${CLAUDE_PROJECT_DIR}`.
+
+## Known limitations
+
+This hook is **advisory enforcement**, not a hard security boundary: it is
+opt-in and it fails open. Detection keys on the leading tokens of each command
+segment, so a few uncommon forms that push code are not gated -- notably
+`git -C <dir> push ...`, a push wrapped in a subshell (`(git push ...)`), or
+`eval`-ed push commands. The common forms (`git push origin main`,
+`git push -u origin <branch>`, `A=b git push`, `... && git push`) are all
+gated. If you need a hard gate that cannot be sidestepped, enforce `qg` in CI
+as well -- the hook is a fast local check, not a replacement for a server-side
+gate.
