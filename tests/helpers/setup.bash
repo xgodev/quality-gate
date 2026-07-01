@@ -28,3 +28,32 @@ qg_clean_env() {
   unset QG_BYPASS_REASON QG_BASE_REF QG_BASELINE_DIR QG_COV_MARGIN \
         QG_LOG_DIR QG_REFRESH_BASELINE QG_FORCE_FULL QG_FORMAT
 }
+
+# --- pre-push hook helpers -------------------------------------------------
+qg_hook_path() {
+  echo "$QG_REPO_ROOT/hooks/pre-push-gate.sh"
+}
+
+# Makes a temp "plugin root" holding a qg stub that exits with RC and echoes
+# its args to stderr (so tests can assert --base forwarding).
+qg_make_stub_plugin() {
+  local rc="$1"
+  local d
+  d="$(mktemp -d -t qg-plugin-XXXXXX)"
+  cat > "$d/qg" <<EOF
+#!/usr/bin/env bash
+echo "stub-qg-args: \$*" >&2
+exit $rc
+EOF
+  chmod +x "$d/qg"
+  echo "$d"
+}
+
+# Makes a temp git repo with one commit; echoes its path.
+qg_make_git_repo() {
+  local d
+  d="$(mktemp -d -t qg-repo-XXXXXX)"
+  git -C "$d" init -q
+  git -C "$d" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
+  echo "$d"
+}
