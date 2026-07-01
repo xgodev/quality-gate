@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.0]
+
+Feature: opt-in pre-push enforcement hook. A bundled `PreToolUse` hook
+(`hooks/pre-push-gate.sh`, declared in `hooks/hooks.json`) blocks `git push`
+and `gh pr create` unless the gate passes for HEAD. It re-runs `qg` against the
+branch upstream (`@{upstream}` -> `origin/HEAD` -> absolute mode), denies on
+`qg` exit 1 (regressed/threshold) or 2 (tool error), and allows on 0
+(passed/bypassed) or 3 (no supported language). Non-code pushes
+(`--delete`/`-d`, `--tags`, `:refspec` delete, `refs/tags/...`) are exempt.
+Bypass is inherited: exporting `QG_BYPASS_REASON` makes the gate pass. The hook
+fails OPEN on its own errors (missing `jq`/`qg`, malformed stdin, non-repo) so a
+broken hook never bricks git. Adds `tests/hook-prepush.bats`. Docs: `docs/hooks.md`.
+
 ## [0.2.5]
 
 Fix (#2): all 8 gates (`rust`/`go`/`python`/`nodejs`/`java`/`kotlin`/`swift`/`web`) now populate git submodules in the baseline checkout. `prepare_baseline` uses `git archive`, which does **not** expand submodules, so for any repo whose build depends on a submodule the baseline dirs were empty: the base build failed, base metrics were undercounted, and every PR was reported as a false `regressed` (the flagged files being pre-existing base-branch debt the base run simply could not measure). A new `_qg_extract_submodules` helper (in each `<lang>/lib/measure.sh`) walks the submodules registered at the base ref and extracts each at the exact commit it is pinned to -- sourced from the working tree's already-initialized submodule object store -- recursing into nested submodules. It is a no-op for repos without `.gitmodules`, never aborts the gate, and emits a `::warning::` (advising `git submodule update --init --recursive`) when a submodule cannot be extracted. Adds unit bats in all 8 `tests/<lang>-qg.bats` covering extraction-at-pinned-commit and the no-submodule no-op.
