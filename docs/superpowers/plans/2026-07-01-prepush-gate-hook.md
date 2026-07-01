@@ -209,7 +209,7 @@ git commit -m "feat(hook): PreToolUse skeleton + registration (fast-exit allow)"
 
 **Interfaces:**
 - Consumes: the skeleton's `$cmd` variable.
-- Produces: on reaching the end, the script has set `is_gated`, `gated_kind` (`push`|`pr`), `gated_seg`; non-code pushes have already `exit 0`.
+- Produces: a `push_is_exempt()` helper and a `should_gate` decision. The script `exit 0` (allow) when no gated, non-exempt operation is present; otherwise it falls through to Task 3's gate-execution block. Exemption is decided per segment and per push (fail-safe: any non-exempt gated segment gates the whole command).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -270,38 +270,67 @@ Expected: the delete/refspec/tags tests FAIL (script does not yet gate, so it al
 
 - [ ] **Step 3: Add gating detection + exemptions to `hooks/pre-push-gate.sh`**
 
-Replace the `# (gating logic added in later tasks)` line with:
+Replace the `# (gating logic added in later tasks)` line with the block
+below. It decides **per segment** whether any gated, non-exempt operation is
+present. A push is exempt only when it pushes **no code** — a pure deletion or
+a tag-only push. Exemption is fail-safe: on any ambiguity (mixed code+tag,
+mixed code+delete, unknown form) it gates. `gh pr create` is never exempt.
+Written without bash arrays so it runs under bash 3.2 (macOS system bash).
 
 ```bash
-# --- is this a gated operation? -------------------------------------------
-# Match `git push` / `gh pr create` as the leading tokens of any
-# &&/||/;/| segment (not a bare substring), after stripping leading env
-# assignments (FOO=bar cmd).
-is_gated=0
-gated_kind=""
-gated_seg=""
+# Returns 0 (true) if a `git push ...` segment pushes NO code and is therefore
+# exempt: a pure deletion (--delete/-d, or every refspec is a ':ref' delete or
+# a 'refs/tags/*' tag) or a tag-only push (--tags with no refspec beyond the
+# remote). Returns 1 (false) otherwise. Fail-safe: anything ambiguous -> false.
+push_is_exempt() {
+  local seg="$1"
+  local rest="${seg#git push}"
+  local has_tags=0 has_delete=0 npos=0 all_noncode=1 seen_remote=0 t
+  for t in $rest; do
+    case "$t" in
+      --tags)        has_tags=1 ;;
+      --delete|-d)   has_delete=1 ;;
+      -*)            : ;;                 # ignore other flags
+      *)
+        npos=$((npos + 1))
+        if [ "$seen_remote" -eq 0 ]; then
+          seen_remote=1                   # first positional is the remote
+        else
+          case "$t" in
+            :*|refs/tags/*) ;;            # delete or tag ref -> non-code
+            *) all_noncode=0 ;;           # a code refspec
+          esac
+        fi
+        ;;
+    esac
+  done
+  [ "$has_delete" -eq 1 ] && return 0                      # all refspecs deleted
+  [ "$npos" -ge 2 ] && [ "$all_noncode" -eq 1 ] && return 0  # only delete/tag refs
+  [ "$has_tags" -eq 1 ] && [ "$npos" -le 1 ] && return 0     # tag-only push
+  return 1
+}
+
+# --- decide whether any gated, non-exempt operation is present ------------
+# Match `git push` / `gh pr create` as the leading tokens of any &&/||/;/|
+# segment (not a bare substring), after stripping leading env assignments
+# (FOO=bar cmd). Any non-exempt gated segment forces the gate to run.
+should_gate=0
 while IFS= read -r seg; do
   seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/^([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)+//')"
   case "$seg" in
-    "git push"|"git push "*)       is_gated=1; gated_kind="push"; gated_seg="$seg" ;;
-    "gh pr create"|"gh pr create "*) is_gated=1; gated_kind="pr";  gated_seg="$seg" ;;
+    "git push"|"git push "*)         push_is_exempt "$seg" || should_gate=1 ;;
+    "gh pr create"|"gh pr create "*) should_gate=1 ;;   # never exempt PR creation
   esac
 done <<< "$(printf '%s' "$cmd" | sed -E 's/(\|\||&&|;|\|)/\n/g')"
 
-[ "$is_gated" -eq 1 ] || exit 0
-
-# --- non-code push operations are exempt ----------------------------------
-if [ "$gated_kind" = "push" ]; then
-  case " $gated_seg " in
-    *" --delete "*|*" -d "*) exit 0 ;;   # branch deletion
-    *" --tags "*)            exit 0 ;;   # tag-only push
-  esac
-  case "$gated_seg" in
-    *" :"*)          exit 0 ;;           # refspec delete: git push origin :foo
-    *"refs/tags/"*)  exit 0 ;;           # explicit tag refspec
-  esac
-fi
+[ "$should_gate" -eq 1 ] || exit 0
 ```
+
+The four bats tests from Step 1 remain valid regression guards (pure delete,
+`:refspec` delete, `--tags`, and the `echo git push` substring case all still
+resolve to allow). The **discriminating** cases that separate exempt from
+non-exempt (`git push origin main --tags`, `git push && git push --tags`) can
+only be asserted once the deny path exists, so they are added in Task 3.
 
 - [ ] **Step 4: Run to verify exemption tests pass**
 
@@ -386,12 +415,45 @@ Append to `tests/hook-prepush.bats`:
   [[ "$output" != *"--base"* ]]   # stub echoes args to stderr; none expected
   rm -rf "$plug" "$proj"
 }
+
+@test "hook: 'git push origin main --tags' is GATED (code + tags, not exempt)" {
+  local plug proj
+  plug="$(qg_make_stub_plugin 1)"   # stub denies if the gate runs
+  proj="$(qg_make_git_repo)"
+  CLAUDE_PLUGIN_ROOT="$plug" CLAUDE_PROJECT_DIR="$proj" \
+    run bash -c 'printf "%s" "{\"tool_input\":{\"command\":\"git push origin main --tags\"}}" | "$(qg_hook_path)"'
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+  rm -rf "$plug" "$proj"
+}
+
+@test "hook: 'git push && git push --tags' is GATED (first push is non-exempt)" {
+  local plug proj
+  plug="$(qg_make_stub_plugin 1)"
+  proj="$(qg_make_git_repo)"
+  CLAUDE_PLUGIN_ROOT="$plug" CLAUDE_PROJECT_DIR="$proj" \
+    run bash -c 'printf "%s" "{\"tool_input\":{\"command\":\"git push && git push --tags\"}}" | "$(qg_hook_path)"'
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+  rm -rf "$plug" "$proj"
+}
+
+@test "hook: pure 'git push --tags' stays exempt even with a failing gate stub" {
+  local plug proj
+  plug="$(qg_make_stub_plugin 1)"   # would deny IF the gate ran
+  proj="$(qg_make_git_repo)"
+  CLAUDE_PLUGIN_ROOT="$plug" CLAUDE_PROJECT_DIR="$proj" \
+    run bash -c 'printf "%s" "{\"tool_input\":{\"command\":\"git push --tags\"}}" | "$(qg_hook_path)"'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]   # exempt -> allowed without running the gate
+  rm -rf "$plug" "$proj"
+}
 ```
 
 - [ ] **Step 2: Run to verify they fail**
 
-Run: `bats tests/hook-prepush.bats -f "gate exit|absolute"`
-Expected: FAIL — the script currently `exit 0`s after exemptions without running `qg`.
+Run: `bats tests/hook-prepush.bats -f "gate exit|absolute|GATED"`
+Expected: FAIL — the script currently `exit 0`s after the gating decision without running `qg`.
 
 - [ ] **Step 3: Append gate execution + decision mapping to `hooks/pre-push-gate.sh`**
 
