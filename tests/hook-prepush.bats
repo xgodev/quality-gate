@@ -114,12 +114,29 @@ setup() {
 
 @test "hook: absolute mode when no upstream (qg called WITHOUT --base)" {
   local plug proj
-  plug="$(qg_make_stub_plugin 0)"
-  proj="$(qg_make_git_repo)"   # fresh repo: no upstream, no origin/HEAD
+  plug="$(qg_make_stub_plugin 1)"   # deny path so the stub args surface in the reason
+  proj="$(qg_make_git_repo)"        # fresh repo: no upstream, no origin/HEAD
   CLAUDE_PLUGIN_ROOT="$plug" CLAUDE_PROJECT_DIR="$proj" \
-    run bash -c "printf '%s' '{\"tool_input\":{\"command\":\"git push origin HEAD\"}}' | \"$(qg_hook_path)\" 2>&1"
+    run bash -c "printf '%s' '{\"tool_input\":{\"command\":\"git push origin HEAD\"}}' | \"$(qg_hook_path)\""
   [ "$status" -eq 0 ]
-  [[ "$output" != *"--base"* ]]   # stub echoes args to stderr; none expected
+  echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+  echo "$output" | jq -e '.hookSpecificOutput.permissionDecisionReason | contains("stub-qg-args:")'
+  echo "$output" | jq -e '.hookSpecificOutput.permissionDecisionReason | contains("--base") | not'
+  rm -rf "$plug" "$proj"
+}
+
+@test "hook: base resolved from origin/HEAD is forwarded as --base" {
+  local plug proj
+  plug="$(qg_make_stub_plugin 1)"   # deny path so the stub args surface
+  proj="$(qg_make_git_repo)"
+  # fabricate a remote default branch: origin/main -> HEAD, origin/HEAD -> origin/main
+  git -C "$proj" update-ref refs/remotes/origin/main "$(git -C "$proj" rev-parse HEAD)"
+  git -C "$proj" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+  CLAUDE_PLUGIN_ROOT="$plug" CLAUDE_PROJECT_DIR="$proj" \
+    run bash -c "printf '%s' '{\"tool_input\":{\"command\":\"git push origin HEAD\"}}' | \"$(qg_hook_path)\""
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+  echo "$output" | jq -e '.hookSpecificOutput.permissionDecisionReason | contains("--base origin/main")'
   rm -rf "$plug" "$proj"
 }
 
