@@ -37,10 +37,13 @@ the hook allows the command and prints a note to stderr.
 
 ## Registration
 
-Declared in `hooks/hooks.json` (matcher `Bash`) and wired via the top-level
-`"hooks": "./hooks/hooks.json"` path in `.claude-plugin/plugin.json`. The
-script locates the gate through `${CLAUDE_PLUGIN_ROOT}` and the project
-through `${CLAUDE_PROJECT_DIR}`.
+Declared in `hooks/hooks.json` (matcher `Bash`), which Claude Code loads
+**automatically** because it sits at the plugin's standard hooks path. The
+plugin manifest must NOT also reference it: a `"hooks": "./hooks/hooks.json"`
+key in `.claude-plugin/plugin.json` duplicates the auto-loaded file and makes
+the whole plugin fail to load (`manifest.hooks` is only for *additional*,
+non-standard hook files). The script locates the gate through
+`${CLAUDE_PLUGIN_ROOT}` and the project through `${CLAUDE_PROJECT_DIR}`.
 
 ## Known limitations
 

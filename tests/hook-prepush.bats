@@ -19,9 +19,9 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
-@test "plugin.json references the hooks file" {
+@test "plugin.json does NOT declare a hooks key (standard hooks/hooks.json auto-loads; a manifest ref duplicates it)" {
   run jq -e '.hooks' "$QG_REPO_ROOT/.claude-plugin/plugin.json"
-  [ "$status" -eq 0 ]
+  [ "$status" -ne 0 ]
 }
 
 @test "hook: 'echo git push' is NOT gated (substring, not a command)" {

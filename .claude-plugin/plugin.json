@@ -1,7 +1,6 @@
 {
   "name": "quality-gate",
-  "version": "0.3.0",
-  "hooks": "./hooks/hooks.json",
+  "version": "0.3.1",
   "description": "Self-contained Claude Code plugin: the Quality Gate dispatcher + per-language gates (Rust, Go, Python, Node.js, Java, Swift, Kotlin, Web) + the `quality-gate` skill. Fails only when a PR worsens a metric vs a chosen base ref; tamper-resistant rulesets; absolute (no-base) mode; ships an opt-in pre-push hook that blocks push/PR-create on a failing gate.",
   "author": {
     "name": "xgodev"

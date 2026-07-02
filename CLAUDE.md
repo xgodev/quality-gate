@@ -102,3 +102,10 @@ anything so a future session does not repeat past mistakes.
 - Leaving any Portuguese string (run a language sweep before push).
 - Guessing Claude Code plugin specifics — verify (claude-code-guide / docs)
   before asserting.
+- Declaring `"hooks": "./hooks/hooks.json"` in `plugin.json` — the standard
+  `hooks/hooks.json` is auto-loaded; a manifest reference to it is a
+  DUPLICATE and makes the whole plugin fail to load ("Duplicate hooks file
+  detected", broke v0.3.0). `manifest.hooks` is only for additional,
+  non-standard hook files. Doc-verified forms are not runtime-verified: any
+  change to plugin registration (manifest keys, hooks, skills layout) must be
+  smoke-tested in a real Claude Code session before release.

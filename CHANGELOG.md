@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.1]
+
+Fix: the plugin failed to load in 0.3.0 with "Duplicate hooks file detected".
+Claude Code auto-loads the standard `hooks/hooks.json`, and `plugin.json` ALSO
+declared `"hooks": "./hooks/hooks.json"` -- the manifest key is only for
+*additional* non-standard hook files, so the double registration broke the
+whole plugin. Removes the manifest `hooks` key (auto-discovery is enough),
+flips the bats test that asserted the buggy key, and corrects the
+`docs/hooks.md` Registration section.
+
 ## [0.3.0]
 
 Feature: opt-in pre-push enforcement hook. A bundled `PreToolUse` hook
