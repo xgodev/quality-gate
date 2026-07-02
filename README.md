@@ -8,11 +8,13 @@ This repository is **two-in-one**:
 - **Claude Code plugin:** installs the `quality-gate` skill **together** with the scripts (bundled dispatcher, no runtime clone):
 
 ```text
-/plugin marketplace add git@github.com:xgodev/quality-gate.git
-/plugin install quality-gate@xgodev-quality-gate
+/plugin marketplace add git@github.com:xgodev/claude-plugin.git
+/plugin install quality-gate@xgodev-plugins
 ```
 
-The marketplace is named `xgodev-quality-gate` (scoped to this repo, to avoid colliding with other `xgodev/*` marketplaces); the plugin inside it is `quality-gate`. Another plugin can declare `quality-gate@xgodev-quality-gate` as a dependency, re-listing this repo in its own `marketplace.json`.
+The plugin is distributed through the single `xgodev-plugins` marketplace, hosted in [`xgodev/claude-plugin`](https://github.com/xgodev/claude-plugin), which lists this repo as a GitHub source. This repo is not a marketplace itself. Another plugin in the same marketplace can declare `quality-gate` (bare name) as a dependency.
+
+> Until 0.3.1 this repo was its own marketplace (`xgodev-quality-gate`). If you installed the old way: `/plugin uninstall quality-gate@xgodev-quality-gate`, `/plugin marketplace remove xgodev-quality-gate`, then install as above.
 
 ## How it works
 

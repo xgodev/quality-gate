@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.0]
+
+Changed: distribution moved to the single `xgodev-plugins` marketplace
+(hosted in `xgodev/claude-plugin`, which lists this repo as a GitHub
+source). This repo's own marketplace (`xgodev-quality-gate`) is retired
+and `.claude-plugin/marketplace.json` removed -- BREAKING for the install
+path only; the plugin itself is unchanged. Existing users: uninstall
+`quality-gate@xgodev-quality-gate`, remove the `xgodev-quality-gate`
+marketplace, add `xgodev/claude-plugin`, install
+`quality-gate@xgodev-plugins`. README install section updated.
+
 ## [0.3.1]
 
 Fix: the plugin failed to load in 0.3.0 with "Duplicate hooks file detected".
