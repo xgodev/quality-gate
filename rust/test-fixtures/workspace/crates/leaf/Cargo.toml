@@ -1,0 +1,7 @@
+[package]
+name = "qgfix-leaf"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+qgfix-mid = { path = "../mid" }

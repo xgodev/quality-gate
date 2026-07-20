@@ -95,7 +95,7 @@ count_fmt_errors() {
   # project's .prettierrc and .editorconfig). --ignore-path points at
   # QG's CANONICAL .prettierignore (NEVER the project's): LAW -- measures
   # SOURCE CODE, generated/vendored dirs stay out. Checks HTML+CSS+SCSS.
-  ( cd "$dir" && npx --yes prettier --check \
+  ( cd "$dir" && NO_COLOR=1 FORCE_COLOR=0 npx --yes prettier --check \
       --config "$rules/.prettierrc.json" --no-editorconfig \
       --ignore-path "$rules/.prettierignore" \
       "**/*.{html,css,scss}" ) > "$log" 2>&1 || true
@@ -125,10 +125,10 @@ count_lint_errors() {
     # canonical ignore) instead of a glob "**/*" -- LAW: never scan generated/
     # vendored dirs nor *.min.css.
     ( cd "$dir" && printf '%s\n' "$css_files" \
-        | xargs npx --yes stylelint \
+        | NO_COLOR=1 FORCE_COLOR=0 xargs npx --yes stylelint \
         --config "$rules/.stylelintrc.json" ) > "$log.style" 2>&1 || true
     local s
-    # stylelint default formatter: linhas " N:N  ✖  msg  rule".
+    # stylelint default formatter: lines " N:N  ✖  msg  rule".
     s=$(_grep_count '^[[:space:]]+[0-9]+:[0-9]+' "$log.style")
     total=$((total + s))
     cat "$log.style" >> "$log"

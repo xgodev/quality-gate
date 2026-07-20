@@ -101,7 +101,7 @@ brew install ruff   # macOS
 ### Stale baseline cache after changing the base branch
 
 ```bash
-~/.quality-gate/python/qg.sh --base origin/main --refresh-baseline
+~/.claude-plugin/tools/quality-gate/python/qg.sh --base origin/main --refresh-baseline
 # OR
 rm -rf /tmp/qg-baseline-python
 ```
@@ -125,4 +125,4 @@ None in V1. Future candidates:
 - `security` via `bandit -q -r .` -- security issues.
 - `vuln` via `pip-audit` -- vulnerabilities in dependencies.
 
-To add, follow the contract (section "Extending") and `skills/add-quality-gate/`.
+To add, follow the contract (section "Extending") and the maintainer-only `add-quality-gate` skill (project-local, `.claude/skills/add-quality-gate/` in the gate repo).

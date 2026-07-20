@@ -117,7 +117,7 @@ count_fmt_errors() {
   # project's .prettierrc and .editorconfig). --ignore-path points at QG's
   # CANONICAL .prettierignore (NEVER the project's): LAW -- measures
   # SOURCE CODE, generated/vendored dirs stay out.
-  ( cd "$dir" && npx --yes prettier --check \
+  ( cd "$dir" && NO_COLOR=1 FORCE_COLOR=0 npx --yes prettier --check \
       --config "$rules/.prettierrc.json" --no-editorconfig \
       --ignore-path "$rules/.prettierignore" . ) > "$log" 2>&1 || true
   # prettier emits "[warn] <path>" for each diverging file. A second defensive
@@ -163,7 +163,7 @@ count_build_errors() {
     local base_ts qg_tsconfig
     qg_tsconfig="$rules/tsconfig.base.json"
     if [ ! -f "$qg_tsconfig" ]; then
-      echo "::error::QG tsconfig.base.json absent in $rules -- corrupted gate install (reinstall: 'git clone <repo> ~/.quality-gate' (Linux/macOS))" >> "$log"
+      echo "::error::QG tsconfig.base.json absent in $rules -- corrupted gate install (reinstall the claude-plugin plugin, or re-clone the repo) (Linux/macOS)" >> "$log"
       printf '0\n'
       return
     fi
@@ -246,11 +246,12 @@ count_complexity() {
   : > "$log"
   local rules
   rules=$(qg_ruleset_dir)
-  # LEI (docs/contract.md): mede CODIGO-FONTE. --config aponta para o
-  # eslint.config.mjs do QG (cujo PRIMEIRO elemento e o `ignores` canonico,
-  # ignore GLOBAL do flat config) + --rule sobrepoe so a regra complexity.
-  # Sem --config, --no-config-lookup deixaria o eslint sem ignore canonico e
-  # ele varreria build/dist (bundles minificados -> complexity inflado).
+  # LAW (docs/contract.md): measures SOURCE code. --config points at QG's
+  # eslint.config.mjs (whose FIRST element is the canonical `ignores`, the
+  # GLOBAL ignore of the flat config) + --rule overrides only the complexity
+  # rule. Without --config, --no-config-lookup would leave eslint with no
+  # canonical ignore and it would sweep build/dist (minified bundles ->
+  # inflated complexity).
   ( cd "$dir" && npx --yes eslint --no-config-lookup \
       --config "$rules/eslint.config.mjs" \
       --rule '{"complexity":["error",15]}' . ) > "$log" 2>&1 || true
@@ -272,6 +273,39 @@ measure_coverage() {
   rm -rf "$cov_dir"
   # Bug 2: never returns empty/"Unknown" -> 0.
   printf '%s\n' "$(_num "$pct")"
+}
+
+# Perf fusion: for the node --test path, ONE c8-wrapped run yields both the
+# failure count and the coverage percentage. Projects with a package.json
+# "test" script keep the two separate runs (their script drives the suite;
+# c8 only wraps node --test), matching the previous behavior exactly.
+measure_test_and_coverage() {
+  local dir="$1" log="$2" out="$3"
+  : > "$log"
+  if [ -f "$dir/package.json" ] && jq -e '.scripts.test' "$dir/package.json" >/dev/null 2>&1; then
+    local n cov
+    n=$(count_test_failures "$dir" "$log")
+    cov=$(measure_coverage "$dir" "$out")
+    printf '%d %s\n' "$(_num "$n")" "$(_num "$cov")"
+    return
+  fi
+  local cov_dir
+  cov_dir=$(dirname "$out")/coverage-tmp-$$
+  ( cd "$dir" && npx --yes c8 --reports-dir="$cov_dir" --reporter=json-summary node --test ) > "$log" 2>&1 || true
+  local n pct=0
+  n=$(awk '
+    /^[[:space:]]*ℹ fail / { print $3; exit }
+    /^# fail / { print $3; exit }
+  ' "$log")
+  n=$(_num "$n")
+  if [ -f "$cov_dir/coverage-summary.json" ]; then
+    pct=$(jq -r '.total.lines.pct // 0' "$cov_dir/coverage-summary.json" 2>/dev/null || echo 0)
+    cp "$cov_dir/coverage-summary.json" "$out" 2>/dev/null || true
+  else
+    printf '{"coverage_percent": 0}\n' > "$out"
+  fi
+  rm -rf "$cov_dir"
+  printf '%d %s\n' "${n%.*}" "$(_num "$pct")"
 }
 # Baseline submodule extraction (shared logic across all language gates).
 # `git archive` does NOT expand git submodules: in the baseline checkout the

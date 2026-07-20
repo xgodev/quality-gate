@@ -498,7 +498,7 @@ EOF
   local rd
   rd=$(qg_ruleset_dir)
   [ -f "$rd/.golangci.yml" ] || { echo "QG ruleset absent: "; return 1; }
-  command -v golangci-lint >/dev/null 2>&1 || skip "golangci-lint not available (fallback go vet ja eh sem-config / tamper-proof)"
+  command -v golangci-lint >/dev/null 2>&1 || skip "golangci-lint not available (the go vet fallback is already config-free / tamper-proof)"
   local tmp logdir
   tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
   cp -R "$(qg_fixture_path go regressed)/." "$tmp/"
@@ -567,4 +567,32 @@ EOF
   [ "$status" -eq 0 ]
   cd "$QG_REPO_ROOT"
   rm -rf "$plain" "$target"
+}
+
+@test "measure_test_and_coverage: ONE run yields failures AND coverage (perf fusion)" {
+  source "$QG_REPO_ROOT/go/lib/measure.sh"
+  local logdir
+  logdir=$(qg_tmp_dir)
+  result=$(measure_test_and_coverage "$(qg_fixture_path go regressed)" "$logdir/test.log" "$logdir/cov.json")
+  fails=$(echo "$result" | awk '{print $1}')
+  cov=$(echo "$result" | awk '{print $2}')
+  [ "$fails" -ge 1 ]
+  awk -v c="$cov" 'BEGIN { exit !(c >= 0 && c < 100) }'
+  grep -qE -- '--- FAIL:' "$logdir/test.log"
+  rm -rf "$logdir"
+}
+
+@test "comparative: base metrics are cached by base SHA (second run skips base measurement)" {
+  command -v go >/dev/null || skip "go not available"
+  repo=$(qg_tmp_dir)
+  cp -R "$(qg_fixture_path go baseline)/." "$repo/"
+  cd "$repo"
+  git -c init.defaultBranch=main init -q . && git config user.email t@t && git config user.name t
+  git add -A && git commit -qm base
+  git checkout -qb feature
+  echo '// touch' >> lib.go && git add -A && git commit -qm change
+  QG_BASELINE_CACHE_DIR="$repo/.qg-cache" run bash "$QG_REPO_ROOT/go/qg.sh" --base main --force-full --log-dir "$repo/logs1"
+  QG_BASELINE_CACHE_DIR="$repo/.qg-cache" run bash "$QG_REPO_ROOT/go/qg.sh" --base main --force-full --log-dir "$repo/logs2"
+  printf '%s' "$output" | grep -q 'base metrics: cached'
+  cd / && rm -rf "$repo"
 }

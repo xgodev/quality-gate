@@ -1,0 +1,6 @@
+.git
+docker
+.github
+docs
+**/test-fixtures/**/target
+**/*.md

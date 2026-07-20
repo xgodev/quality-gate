@@ -243,3 +243,49 @@ EOF
   [[ "$stderr" == *"--format json"* ]]
   cd "$QG_REPO_ROOT"; rm -rf "$root" "$proj"
 }
+
+@test "dispatcher: N matches --format json -- a silent tool-error gate does not corrupt the envelope" {
+  local root proj
+  root=$(qg_tmp_dir); proj=$(qg_tmp_dir)
+  make_fake_root "$root" go GO_SENTINEL 0
+  # A gate that detects but emits NOTHING on stdout and exits 2 (tool error
+  # before render_json) -- the aggregate JSON must stay valid.
+  mkdir -p "$root/rust"
+  cat > "$root/rust/qg.sh" <<'EOS'
+#!/usr/bin/env bash
+for a in "$@"; do
+  if [ "$a" = "--detect" ]; then
+    [ -f ./RUST_SENTINEL ] && { echo rust; exit 0; }
+    exit 1
+  fi
+done
+echo "::error::tool missing" >&2
+exit 2
+EOS
+  chmod +x "$root/rust/qg.sh"
+  cd "$proj"; touch GO_SENTINEL RUST_SENTINEL
+  run --separate-stderr "$root/qg" --base origin/main --format json
+  [ "$status" -eq 2 ]
+  printf '%s' "$output" | jq -e . >/dev/null
+  printf '%s' "$output" | jq -e '.aggregate_verdict == "failed"' >/dev/null
+  printf '%s' "$output" | jq -e '.results | length == 2' >/dev/null
+  cd "$QG_REPO_ROOT"; rm -rf "$root" "$proj"
+}
+
+@test "dispatcher: 0 matches -- hygiene still runs (violation beats exit 3)" {
+  local root proj
+  root=$(qg_tmp_dir); proj=$(qg_tmp_dir)
+  make_fake_root "$root" go GO_SENTINEL 0
+  mkdir -p "$root/hygiene"
+  cp "$QG_REPO_ROOT/hygiene/scan.sh" "$root/hygiene/scan.sh"
+  mkdir -p "$proj/.github/workflows"
+  printf 'on:\n  pull_request:\njobs:\n  t:\n    steps:\n      - run: pytest || true\n' > "$proj/.github/workflows/ci.yml"
+  cd "$proj"
+  run "$root/qg" --base origin/main
+  [ "$status" -eq 1 ]
+  printf '%s' "$output" | grep -q '|| true'
+  rm -rf "$proj/.github"
+  run "$root/qg" --base origin/main
+  [ "$status" -eq 3 ]
+  cd "$QG_REPO_ROOT"; rm -rf "$root" "$proj"
+}

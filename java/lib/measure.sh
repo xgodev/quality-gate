@@ -143,7 +143,7 @@ count_lint_errors() {
   ( cd "$dir" && pmd check --no-cache --no-progress \
       -R "$rules/pmd.xml" \
       -d src/main/java -f text ) > "$log" 2>&1 || true
-  # Cada issue eh uma linha: file:line: rule: msg
+  # Each issue is one line: file:line: rule: msg
   _grep_count '\.java:[0-9]+:[[:space:]]+[A-Za-z]+:' "$log"
 }
 
@@ -171,9 +171,9 @@ count_test_failures() {
       -Dmaven.test.failure.ignore=true \
       test ) > "$log" 2>&1 || true
   # surefire prints ONE line "Tests run: N, Failures: F, Errors: E, Skipped: S" per test class.
-  # O resumo final eh "Tests run: <total>, Failures: <total>, Errors: <total>, Skipped: <total>"
-  # tipicamente apos "[INFO] Results:".
-  # Para evitar dupla-contagem, coletamos APENAS o ULTIMO match (que eh o resumo final).
+  # The final summary is "Tests run: <total>, Failures: <total>, Errors: <total>, Skipped: <total>",
+  # typically after "[INFO] Results:".
+  # To avoid double-counting, only the LAST match (the final summary) is kept.
   local n
   n=$(awk '
     /Tests run: [0-9]+, Failures: [0-9]+, Errors: [0-9]+/ {
@@ -220,8 +220,8 @@ measure_coverage() {
   local xml="$dir/target/site/jacoco/jacoco.xml"
   local pct=0
   if [ -f "$xml" ]; then
-    # Pega o ULTIMO counter type="LINE" do XML (totals do report).
-    # Linhas no XML: <counter type="LINE" missed="N" covered="M"/>
+    # Take the LAST counter type="LINE" in the XML (the report totals).
+    # XML lines: <counter type="LINE" missed="N" covered="M"/>
     pct=$(LC_ALL=C awk '
       {
         while (match($0, /<counter type="LINE" missed="[0-9]+" covered="[0-9]+"\/>/)) {
@@ -245,6 +245,61 @@ measure_coverage() {
   fi
   # Bug 2: never returns empty/"Unknown" -> 0.
   printf '%s\n' "$(_num "$pct")"
+}
+
+# Perf fusion: ONE `mvn test` run yields both the surefire failure count and
+# the jacoco report -- measure_coverage was a full second suite run per side.
+# Echoes "<failures> <pct>".
+measure_test_and_coverage() {
+  local dir="$1" log="$2" out="$3"
+  : > "$log"
+  local mvn_cmd
+  mvn_cmd=$(qg_maven_cmd "$dir" "$log") || { printf '0 0\n'; return; }
+  ( cd "$dir" && "$mvn_cmd" -q -B \
+      -Dmaven.test.failure.ignore=true \
+      test ) > "$log" 2>&1 || true
+  local n
+  n=$(awk '
+    /Tests run: [0-9]+, Failures: [0-9]+, Errors: [0-9]+/ {
+      for (i=1; i<=NF; i++) {
+        if ($i == "Failures:") { fail = $(i+1); gsub(",", "", fail) }
+        if ($i == "Errors:")   { err  = $(i+1); gsub(",", "", err) }
+      }
+      last_fail = fail
+      last_err = err
+      found = 1
+    }
+    END {
+      if (found) print (last_fail + last_err) + 0
+      else print 0
+    }
+  ' "$log")
+  [ -z "$n" ] && n=0
+  local xml="$dir/target/site/jacoco/jacoco.xml"
+  local pct=0
+  if [ -f "$xml" ]; then
+    pct=$(LC_ALL=C awk '
+      {
+        while (match($0, /<counter type="LINE" missed="[0-9]+" covered="[0-9]+"\/>/)) {
+          tag = substr($0, RSTART, RLENGTH)
+          $0 = substr($0, RSTART + RLENGTH)
+          last_tag = tag
+        }
+      }
+      END {
+        if (last_tag == "") { print 0; exit }
+        match(last_tag, /missed="[0-9]+"/)
+        m = substr(last_tag, RSTART+8, RLENGTH-9)
+        match(last_tag, /covered="[0-9]+"/)
+        c = substr(last_tag, RSTART+9, RLENGTH-10)
+        total = m + c
+        if (total == 0) { print 0; exit }
+        printf "%.2f\n", (c * 100.0) / total
+      }
+    ' "$xml")
+    cp "$xml" "$out" 2>/dev/null || true
+  fi
+  printf '%d %s\n' "$n" "$(_num "$pct")"
 }
 # Baseline submodule extraction (shared logic across all language gates).
 # `git archive` does NOT expand git submodules: in the baseline checkout the

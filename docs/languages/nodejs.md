@@ -104,7 +104,7 @@ export default [{ files: ['**/*.js'], rules: { 'no-unused-vars': 'error' } }];
 ### Stale baseline cache after changing the base branch
 
 ```bash
-~/.quality-gate/nodejs/qg.sh --base origin/main --refresh-baseline
+~/.claude-plugin/tools/quality-gate/nodejs/qg.sh --base origin/main --refresh-baseline
 # OR
 rm -rf /tmp/qg-baseline-nodejs
 ```
@@ -128,4 +128,4 @@ None in V1. Future candidates:
 - `bundle_size` via `bundlesize` or `size-limit` -- output size.
 - `type_coverage` via `typescript-coverage-report` -- % of code without `any`.
 
-To add, follow the contract (section "Extending") and `skills/add-quality-gate/`.
+To add, follow the contract (section "Extending") and the maintainer-only `add-quality-gate` skill (project-local, `.claude/skills/add-quality-gate/` in the gate repo).

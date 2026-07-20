@@ -49,7 +49,7 @@ Reserved sentinels per language:
 
 For the JVM gates, `build.gradle[.kts]` alone is a build-system sentinel shared by Java and Kotlin projects (Java projects routinely use the Kotlin Gradle DSL). Detection therefore requires a source file of the language under `src/` so that pure-Java projects are not classified as Kotlin and vice-versa. Mixed Java+Kotlin Gradle projects continue to match both gates.
 
-Consumers (the `quality-gate` skill) iterate `<lang>/qg.sh --detect`, collect the ones that exit 0 and run only those -- no hardcoded sentinel table.
+Consumers (the `dev` skill's gate leaf) iterate `<lang>/qg.sh --detect`, collect the ones that exit 0 and run only those -- no hardcoded sentinel table.
 
 ## Absolute mode (`--base` optional)
 
@@ -94,7 +94,7 @@ If `--base` AND `QG_BASE_REF` are both absent -> **absolute mode** (not an error
 Fixed structure in 3 blocks:
 
 ```
-═══ Quality Gate — <lang> ═══
+═══ Quality Gate -- <lang> ═══
   branch:        <current branch>
   base ref:      <--base>
   baseline:      <path>
@@ -209,9 +209,10 @@ Env var `QG_BYPASS_REASON="<reason>"`:
 
 No equivalent CLI flag. The env var adds friction deliberately.
 
-## Deterministic dispatcher (`qg` at the root)
+## Deterministic dispatcher (`qg` at the gate root)
 
-The root of the gate repo ships a `qg` executable (`~/.quality-gate/qg`).
+The gate root (`tools/quality-gate/` in the plugin repo) ships a `qg`
+executable next to the `<lang>/` dirs.
 **100% shell detection, zero AI**: it discovers the target project's language(s) via
 `<lang>/qg.sh --detect` and runs the matching gate(s). The consumer skill
 ONLY calls this script -- it never iterates `<lang>/qg.sh` on its own nor keeps
@@ -245,6 +246,43 @@ a hardcoded sentinel table.
 Exit 3 is the **dispatcher's**, never an individual `<lang>/qg.sh`'s. Consumers
 map: 3 -> "language out of scope", 2 -> tool/setup error, 1 -> regression/
 threshold violated, 0 -> green.
+
+## Hygiene scan (repo-level, dispatcher-run)
+
+After the language gate(s), the dispatcher runs `hygiene/scan.sh` once at
+the target root. It catches repo-level defects no per-language metric
+sees; findings go to STDERR only (`::error`/`::warning` lines), so JSON
+reports stay parseable. A hard violation contributes exit 1 to the
+aggregate verdict.
+
+Hard violations (exit 1):
+
+- A CI test step whose exit code cannot fail the build (`|| true`,
+  `|| exit 0`), `continue-on-error: true` on a workflow that runs tests,
+  or a test workflow with no automatic trigger (`workflow_dispatch` only).
+- A debt-allowlist entry (`*allowlist*`, `*xfail*`, `known_failures*`)
+  pointing at a path that no longer exists.
+- A `TODO(#N)`/`FIXME(#N)`/`HACK(#N)` whose issue is CLOSED (resolved via
+  `gh` when available; unresolvable refs are warnings, and a missing `gh`
+  degrades to a warning).
+- A module/crate-wide suppression (`#![allow(lint)]`) of a lint whose
+  threshold the repo's own clippy config sets, or a file-level
+  `/* eslint-disable */` with no rule names in a repo with an eslint
+  config.
+
+Warnings (never fail): bare `TODO`/`FIXME`/`HACK` without a tracker
+reference, blanket suppressions without a configured threshold or an
+adjacent reason, file-level `noqa`.
+
+The EXIT CODE is authoritative: a language gate's JSON report does not
+include hygiene, so a `passed` report with exit 1 means a hygiene
+violation (details on stderr). The N-language envelope's
+`aggregate_verdict` does fold hygiene in. The scan also runs when NO
+language is detected: a hygiene violation turns the usual exit 3 into
+exit 1.
+
+`QG_HYGIENE=0` disables the scan -- an env supplied by whoever RUNS the
+gate, never a project file (tamper-resistance law applies).
 
 ## React/Vue/etc. do NOT become their own gate
 
@@ -330,7 +368,7 @@ projects:                             # monorepo: closed list of sub-projects
 
 ### `projects` block (monorepo)
 
-Read ONLY by the root `qg` dispatcher. **Closed** schema per item: allowed keys
+Read ONLY by the `qg` dispatcher. **Closed** schema per item: allowed keys
 = `path` (required), `lang` (optional). Unknown key -> exit 2.
 If `projects:` exists, the dispatcher **ignores** root detection and uses only this
 list. `lang:` does NOT select the ruleset (that is a tamper-surface) -- it only restricts which
@@ -394,6 +432,34 @@ If `git diff --name-only <base>...HEAD` (+ staged + worktree) matches nothing an
 3. Exit 0.
 
 `extra_fast_path_paths` from `.qg.yaml` is added to the regex.
+
+The three-way changed-file union (`committed <base>...HEAD` + staged + worktree)
+is computed once by the shared `lib/changed-files.sh` (`qg_changed_files`),
+sourced by every gate -- the block is no longer copied per gate.
+
+## Diff scoping (rust)
+
+The rust gate does not measure the whole workspace for every touched `.rs`.
+After the fast-path lets a Rust change through, it resolves the affected
+workspace packages -- the packages the changed files belong to (`cargo metadata`
+manifest roots, longest-prefix match) **plus their in-workspace
+reverse-dependents** (BFS over the resolve graph) -- and scopes every cargo
+metric to that set (`-p <pkg> ... --lib --bins --tests`; a separate `--examples`
+pass runs only for the packages the diff actually touched, so an untouched
+crate's platform-specific example never gates the run). Coverage instruments
+only the affected packages, avoiding whole-tree linker OOM.
+
+The baseline is measured on the same set intersected with the packages that
+exist on the base ref (a package the PR adds reads base = 0). The measured scope
+is part of the base-metrics cache key, so a cached full-workspace run is never
+reused for a narrowed run or vice versa.
+
+Full-workspace fallback (measure everything, both sides) triggers on a diff to a
+root-level file that can affect the whole graph -- `Cargo.lock`, root
+`Cargo.toml`, `rust-toolchain`/`rust-toolchain.toml`, `.cargo/config*`, root
+`build.rs` -- or on `--force-full` / `QG_FORCE_FULL=1`. The measured scope is
+reported in the text header and JSON output. Other gates do not scope by diff
+yet; the rust resolver (`rust/lib/scope.sh`) is the reference for adopting it.
 
 ## Baseline
 

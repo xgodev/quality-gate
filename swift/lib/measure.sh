@@ -187,8 +187,39 @@ measure_coverage() {
   local dir="$1" out="$2"
   # swift test --enable-code-coverage produces profraw files in .build/<arch>/debug/codecov/.
   # When the tests PASS, swift also generates default.profdata + per-module JSONs.
-  # When they FAIL, only the profraw exist -- we need to generate profdata manually.
+  # When they FAIL, only the profraw exist -- profdata is generated manually below.
   ( cd "$dir" && swift test --enable-code-coverage ) >/dev/null 2>&1 || true
+  _swift_extract_coverage "$dir" "$out"
+}
+
+# Perf fusion: ONE `swift test --enable-code-coverage` run yields both the
+# failure count (XCTest summary in the log) and the coverage profile -- the
+# gate used to run the exact same command twice per side.
+# Echoes "<failures> <coverage_pct>".
+measure_test_and_coverage() {
+  local dir="$1" log="$2" out="$3"
+  : > "$log"
+  ( cd "$dir" && swift test --enable-code-coverage ) > "$log" 2>&1 || true
+  local n
+  n=$(awk '
+    /Executed [0-9]+ tests?, with [0-9]+ failures?/ {
+      for (i=1; i<=NF; i++) {
+        if ($i == "with") { last_fail = $(i+1); found = 1 }
+      }
+    }
+    END {
+      if (found) print last_fail + 0
+      else print 0
+    }' "$log")
+  local pct
+  pct=$(_swift_extract_coverage "$dir" "$out")
+  printf '%d %s\n' "$(_num "${n:-0}")" "$(_num "${pct:-0}")"
+}
+
+# Extraction only (no test run): profraw -> profdata -> llvm-cov export summary.
+# Assumes `swift test --enable-code-coverage` already ran in $dir.
+_swift_extract_coverage() {
+  local dir="$1" out="$2"
   local cov_dir
   cov_dir=$(find "$dir/.build" -type d -name codecov 2>/dev/null | head -1)
   if [ -z "$cov_dir" ]; then
@@ -211,8 +242,8 @@ measure_coverage() {
     return
   fi
 
-  # Encontra o(s) binario(s) executavel xctest. Excluir contents/dSYM.
-  # Convencao SwiftPM: <pkg>.xctest/Contents/MacOS/<pkg> (sem extensao, executavel).
+  # Find the executable xctest binaries (excluding contents/dSYM).
+  # SwiftPM convention: <pkg>.xctest/Contents/MacOS/<pkg> (no extension, executable).
   local binaries
   binaries=$(find "$dir/.build" -type d -name '*.xctest' 2>/dev/null | while read -r b; do
     pkg=$(basename "$b" .xctest)
@@ -240,7 +271,7 @@ measure_coverage() {
     local abs_bin
     abs_bin=$(cd "$(dirname "$bin")" && pwd)/$(basename "$bin")
     local json
-    # Filtra para Sources/ (exclui test code) -- comparavel com outras linguagens.
+    # Filter to Sources/ (excludes test code) -- comparable with other languages.
     json=$(xcrun llvm-cov export -summary-only \
               -instr-profile="$abs_profdata" "$abs_bin" "$abs_dir/Sources" 2>/dev/null)
     [ -z "$json" ] && continue

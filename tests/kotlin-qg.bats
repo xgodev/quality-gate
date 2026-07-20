@@ -555,3 +555,17 @@ EOF
   cd "$QG_REPO_ROOT"
   rm -rf "$plain" "$target"
 }
+
+@test "measure_test_and_coverage: ONE run yields failures AND coverage (perf fusion)" {
+  command -v gradle >/dev/null || skip "gradle not available"
+  source "$QG_REPO_ROOT/kotlin/lib/measure.sh"
+  local logdir
+  logdir=$(qg_tmp_dir)
+  result=$(measure_test_and_coverage "$(qg_fixture_path kotlin regressed)" "$logdir/test.log" "$logdir/cov.json")
+  fails=$(echo "$result" | awk '{print $1}')
+  cov=$(echo "$result" | awk '{print $2}')
+  [ "$fails" -ge 1 ]
+  awk -v c="$cov" 'BEGIN { exit !(c >= 0 && c < 100) }'
+  grep -qE -- 'failed' "$logdir/test.log"
+  rm -rf "$logdir"
+}

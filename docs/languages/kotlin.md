@@ -121,7 +121,7 @@ And the XML report is generated at `build/reports/kover/report.xml` after `gradl
 ### Stale baseline cache after changing the base branch
 
 ```bash
-~/.quality-gate/kotlin/qg.sh --base origin/main --refresh-baseline
+~/.claude-plugin/tools/quality-gate/kotlin/qg.sh --base origin/main --refresh-baseline
 # OR
 rm -rf /tmp/qg-baseline-kotlin
 ```
@@ -145,4 +145,4 @@ None in V1. Future candidates:
 - `binary_compat` via `kotlinx-binary-compatibility-validator` -- breaking API changes.
 - `unused_deps` via `gradle nebula.dependency-lock` or similar.
 
-To add, follow the contract (section "Extending") and `skills/add-quality-gate/`.
+To add, follow the contract (section "Extending") and the maintainer-only `add-quality-gate` skill (project-local, `.claude/skills/add-quality-gate/` in the gate repo).

@@ -350,7 +350,7 @@ EOF
   local logdir
   logdir=$(qg_tmp_dir)
   result=$(count_fmt_errors "$(qg_fixture_path nodejs regressed)" "$logdir/test.log")
-  [ "$result" -gt 0 ]
+  [ "$result" -gt 0 ] || { echo "count_fmt=$result -- prettier log:"; cat "$logdir/test.log"; return 1; }
   rm -rf "$logdir"
 }
 
@@ -510,7 +510,7 @@ EOF
   cat > "$tmp/package.json" <<'EOF'
 { "name": "my-project", "version": "0.1.0", "private": true }
 EOF
-  # tsconfig do projeto existe (gatilho do branch tsc) mas e IGNORADO.
+  # the project tsconfig exists (tsc branch trigger) but is IGNORED.
   cat > "$tmp/tsconfig.json" <<'EOF'
 { "compilerOptions": { "jsx": "react-jsx", "strict": true } }
 EOF
@@ -531,7 +531,7 @@ EOF
   [ "$result" -ge 1 ] || { echo "expected >=1 real error; got $result"; cat "$logdir/build.log"; return 1; }
   [ "$result" -lt 5 ] || { echo "phantom JSX errors (TS17004) -- got $result"; cat "$logdir/build.log"; return 1; }
   if grep -qE 'error TS(17004|6142):' "$logdir/build.log"; then
-    echo "ainda emite TS17004/TS6142 (faltou --jsx no ruleset do QG)"; cat "$logdir/build.log"; return 1
+    echo "still emits TS17004/TS6142 (--jsx missing from the QG ruleset)"; cat "$logdir/build.log"; return 1
   fi
   rm -rf "$tmp" "$logdir"
 }
@@ -573,7 +573,7 @@ EOF
   cat > "$tmp/tsconfig.json" <<'EOF'
 { "compilerOptions": { "strict": false, "noImplicitAny": false, "jsx": "preserve" } }
 EOF
-  # Erro que SO aparece sob strict/noImplicitAny: param implicito any.
+  # An error that ONLY appears under strict/noImplicitAny: implicit any param.
   cat > "$tmp/App.tsx" <<'EOF'
 export function handler(payload) {
   return <pre>{JSON.stringify(payload)}</pre>;
@@ -736,4 +736,18 @@ EOF
   [ "$status" -eq 0 ]
   cd "$QG_REPO_ROOT"
   rm -rf "$plain" "$target"
+}
+
+@test "measure_test_and_coverage: ONE run yields failures AND coverage (perf fusion)" {
+  
+  source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
+  local logdir
+  logdir=$(qg_tmp_dir)
+  result=$(measure_test_and_coverage "$(qg_fixture_path nodejs regressed)" "$logdir/test.log" "$logdir/cov.json")
+  fails=$(echo "$result" | awk '{print $1}')
+  cov=$(echo "$result" | awk '{print $2}')
+  [ "$fails" -ge 1 ]
+  awk -v c="$cov" 'BEGIN { exit !(c >= 0 && c < 100) }'
+  grep -qE -- 'fail' "$logdir/test.log"
+  rm -rf "$logdir"
 }

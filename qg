@@ -163,10 +163,33 @@ if [ "$DISPATCH_DETECT_ONLY" = "1" ]; then
   exit 0
 fi
 
-# --- 0 matches -------------------------------------------------------------
+# Exit precedence: 2 > 1 > 3 > 0.
+worst_exit() {
+  local a="$1" b="$2"
+  for code in 2 1 3; do
+    if [ "$a" = "$code" ] || [ "$b" = "$code" ]; then
+      echo "$code"; return
+    fi
+  done
+  echo 0
+}
+
+# Repo-level hygiene scan (issues #7 #8 #11 #15): runs once at the target
+# root after the language gate(s). Findings go to stderr only; a violation
+# contributes exit 1 to the aggregate. QG_HYGIENE=0 (runner env) disables.
+run_hygiene() {
+  [ "${QG_HYGIENE:-1}" = "0" ] && return 0
+  local hs="$ROOT/hygiene/scan.sh"
+  [ -f "$hs" ] || return 0
+  ( cd "$TARGET" && bash "$hs" )
+}
+
+# --- 0 matches: no language gate, but hygiene still runs -------------------
 if [ -z "$MATCHES" ]; then
   echo "::error::no supported language detected" >&2
-  exit 3
+  rc=3
+  if ! run_hygiene; then rc=$(worst_exit "$rc" 1); fi
+  exit "$rc"
 fi
 
 N_MATCHES=$(echo "$MATCHES" | grep -c . || true)
@@ -180,25 +203,17 @@ for a in "$@"; do
 done
 [ -n "${QG_FORMAT:-}" ] && [ "$FMT" = "text" ] && FMT="$QG_FORMAT"
 
-# --- 1 match: forward directly, exit code intact ----------------------------
+# --- 1 match: forward directly, hygiene folded into the exit code ----------
 if [ "$N_MATCHES" -eq 1 ]; then
   slug=$(echo "$MATCHES" | head -1 | cut -d'|' -f1)
   wd=$(echo "$MATCHES" | head -1 | cut -d'|' -f2-)
   ( cd "$wd" && "$ROOT/$slug/qg.sh" "$@" )
-  exit $?
+  rc=$?
+  if ! run_hygiene; then rc=$(worst_exit "$rc" 1); fi
+  exit "$rc"
 fi
 
 # --- N matches: run all, aggregate ----------------------------------------
-# Exit precedence: 2 > 1 > 3 > 0.
-worst_exit() {
-  local a="$1" b="$2"
-  for code in 2 1 3; do
-    if [ "$a" = "$code" ] || [ "$b" = "$code" ]; then
-      echo "$code"; return
-    fi
-  done
-  echo 0
-}
 
 verdict_for_exit() {
   case "$1" in
@@ -217,6 +232,12 @@ while IFS='|' read -r slug wd; do
   if [ "$FMT" = "json" ]; then
     out=$( cd "$wd" && "$ROOT/$slug/qg.sh" "$@" )
     rc=$?
+    # A gate that died before rendering (tool error) emits no JSON -- stub it
+    # so the aggregate envelope stays parseable.
+    if ! printf '%s' "$out" | jq -e . >/dev/null 2>&1; then
+      out=$(jq -nc --arg l "$slug" --arg v "$(verdict_for_exit "$rc")" \
+        '{schema_version:"1.1",language:$l,verdict:$v,note:"gate emitted no JSON report (see stderr)"}')
+    fi
     results_json="${results_json}${results_json:+,}${out}"
   else
     ( cd "$wd" && "$ROOT/$slug/qg.sh" "$@" )
@@ -224,6 +245,8 @@ while IFS='|' read -r slug wd; do
   fi
   agg_exit=$(worst_exit "$agg_exit" "$rc")
 done <<< "$MATCHES"
+
+if ! run_hygiene; then agg_exit=$(worst_exit "$agg_exit" 1); fi
 
 if [ "$FMT" = "json" ]; then
   agg_verdict=$(verdict_for_exit "$agg_exit")

@@ -16,6 +16,8 @@ set -uo pipefail
 export LC_ALL=C
 
 QG_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../lib/changed-files.sh
+source "$QG_SCRIPT_DIR/../lib/changed-files.sh"
 # shellcheck source=lib/measure.sh
 source "$QG_SCRIPT_DIR/lib/measure.sh"
 # shellcheck source=lib/output.sh
@@ -339,12 +341,7 @@ else
 fi
 
 if [ "$QG_FORCE_FULL_ARG" != "1" ]; then
-  git fetch origin --quiet 2>/dev/null || true
-  committed_files=$(git diff --name-only "$QG_BASE_REF_ARG...HEAD" 2>/dev/null || true)
-  staged_files=$(git diff --cached --name-only 2>/dev/null || true)
-  worktree_files=$(git diff --name-only 2>/dev/null || true)
-  changed_files=$(printf '%s\n%s\n%s\n' "$committed_files" "$staged_files" "$worktree_files" \
-                  | sort -u | sed '/^$/d')
+  changed_files=$(qg_changed_files "$QG_BASE_REF_ARG")
 
   if [ -n "$changed_files" ] && ! echo "$changed_files" | grep -qE "$WEB_PATH_RE_EXTRA"; then
     branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "<detached>")
@@ -412,11 +409,27 @@ prepare_baseline() {
   : > "$target/.qg-baseline-prepared"
 }
 
+QG_BASE_METRICS_CACHE=""
 if [ -z "$QG_BASELINE_DIR_ARG" ]; then
-  QG_BASELINE_DIR_ARG="/tmp/qg-baseline-web"
+  # Keyed by PROJECT and BASE SHA: a shared, sha-less dir silently reuses
+  # another project's (or an older base's) extraction -> wrong verdicts.
+  # The sha in the path is also what makes staleness detection automatic.
+  base_sha=$(git rev-parse "$QG_BASE_REF_ARG" 2>/dev/null || true)
+  if [ -z "$base_sha" ]; then
+    echo "::error::cannot resolve base ref '$QG_BASE_REF_ARG' -- try 'git fetch origin'" >&2
+    exit 2
+  fi
+  proj_key=$(git rev-parse --show-toplevel 2>/dev/null | shasum 2>/dev/null | cut -c1-12)
+  cache_root="${QG_BASELINE_CACHE_DIR:-/tmp/qg-baseline-web}"
+  QG_BASELINE_DIR_ARG="$cache_root/${proj_key:-noproj}-${base_sha}"
   if [ ! -f "$QG_BASELINE_DIR_ARG/.qg-baseline-prepared" ] || [ "$QG_REFRESH_BASELINE_ARG" = "1" ]; then
     prepare_baseline "$QG_BASELINE_DIR_ARG" || exit 2
   fi
+  # Base metrics are a pure function of (base sha, ruleset): cache them so
+  # re-runs against the same base only measure the PR side.
+  rules_hash=$( (cat "$(qg_ruleset_dir)"/* 2>/dev/null || true) | shasum | cut -c1-12)
+  QG_BASE_METRICS_CACHE="$QG_BASELINE_DIR_ARG/.qg-base-metrics-${rules_hash}.tsv"
+  [ "$QG_REFRESH_BASELINE_ARG" = "1" ] && rm -f "$QG_BASE_METRICS_CACHE"
 elif [ ! -d "$QG_BASELINE_DIR_ARG" ]; then
   echo "::error::--baseline-dir '$QG_BASELINE_DIR_ARG' does not exist" >&2
   exit 2
@@ -459,9 +472,17 @@ if ! qg_resolve_deps "." "$QG_LOG_DIR_ARG/pr-deps.log"; then
   exit 2
 fi
 # OBSERVACAO: build/test/complexity/coverage OMITIDAS -- ver docs/languages/web.md.
+if [ -n "$QG_BASE_METRICS_CACHE" ] && [ -s "$QG_BASE_METRICS_CACHE" ]; then
+  echo "-- base metrics: cached ($QG_BASE_METRICS_CACHE) --" >&2
+  IFS=$'\t' read -r base_fmt base_lint < "$QG_BASE_METRICS_CACHE"
+else
 echo "-- measuring base --" >&2
 base_fmt=$(count_fmt_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-fmt.log")
 base_lint=$(count_lint_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-lint.log")
+  if [ -n "$QG_BASE_METRICS_CACHE" ]; then
+    printf '%s\t%s\n' "$base_fmt" "$base_lint" > "$QG_BASE_METRICS_CACHE"
+  fi
+fi
 
 echo "-- measuring PR --" >&2
 pr_fmt=$(count_fmt_errors "." "$QG_LOG_DIR_ARG/pr-fmt.log")

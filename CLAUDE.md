@@ -1,10 +1,14 @@
 # CLAUDE.md — quality-gate
 
-This repo is **`quality-gate`**: a self-contained Claude Code plugin that
-**is** the Quality Gate — the dispatcher `qg`, the per-language gates
-(`<lang>/qg.sh`), the bundled `quality-gate` skill, the contract docs, and
-the canonical rulesets. It is also usable as a plain CLI in CI (clone the
-repo, run `./qg`); `.claude-plugin/` is inert outside Claude Code.
+This repo is **`quality-gate`**: the standalone Quality Gate — the dispatcher
+`qg`, the per-language gates (`<lang>/qg.sh`), the shared `lib/`, the hygiene
+scan, the contract docs, and the canonical rulesets. It ships as **per-language
+Docker images** on GHCR (`ghcr.io/xgodev/quality-gate/<lang>`), built and
+published by `.github/workflows/build-publish.yml`, and consumed either through
+the reusable `gate.yml` workflow or a direct `docker run`. The `xgodev`
+Claude Code plugin runs these images from its `dev` skill; it does NOT bundle
+the gate. This repo is no longer a Claude plugin (no `.claude-plugin/`, no
+bundled skill).
 
 These are hard rules learned the expensive way. Read them before touching
 anything so a future session does not repeat past mistakes.

@@ -10,8 +10,12 @@
 set -uo pipefail
 
 QG_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../lib/changed-files.sh
+source "$QG_SCRIPT_DIR/../lib/changed-files.sh"
 # shellcheck source=lib/measure.sh
 source "$QG_SCRIPT_DIR/lib/measure.sh"
+# shellcheck source=lib/scope.sh
+source "$QG_SCRIPT_DIR/lib/scope.sh"
 # shellcheck source=lib/output.sh
 source "$QG_SCRIPT_DIR/lib/output.sh"
 
@@ -345,9 +349,9 @@ if [ "$QG_ABSOLUTE_MODE" = "1" ]; then
   abs_fmt=$(count_fmt_errors "." "$QG_LOG_DIR_ARG/abs-fmt.log")
   abs_lint=$(count_lint_errors "." "$QG_LOG_DIR_ARG/abs-lint.log")
   abs_build=$(count_build_errors "." "$QG_LOG_DIR_ARG/abs-build.log")
-  abs_test=$(count_test_failures "." "$QG_LOG_DIR_ARG/abs-test.log")
   abs_complex=$(count_complexity "." "$QG_LOG_DIR_ARG/abs-complex.log")
-  abs_cov=$(measure_coverage "." "$QG_LOG_DIR_ARG/abs-cov.json")
+  set -- $(measure_test_and_coverage "." "$QG_LOG_DIR_ARG/abs-test.log" "$QG_LOG_DIR_ARG/abs-cov.json")
+  abs_test="$1"; abs_cov="$2"
 
   branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "<detached>")
   started_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -390,14 +394,9 @@ else
   RUST_PATH_RE_EXTRA="$RUST_PATH_RE"
 fi
 
-if [ "$QG_FORCE_FULL_ARG" != "1" ]; then
-  git fetch origin --quiet 2>/dev/null || true
-  committed_files=$(git diff --name-only "$QG_BASE_REF_ARG...HEAD" 2>/dev/null || true)
-  staged_files=$(git diff --cached --name-only 2>/dev/null || true)
-  worktree_files=$(git diff --name-only 2>/dev/null || true)
-  changed_files=$(printf '%s\n%s\n%s\n' "$committed_files" "$staged_files" "$worktree_files" \
-                  | sort -u | sed '/^$/d')
+changed_files=$(qg_changed_files "$QG_BASE_REF_ARG")
 
+if [ "$QG_FORCE_FULL_ARG" != "1" ]; then
   if [ -n "$changed_files" ] && ! echo "$changed_files" | grep -qE "$RUST_PATH_RE_EXTRA"; then
     branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "<detached>")
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -449,6 +448,38 @@ EOF
   fi
 fi
 
+# --- SCOPE RESOLUTION (issue 17) ---------------------------------------------
+# Measure what the PR changed, not the whole workspace. The scope is resolved on
+# the PR tree; the baseline is intersected with it further down.
+QG_SCOPE_PKGS="--workspace"
+QG_SCOPE_SEED_PKGS=""
+QG_SCOPE_DESC="full workspace"
+QG_SCOPE_HASH="full"
+QG_SCOPE_LIST="__FULL__"
+
+if [ "$QG_FORCE_FULL_ARG" = "1" ]; then
+  QG_SCOPE_DESC="full workspace (trigger: --force-full)"
+else
+  _seeds=$(qg_rust_changed_packages "." "$changed_files")
+  if [ "$_seeds" = "__FULL__" ]; then
+    _trigger=$(printf '%s\n' "$changed_files" | grep -E "$_QG_RUST_FULL_RE" | head -1)
+    QG_SCOPE_DESC="full workspace (trigger: ${_trigger:-workspace root})"
+  elif [ -z "$_seeds" ]; then
+    # Rust files changed (the fast-path let us through) but none maps to a
+    # workspace member -- do not silently narrow to nothing.
+    QG_SCOPE_DESC="full workspace (trigger: changed Rust files outside any workspace member)"
+  else
+    QG_SCOPE_LIST=$(qg_rust_expand "." "$_seeds")
+    _total=$(_qg_rust_members "." | wc -l | tr -d ' ')
+    _nseed=$(printf '%s\n' "$_seeds" | sed '/^$/d' | wc -l | tr -d ' ')
+    QG_SCOPE_PKGS=$(qg_rust_pkg_flags "$QG_SCOPE_LIST")
+    QG_SCOPE_SEED_PKGS=$(qg_rust_pkg_flags "$_seeds")
+    QG_SCOPE_HASH=$(qg_rust_scope_hash "$QG_SCOPE_LIST")
+    QG_SCOPE_DESC=$(qg_rust_scope_summary "$QG_SCOPE_LIST" "$_nseed" "$_total")
+  fi
+fi
+export QG_SCOPE_PKGS QG_SCOPE_SEED_PKGS
+
 prepare_baseline() {
   local target="$1"
   rm -rf "$target"
@@ -465,11 +496,31 @@ prepare_baseline() {
   : > "$target/.qg-baseline-prepared"
 }
 
+QG_BASE_METRICS_CACHE=""
 if [ -z "$QG_BASELINE_DIR_ARG" ]; then
-  QG_BASELINE_DIR_ARG="/tmp/qg-baseline-rust"
+  # The baseline dir is keyed by PROJECT and BASE SHA: a shared, sha-less dir
+  # silently reuses another project's (or an older base's) extraction and
+  # produces wrong verdicts; the sha in the path is also what makes staleness
+  # detection automatic (new base sha -> new dir -> fresh extraction).
+  base_sha=$(git rev-parse "$QG_BASE_REF_ARG" 2>/dev/null || true)
+  if [ -z "$base_sha" ]; then
+    echo "::error::cannot resolve base ref '$QG_BASE_REF_ARG' -- try 'git fetch origin'" >&2
+    exit 2
+  fi
+  proj_key=$(git rev-parse --show-toplevel 2>/dev/null | shasum 2>/dev/null | cut -c1-12)
+  cache_root="${QG_BASELINE_CACHE_DIR:-/tmp/qg-baseline-rust}"
+  QG_BASELINE_DIR_ARG="$cache_root/${proj_key:-noproj}-${base_sha}"
   if [ ! -f "$QG_BASELINE_DIR_ARG/.qg-baseline-prepared" ] || [ "$QG_REFRESH_BASELINE_ARG" = "1" ]; then
     prepare_baseline "$QG_BASELINE_DIR_ARG" || exit 2
   fi
+  # Base metrics are a pure function of (base sha, ruleset): cache them so
+  # re-runs against the same base only measure the PR side.
+  # The SCOPE is part of the cache identity: a cached full-workspace TSV reused
+  # by a narrowed run (or vice versa) turns pre-existing findings into a phantom
+  # `0 -> N` regression.
+  rules_hash=$( (cat "$(qg_ruleset_dir)"/* 2>/dev/null || true) | shasum | cut -c1-12)
+  QG_BASE_METRICS_CACHE="$QG_BASELINE_DIR_ARG/.qg-base-metrics-${rules_hash}-${QG_SCOPE_HASH}.tsv"
+  [ "$QG_REFRESH_BASELINE_ARG" = "1" ] && rm -f "$QG_BASE_METRICS_CACHE"
 elif [ ! -d "$QG_BASELINE_DIR_ARG" ]; then
   echo "::error::--baseline-dir '$QG_BASELINE_DIR_ARG' does not exist" >&2
   exit 2
@@ -512,21 +563,55 @@ if ! qg_resolve_deps "." "$QG_LOG_DIR_ARG/pr-deps.log"; then
   echo "::error::failed to resolve rust dependencies (PR) -- see $QG_LOG_DIR_ARG/pr-deps.log" >&2
   exit 2
 fi
-echo "── measuring base ──" >&2
-base_fmt=$(count_fmt_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-fmt.log")
-base_lint=$(count_lint_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-lint.log")
-base_build=$(count_build_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-build.log")
-base_test=$(count_test_failures "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-test.log")
-base_complex=$(count_complexity "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-complex.log")
-base_cov=$(measure_coverage "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-cov.json")
+if [ -n "$QG_BASE_METRICS_CACHE" ] && [ -s "$QG_BASE_METRICS_CACHE" ]; then
+  echo "── base metrics: cached ($QG_BASE_METRICS_CACHE) ──" >&2
+  IFS=$'\t' read -r base_fmt base_lint base_build base_test base_complex base_cov < "$QG_BASE_METRICS_CACHE"
+else
+  echo "── measuring base ($QG_SCOPE_DESC) ──" >&2
+  # The baseline predates the PR: a package the PR ADDS does not exist there and
+  # `cargo -p` on it is a hard error. Measure the intersection; an added package
+  # legitimately reads base=0 because it did not exist.
+  _pr_scope_pkgs="$QG_SCOPE_PKGS"
+  _pr_scope_seed="$QG_SCOPE_SEED_PKGS"
+  _base_all_new=0
+  if [ "$QG_SCOPE_LIST" != "__FULL__" ]; then
+    _base_scope=$(qg_rust_intersect_scope "$QG_BASELINE_DIR_ARG" "$QG_SCOPE_LIST")
+    if [ -z "$_base_scope" ]; then
+      _base_all_new=1
+    else
+      QG_SCOPE_PKGS=$(qg_rust_pkg_flags "$_base_scope")
+      QG_SCOPE_SEED_PKGS=$(qg_rust_pkg_flags "$(qg_rust_intersect_scope "$QG_BASELINE_DIR_ARG" "$_seeds")")
+    fi
+  fi
 
-echo "── measuring PR ──" >&2
+  if [ "$_base_all_new" = "1" ]; then
+    # Every affected package is new in this PR. There is nothing to measure on
+    # the base, and measuring the full workspace instead would compare unrelated
+    # trees. Zero is the honest baseline: the code did not exist.
+    echo "::warning::all affected packages are new in this PR -- base metrics are 0 (nothing to compare against)" >&2
+    base_fmt=0; base_lint=0; base_build=0; base_complex=0; base_test=0; base_cov=0
+  else
+    base_fmt=$(count_fmt_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-fmt.log")
+    base_lint=$(count_lint_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-lint.log")
+    base_build=$(count_build_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-build.log")
+    base_complex=$(count_complexity "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-complex.log")
+    set -- $(measure_test_and_coverage "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-test.log" "$QG_LOG_DIR_ARG/base-cov.json")
+    base_test="$1"; base_cov="$2"
+  fi
+  QG_SCOPE_PKGS="$_pr_scope_pkgs"
+  QG_SCOPE_SEED_PKGS="$_pr_scope_seed"
+  if [ -n "$QG_BASE_METRICS_CACHE" ]; then
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$base_fmt" "$base_lint" "$base_build" "$base_test" "$base_complex" "$base_cov" > "$QG_BASE_METRICS_CACHE"
+  fi
+fi
+
+echo "── measuring PR ($QG_SCOPE_DESC) ──" >&2
 pr_fmt=$(count_fmt_errors "." "$QG_LOG_DIR_ARG/pr-fmt.log")
 pr_lint=$(count_lint_errors "." "$QG_LOG_DIR_ARG/pr-lint.log")
 pr_build=$(count_build_errors "." "$QG_LOG_DIR_ARG/pr-build.log")
-pr_test=$(count_test_failures "." "$QG_LOG_DIR_ARG/pr-test.log")
 pr_complex=$(count_complexity "." "$QG_LOG_DIR_ARG/pr-complex.log")
-pr_cov=$(measure_coverage "." "$QG_LOG_DIR_ARG/pr-cov.json")
+set -- $(measure_test_and_coverage "." "$QG_LOG_DIR_ARG/pr-test.log" "$QG_LOG_DIR_ARG/pr-cov.json")
+pr_test="$1"; pr_cov="$2"
 
 branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "<detached>")
 started_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")

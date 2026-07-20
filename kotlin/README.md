@@ -16,7 +16,7 @@ O projeto-alvo precisa ter `org.jetbrains.kotlinx.kover` aplicado em `build.grad
 ## Usage
 
 ```bash
-~/.quality-gate/kotlin/qg.sh --base origin/main
+~/.claude-plugin/tools/quality-gate/kotlin/qg.sh --base origin/main
 ```
 
 See [`docs/consume.md`](../docs/consume.md) for full usage.
@@ -47,5 +47,5 @@ See [`docs/languages/kotlin.md`](../docs/languages/kotlin.md).
 ## Tests for the script itself
 
 ```bash
-bats tests/kotlin-qg.bats
+bats tools/quality-gate/tests/kotlin-qg.bats
 ```
