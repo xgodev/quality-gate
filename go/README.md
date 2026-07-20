@@ -14,7 +14,7 @@ Quality gate for Go projects. Complies with the [v1 contract](../docs/contract.m
 ## Usage
 
 ```bash
-~/.quality-gate/go/qg.sh --base origin/main
+~/.claude-plugin/tools/quality-gate/go/qg.sh --base origin/main
 ```
 
 See [`docs/consume.md`](../docs/consume.md) for full usage.
@@ -45,5 +45,5 @@ See [`docs/languages/go.md`](../docs/languages/go.md).
 ## Tests for the script itself
 
 ```bash
-bats tests/go-qg.bats
+bats tools/quality-gate/tests/go-qg.bats
 ```

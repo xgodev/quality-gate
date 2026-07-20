@@ -2,19 +2,29 @@
 
 Quality gate shared across projects. Runs **the same** locally and in CI: fails **only** when the PR worsens some metric relative to a chosen base ref.
 
-This repository is **two-in-one**:
+The gate ships as **per-language Docker images** on GHCR. Nothing to clone, no toolchain to install on the runner -- the image carries both the gate and the language toolchain.
 
-- **CLI/CI:** clone the repo and run the dispatcher `./qg` (or `<lang>/qg.sh`) directly -- `.claude-plugin/` is inert outside Claude Code.
-- **Claude Code plugin:** installs the `quality-gate` skill **together** with the scripts (bundled dispatcher, no runtime clone):
+**In CI (reusable workflow):**
 
-```text
-/plugin marketplace add git@github.com:xgodev/claude-plugin.git
-/plugin install quality-gate@xgodev-plugins
+```yaml
+jobs:
+  gate:
+    uses: xgodev/quality-gate/.github/workflows/gate.yml@v1
+    with:
+      lang: rust
+      base: origin/${{ github.base_ref || 'main' }}
 ```
 
-The plugin is distributed through the single `xgodev-plugins` marketplace, hosted in [`xgodev/claude-plugin`](https://github.com/xgodev/claude-plugin), which lists this repo as a GitHub source. This repo is not a marketplace itself. Another plugin in the same marketplace can declare `quality-gate` (bare name) as a dependency.
+**Locally / any CI, directly:**
 
-> Until 0.3.1 this repo was its own marketplace (`xgodev-quality-gate`). If you installed the old way: `/plugin uninstall quality-gate@xgodev-quality-gate`, `/plugin marketplace remove xgodev-quality-gate`, then install as above.
+```bash
+docker run --rm -v "$PWD:/src" -w /src \
+  ghcr.io/xgodev/quality-gate/rust:v1 --base origin/main
+```
+
+`/src` must be the checkout **with its `.git`** -- the baseline uses `git archive <base>`, so in `actions/checkout` set `fetch-depth: 0`.
+
+The `xgodev` Claude Code plugin ([`xgodev/claude-plugin`](https://github.com/xgodev/claude-plugin)) consumes these same images from its `dev` skill; it no longer bundles the gate scripts.
 
 ## How it works
 

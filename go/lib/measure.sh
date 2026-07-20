@@ -2,7 +2,7 @@
 # Measurement functions for the Go.
 # Source this file from go/qg.sh.
 # Each function ALWAYS returns an integer >= 0 on stdout, with no prefixes.
-# measure_coverage retorna decimal (ex: 82.50).
+# measure_coverage returns a decimal (e.g. 82.50).
 
 _grep_count() {
   local pattern="$1" file="$2"
@@ -41,9 +41,9 @@ qg_lang_present() {
   [ -f "$dir/go.mod" ]
 }
 
-# Toolchain declarado em go.mod e autoritativo (LEI): a diretiva
+# The toolchain declared in go.mod is authoritative (LAW): the
 # `toolchain`/`go 1.x` in go.mod pins the Go version the project uses.
-# GOTOOLCHAIN=auto (default) baixa a pinada; o gate NUNCA forca
+# GOTOOLCHAIN=auto (default) downloads the pinned one; the gate NEVER forces
 # GOTOOLCHAIN=local (which would ignore the pinned one and build with the
 # PATH version). If the pinned version is not satisfiable (download failed offline,
 # external GOTOOLCHAIN=local) and the PATH version diverges from the pinned one, that is
@@ -53,7 +53,7 @@ qg_check_go_toolchain() {
   local dir="$1" log="$2"
   command -v go >/dev/null 2>&1 || return 0
   local pinned path_ver
-  # Diretiva `toolchain go1.x.y` tem prioridade; senao a diretiva `go 1.x`.
+  # The `toolchain go1.x.y` directive wins; otherwise the `go 1.x` directive.
   pinned=$(grep -E '^toolchain[[:space:]]+go[0-9]' "$dir/go.mod" 2>/dev/null \
             | head -1 | sed -E 's/^toolchain[[:space:]]+go//')
   if [ -z "$pinned" ]; then
@@ -88,14 +88,14 @@ qg_resolve_deps() {
   : > "$log"
   [ -f "$dir/go.mod" ] || return 0
   qg_check_go_toolchain "$dir" "$log" || return 1
-  # Nao forca GOTOOLCHAIN: respeita o ambiente (default auto baixa a pinada).
+  # Does not force GOTOOLCHAIN: respects the environment (default auto downloads the pinned one).
   ( cd "$dir" && GOFLAGS=-mod=mod go mod download ) >> "$log" 2>&1 || return 1
   return 0
 }
 
 # Detecta qual binario de lint usar.
-# Preferimos golangci-lint, com fallback para go vet (sempre presente).
-# QG_GO_LINT_FORCE_VET=1 forca go vet (util para CI/dev sem golangci-lint).
+# Prefers golangci-lint, with a fallback to go vet (always present).
+# QG_GO_LINT_FORCE_VET=1 forces go vet (useful for CI/dev without golangci-lint).
 _qg_go_lint_tool() {
   if [ -n "${QG_GO_LINT_FORCE_VET:-}" ]; then
     echo "go-vet"
@@ -137,13 +137,13 @@ count_lint_errors() {
   if [ "$tool" = "golangci-lint" ]; then
     local rules
     rules=$(qg_ruleset_dir)
-    # Tamper-resistance: -c aponta para o .golangci.yml do QG, ignorando o
+    # Tamper-resistance: -c points at QG's own .golangci.yml, ignoring the
     # target project's.
     ( cd "$dir" && golangci-lint run -c "$rules/.golangci.yml" \
         --out-format=line-number ./... ) > "$log" 2>&1
     local rc=$?
-    # Tool failure (rc != 0 e != 1) -> sem issues, mas registra warning e usa vet como sanity.
-    # rc=0 sem issues, rc=1 issues encontrados. Outros codigos = problema com o linter.
+    # rc=0 means no issues, rc=1 means issues found. Any other code is a tool
+    # failure: log a warning and fall back to go vet as a sanity check.
     if [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; then
       echo "::warning::golangci-lint returned exit $rc -- possible version incompatibility; using go vet as a fallback" >&2
       ( cd "$dir" && go vet ./... ) > "$log" 2>&1 || true
@@ -198,6 +198,23 @@ count_complexity() {
   printf '%d\n' "$(_num "${n:-0}")"
 }
 
+# Perf fusion: `go test -coverprofile` runs the suite ONCE and yields both the
+# failure count and the coverage percentage -- the separate plain `go test`
+# execution was a full extra suite run per side. Echoes "<failures> <pct>".
+measure_test_and_coverage() {
+  local dir="$1" log="$2" out="$3"
+  : > "$log"
+  local profile
+  profile="${out%.json}.profile"
+  ( cd "$dir" && GOFLAGS=-mod=mod go test ./... -count=1 -vet=off -covermode=atomic -coverprofile="$profile" ) > "$log" 2>&1 || true
+  local n pct=0
+  n=$(_grep_count '^--- FAIL:' "$log")
+  if [ -s "$profile" ]; then
+    pct=$( ( cd "$dir" && go tool cover -func="$profile" ) 2>/dev/null             | awk '/^total:/ { gsub("%","",$NF); print $NF; exit }')
+  fi
+  printf '%d %s\n' "$(_num "${n:-0}")" "$(_num "${pct:-0}")"
+}
+
 measure_coverage() {
   local dir="$1" out="$2"
   local profile
@@ -205,12 +222,12 @@ measure_coverage() {
   ( cd "$dir" && GOFLAGS=-mod=mod go test ./... -count=1 -vet=off -covermode=atomic -coverprofile="$profile" ) >/dev/null 2>&1 || true
   local pct=0
   if [ -s "$profile" ]; then
-    # go tool cover -func gera linha "total: (statements) X.X%"
+    # go tool cover -func emits the line "total: (statements) X.X%"
     pct=$( ( cd "$dir" && go tool cover -func="$profile" ) 2>/dev/null \
             | awk '/^total:/ { gsub("%","",$NF); print $NF; exit }')
   fi
   pct=$(_num "$pct")
-  # Persiste log JSON-like para auditar
+  # Persist a JSON-like log for auditing
   printf '{"coverage_percent": %s}\n' "$pct" > "$out"
   # Bug 2: never returns empty/"Unknown" -> 0.
   printf '%s\n' "$pct"

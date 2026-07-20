@@ -9,10 +9,10 @@ For the canonical specification, see [`contract.md`](contract.md). This document
 ### Verdict: passed
 
 ```
-═══ Quality Gate — rust ═══
+═══ Quality Gate -- rust ═══
   branch:        feature/INT-1234
   base ref:      origin/main
-  baseline:      /tmp/qg-baseline-rust
+  baseline:      /tmp/qg-baseline-rust/<project>-<base-sha>
   cov margin:    1.0pp
   logs:          target/qg-logs/
 
@@ -55,7 +55,7 @@ Exit code: 1.
 ### Verdict: bypassed
 
 ```
-═══ Quality Gate — rust ═══
+═══ Quality Gate -- rust ═══
   branch:        hotfix/INT-9999
   base ref:      origin/main
 
@@ -157,7 +157,7 @@ Without `--base`/`QG_BASE_REF` the gate runs in absolute mode: measures `.` once
 ### Text -- with `absolute_thresholds` (one violation)
 
 ```
-═══ Quality Gate — rust (absolute mode) ═══
+═══ Quality Gate -- rust (absolute mode) ═══
   branch:        feature/x
   cov margin:    n/a (absolute mode)
   logs:          target/qg-logs/
@@ -253,7 +253,7 @@ $ echo $?
 
 ## Dispatcher `qg` (monorepo / multi-language)
 
-The root `qg` dispatcher runs 1..N gates. With **1 language** detected, the
+The `qg` dispatcher runs 1..N gates. With **1 language** detected, the
 output is exactly that of `<lang>/qg.sh` (single object -- no wrapper). With **N
 languages** (or `.qg.yaml projects:` with multiple paths), `--format json`
 emits an enveloped array:

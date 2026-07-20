@@ -124,7 +124,7 @@ And make sure `$(go env GOPATH)/bin` is on `$PATH`.
 ### Stale baseline cache after changing the base branch
 
 ```bash
-~/.quality-gate/go/qg.sh --base origin/main --refresh-baseline
+~/.claude-plugin/tools/quality-gate/go/qg.sh --base origin/main --refresh-baseline
 ```
 
 or
@@ -151,4 +151,4 @@ None in V1. Future candidates:
 - `vuln` via `govulncheck` -- vulnerabilities in dependencies and code.
 - `staticcheck_advanced` -- additional checks outside the golangci-lint default.
 
-To add, follow the contract (section "Extending") and `skills/add-quality-gate/`.
+To add, follow the contract (section "Extending") and the maintainer-only `add-quality-gate` skill (project-local, `.claude/skills/add-quality-gate/` in the gate repo).

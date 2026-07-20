@@ -1,0 +1,50 @@
+name: build-publish
+
+# Builds one image per language and pushes to GHCR.
+# Tags: the git tag (vX.Y.Z) on release, plus `latest` on the default branch.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Grow this list as each language's Dockerfile lands.
+        lang: [rust]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute tags
+        id: meta
+        run: |
+          img="ghcr.io/${GITHUB_REPOSITORY}/${{ matrix.lang }}"
+          img="${img,,}"  # GHCR requires a lowercase path
+          tags="${img}:latest"
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            tags="${tags},${img}:${GITHUB_REF_NAME}"
+          fi
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/${{ matrix.lang }}.Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=${{ matrix.lang }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.lang }}

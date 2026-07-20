@@ -213,6 +213,61 @@ measure_coverage() {
   # Bug 2: never returns empty/"Unknown" -> 0.
   printf '%s\n' "$(_num "$pct")"
 }
+
+# Perf fusion: ONE gradle invocation (`test koverXmlReport`) yields both the
+# failure count and the kover report -- measure_coverage was a full second
+# suite run per side. Echoes "<failures> <pct>". Falls back to a plain
+# `test` run (coverage 0) when the project has no kover plugin, so the
+# failure count never regresses.
+measure_test_and_coverage() {
+  local dir="$1" log="$2" out="$3"
+  : > "$log"
+  local gradle_cmd
+  gradle_cmd=$(qg_gradle_cmd "$dir" "$log") || { printf '0 0\n'; return; }
+  ( cd "$dir" && "$gradle_cmd" test koverXmlReport --rerun-tasks --no-daemon ) > "$log" 2>&1 || true
+  if grep -q "Task 'koverXmlReport' not found" "$log"; then
+    ( cd "$dir" && "$gradle_cmd" test --rerun-tasks --no-daemon ) > "$log" 2>&1 || true
+  fi
+  local n
+  n=$(awk '
+    /[0-9]+ tests completed, [0-9]+ failed/ {
+      for (i=1; i<=NF; i++) {
+        if ($i == "failed") { last_fail = $(i-1) }
+      }
+      found = 1
+    }
+    END {
+      if (found) print last_fail + 0
+      else print 0
+    }
+  ' "$log")
+  [ -z "$n" ] && n=0
+  local xml="$dir/build/reports/kover/report.xml"
+  local pct=0
+  if [ -f "$xml" ]; then
+    pct=$(LC_ALL=C awk '
+      {
+        while (match($0, /<counter type="LINE" missed="[0-9]+" covered="[0-9]+"\/>/)) {
+          tag = substr($0, RSTART, RLENGTH)
+          $0 = substr($0, RSTART + RLENGTH)
+          last_tag = tag
+        }
+      }
+      END {
+        if (last_tag == "") { print 0; exit }
+        match(last_tag, /missed="[0-9]+"/)
+        m = substr(last_tag, RSTART+8, RLENGTH-9)
+        match(last_tag, /covered="[0-9]+"/)
+        c = substr(last_tag, RSTART+9, RLENGTH-10)
+        total = m + c
+        if (total == 0) { print 0; exit }
+        printf "%.2f\n", (c * 100.0) / total
+      }
+    ' "$xml")
+    cp "$xml" "$out" 2>/dev/null || true
+  fi
+  printf '%d %s\n' "$n" "$(_num "$pct")"
+}
 # Baseline submodule extraction (shared logic across all language gates).
 # `git archive` does NOT expand git submodules: in the baseline checkout the
 # submodule dirs are empty, so a submodule-dependent build fails, the base

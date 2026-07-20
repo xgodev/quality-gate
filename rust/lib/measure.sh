@@ -90,14 +90,45 @@ qg_resolve_deps() {
   return 0
 }
 
+# --- diff scoping (issue 17) --------------------------------------------------
+# qg.sh sets QG_SCOPE_PKGS / QG_SCOPE_SEED_PKGS before measuring each side.
+# Unset or "--workspace" => whole-workspace behavior, byte-identical to what the
+# gate did before scoping existed.
+#
+# Targets: the affected set is built with --lib --bins --tests, and EXAMPLES are
+# built only for the packages the diff actually touched. An untouched crate's
+# example must never gate a PR -- a macOS-only `#[link(kind="framework")]` repro
+# in a vendored crate failing to compile on Linux is not a finding about this PR.
+_qg_scope_is_full() {
+  [ -z "${QG_SCOPE_PKGS:-}" ] || [ "${QG_SCOPE_PKGS}" = "--workspace" ]
+}
+
+# Main-pass flags: package selection + non-example targets.
+_qg_scope_main_flags() {
+  if _qg_scope_is_full; then
+    printf -- '--all-targets\n'
+  else
+    printf -- '%s --lib --bins --tests\n' "$QG_SCOPE_PKGS"
+  fi
+}
+
+# Examples pass: only for touched packages, and only when narrowed. Prints
+# nothing when there is no separate examples pass to run.
+_qg_scope_examples_flags() {
+  _qg_scope_is_full && return 0
+  [ -z "${QG_SCOPE_SEED_PKGS:-}" ] && return 0
+  printf -- '%s --examples\n' "$QG_SCOPE_SEED_PKGS"
+}
+
 count_fmt_errors() {
   local dir="$1" log="$2"
   : > "$log"
-  local rules
+  local rules pkgs
   rules=$(qg_ruleset_dir)
+  if _qg_scope_is_full; then pkgs="--all"; else pkgs="$QG_SCOPE_PKGS"; fi
   # Tamper-resistance: rustfmt points at QG's rustfmt.toml, ignoring the
   # target project's.
-  ( cd "$dir" && cargo fmt --all -- --check \
+  ( cd "$dir" && cargo fmt $pkgs -- --check \
       --config-path "$rules/rustfmt.toml" ) > "$log" 2>&1 || true
   _grep_count '^Diff in ' "$log"
 }
@@ -105,24 +136,38 @@ count_fmt_errors() {
 count_lint_errors() {
   local dir="$1" log="$2"
   : > "$log"
-  local rules
+  local rules ex
   rules=$(qg_ruleset_dir)
   # Tamper-resistance: clippy reads clippy.toml from CLIPPY_CONF_DIR -> QG's ruleset.
   (
-    cd "$dir" && CLIPPY_CONF_DIR="$rules" cargo clippy --all-targets -- \
+    cd "$dir" && CLIPPY_CONF_DIR="$rules" cargo clippy $(_qg_scope_main_flags) -- \
       -D warnings \
       -A clippy::cognitive_complexity \
       -A clippy::too_many_lines \
       -A clippy::too_many_arguments \
       -A clippy::type_complexity
   ) > "$log" 2>&1 || true
+  if ex=$(_qg_scope_examples_flags) && [ -n "$ex" ]; then
+    (
+      cd "$dir" && CLIPPY_CONF_DIR="$rules" cargo clippy $ex -- \
+        -D warnings \
+        -A clippy::cognitive_complexity \
+        -A clippy::too_many_lines \
+        -A clippy::too_many_arguments \
+        -A clippy::type_complexity
+    ) >> "$log" 2>&1 || true
+  fi
   _grep_count '^error(\[|:)' "$log"
 }
 
 count_build_errors() {
   local dir="$1" log="$2"
   : > "$log"
-  ( cd "$dir" && cargo build --all-targets ) > "$log" 2>&1 || true
+  local ex
+  ( cd "$dir" && cargo build $(_qg_scope_main_flags) ) > "$log" 2>&1 || true
+  if ex=$(_qg_scope_examples_flags) && [ -n "$ex" ]; then
+    ( cd "$dir" && cargo build $ex ) >> "$log" 2>&1 || true
+  fi
   _grep_count '^error(\[|:)' "$log"
 }
 
@@ -145,7 +190,7 @@ count_complexity() {
   # Tamper-resistance: complexity thresholds come from QG's clippy.toml
   # (CLIPPY_CONF_DIR), never from the target project.
   (
-    cd "$dir" && CLIPPY_CONF_DIR="$rules" cargo clippy --all-targets -- \
+    cd "$dir" && CLIPPY_CONF_DIR="$rules" cargo clippy $(_qg_scope_main_flags) -- \
       -A clippy::all \
       -W clippy::cognitive_complexity \
       -W clippy::too_many_lines \
@@ -164,6 +209,29 @@ measure_coverage() {
   fi
   # Bug 2: never returns empty/"Unknown" -> 0.
   printf '%s\n' "$(_num "$pct")"
+}
+
+# Perf fusion: cargo llvm-cov already RUNS the test suite to collect coverage
+# profiles, so one invocation yields BOTH the test-failure count and the
+# coverage percentage -- the separate `cargo test` execution was a full extra
+# suite run per side. Echoes "<failures> <coverage_pct>".
+measure_test_and_coverage() {
+  local dir="$1" log="$2" out="$3"
+  : > "$log"
+  # Scoping matters most here: coverage instrumentation over a whole native tree
+  # is what blows up `ld` ("terminated with signal 7 [Bus error]"). Examples are
+  # never instrumented -- they carry no coverage signal.
+  local cov_flags=""
+  _qg_scope_is_full || cov_flags="$QG_SCOPE_PKGS --lib --bins --tests"
+  ( cd "$dir" && cargo llvm-cov --ignore-run-fail --json --output-path "$out" $cov_flags ) > "$log" 2>&1 || true
+  local n pct=0
+  n=$(grep -E '^test result:' "$log" 2>/dev/null \
+      | sed -E 's/.*([0-9]+) failed.*/\1/' \
+      | awk '{ s += $1 } END { print s+0 }')
+  if [ -s "$out" ]; then
+    pct=$(jq -r '.data[0].totals.lines.percent // 0' "$out" 2>/dev/null || echo 0)
+  fi
+  printf '%d %s\n' "${n:-0}" "$(_num "$pct")"
 }
 
 # Baseline submodule extraction (shared logic across all language gates).

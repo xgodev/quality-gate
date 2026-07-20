@@ -14,7 +14,7 @@ Quality gate for Node.js (JavaScript and TypeScript) projects. Complies with the
 ## Usage
 
 ```bash
-~/.quality-gate/nodejs/qg.sh --base origin/main
+~/.claude-plugin/tools/quality-gate/nodejs/qg.sh --base origin/main
 ```
 
 See [`docs/consume.md`](../docs/consume.md) for full usage.
@@ -45,5 +45,5 @@ See [`docs/languages/nodejs.md`](../docs/languages/nodejs.md).
 ## Tests for the script itself
 
 ```bash
-bats tests/nodejs-qg.bats
+bats tools/quality-gate/tests/nodejs-qg.bats
 ```

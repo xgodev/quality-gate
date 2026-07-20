@@ -458,7 +458,7 @@ EOF
   local logdir
   logdir=$(qg_tmp_dir)
   result=$(measure_coverage "$(qg_fixture_path java regressed)" "$logdir/cov.json")
-  # baseline ~66.67%, regressed deve estar bem abaixo (uncovered + complexFunction sem teste)
+  # baseline ~66.67%, regressed must be well below (uncovered + complexFunction has no test)
   awk -v r="$result" 'BEGIN { exit !(r < 50) }'
   rm -rf "$logdir"
 }
@@ -604,4 +604,18 @@ EOF
   [ "$status" -eq 0 ]
   cd "$QG_REPO_ROOT"
   rm -rf "$plain" "$target"
+}
+
+@test "measure_test_and_coverage: ONE run yields failures AND coverage (perf fusion)" {
+  command -v mvn >/dev/null || skip "mvn not available"
+  source "$QG_REPO_ROOT/java/lib/measure.sh"
+  local logdir
+  logdir=$(qg_tmp_dir)
+  result=$(measure_test_and_coverage "$(qg_fixture_path java regressed)" "$logdir/test.log" "$logdir/cov.json")
+  fails=$(echo "$result" | awk '{print $1}')
+  cov=$(echo "$result" | awk '{print $2}')
+  [ "$fails" -ge 1 ]
+  awk -v c="$cov" 'BEGIN { exit !(c >= 0 && c < 100) }'
+  grep -qE -- 'Tests run:' "$logdir/test.log"
+  rm -rf "$logdir"
 }

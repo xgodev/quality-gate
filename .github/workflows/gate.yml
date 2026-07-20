@@ -1,0 +1,44 @@
+name: quality-gate
+
+# Reusable workflow for consumer repos. In your project:
+#
+#   jobs:
+#     gate:
+#       uses: xgodev/quality-gate/.github/workflows/gate.yml@v1
+#       with:
+#         lang: rust
+#         base: origin/${{ github.base_ref || 'main' }}
+#
+# The gate compares the PR head against `base` and fails only when a metric
+# worsens. It runs inside the published per-language image, so the runner needs
+# no toolchain of its own.
+on:
+  workflow_call:
+    inputs:
+      lang:
+        description: Language image to run (rust, go, ...).
+        required: true
+        type: string
+      base:
+        description: Git ref to compare against.
+        required: false
+        default: origin/main
+        type: string
+      version:
+        description: Image tag to pin (defaults to v1).
+        required: false
+        default: v1
+        type: string
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/xgodev/quality-gate/${{ inputs.lang }}:${{ inputs.version }}
+    steps:
+      # fetch-depth: 0 so `git archive <base>` can resolve the baseline tree.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run gate
+        run: /opt/quality-gate/qg --base "${{ inputs.base }}"

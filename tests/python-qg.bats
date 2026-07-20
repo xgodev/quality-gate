@@ -195,8 +195,8 @@ EOF
 @test "python/qg.sh detects a missing tool and exits 2 with an installable message" {
   run env PATH="/usr/bin:/bin" "$(qg_script_path python)" --base origin/main
   [ "$status" -eq 2 ]
-  [[ "$output" == *"python"* ]]
-  [[ "$output" == *"install"* ]]
+  printf '%s' "$output" | grep -q pytest
+  printf '%s' "$output" | grep -q install
 }
 
 @test "python/qg.sh with QG_BYPASS_REASON exits 0 and emits a warning" {
@@ -479,7 +479,7 @@ def add(a, b):
     return a + b
 EOF
   # build/ + dist/ GENERATED: Python junk with an unused import (F401),
-  # formatacao ruim e funcao de alta complexidade.
+  # bad formatting and a high-complexity function.
   mkdir -p "$tmp/build/lib" "$tmp/dist"
   cat > "$tmp/build/lib/generated.py" <<'EOF'
 import os,sys
@@ -624,4 +624,18 @@ EOF
   [ "$status" -eq 0 ]
   cd "$QG_REPO_ROOT"
   rm -rf "$plain" "$target"
+}
+
+@test "measure_test_and_coverage: ONE run yields failures AND coverage (perf fusion)" {
+  
+  source "$QG_REPO_ROOT/python/lib/measure.sh"
+  local logdir
+  logdir=$(qg_tmp_dir)
+  result=$(measure_test_and_coverage "$(qg_fixture_path python regressed)" "$logdir/test.log" "$logdir/cov.json")
+  fails=$(echo "$result" | awk '{print $1}')
+  cov=$(echo "$result" | awk '{print $2}')
+  [ "$fails" -ge 1 ]
+  awk -v c="$cov" 'BEGIN { exit !(c >= 0 && c < 100) }'
+  grep -qE -- '^FAILED ' "$logdir/test.log"
+  rm -rf "$logdir"
 }

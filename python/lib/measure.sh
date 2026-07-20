@@ -2,7 +2,7 @@
 # Measurement functions for the Python.
 # Source this file from python/qg.sh.
 # Each function ALWAYS returns an integer >= 0 on stdout, with no prefixes.
-# measure_coverage retorna decimal.
+# measure_coverage returns a decimal.
 
 _grep_count() {
   local pattern="$1" file="$2"
@@ -199,6 +199,26 @@ measure_coverage() {
   fi
   # Bug 2: never returns empty/"Unknown" -> 0.
   printf '%s\n' "$(_num "$pct")"
+}
+
+# Perf fusion: ONE pytest run with --cov yields both the failure count and
+# the coverage percentage -- the separate plain pytest execution was a full
+# extra suite run per side. Echoes "<failures> <pct>". Falls back to a plain
+# run (coverage 0) when pytest-cov is not installed, so the failure count
+# never regresses.
+measure_test_and_coverage() {
+  local dir="$1" log="$2" out="$3"
+  : > "$log"
+  ( cd "$dir" && pytest -p no:cacheprovider --cov=. --cov-report=json:"$out" --tb=no -q ) > "$log" 2>&1 || true
+  if grep -q 'unrecognized arguments: --cov' "$log"; then
+    ( cd "$dir" && pytest -p no:cacheprovider --tb=no -q ) > "$log" 2>&1 || true
+  fi
+  local n pct=0
+  n=$(_grep_count '^FAILED ' "$log")
+  if [ -s "$out" ]; then
+    pct=$(jq -r '.totals.percent_covered // 0' "$out" 2>/dev/null || echo 0)
+  fi
+  printf '%d %s\n' "$(_num "${n:-0}")" "$(_num "${pct:-0}")"
 }
 # Baseline submodule extraction (shared logic across all language gates).
 # `git archive` does NOT expand git submodules: in the baseline checkout the

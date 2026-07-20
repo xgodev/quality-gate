@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # Shared helpers for the Quality Gate bats tests.
 
-# Repo root path (assumes tests/ is at the root)
+# Quality-gate root (tools/quality-gate -- holds qg and the <lang>/ dirs)
 QG_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 export QG_REPO_ROOT
+
+# Actual repository root (holds hooks/, skills/, docs/)
+QG_GIT_ROOT="$(cd "$QG_REPO_ROOT/../.." && pwd)"
+export QG_GIT_ROOT
 
 # Path of a language's script
 qg_script_path() {
@@ -31,21 +35,23 @@ qg_clean_env() {
 
 # --- pre-push hook helpers -------------------------------------------------
 qg_hook_path() {
-  echo "$QG_REPO_ROOT/hooks/pre-push-gate.sh"
+  echo "$QG_GIT_ROOT/hooks/quality-gate/pr-gate.sh"
 }
 
-# Makes a temp "plugin root" holding a qg stub that exits with RC and echoes
-# its args to stderr (so tests can assert --base forwarding).
+# Makes a temp "plugin root" holding a qg stub (at the bundled path
+# tools/quality-gate/qg) that exits with RC and echoes its args to
+# stderr (so tests can assert --base forwarding).
 qg_make_stub_plugin() {
   local rc="$1"
   local d
   d="$(mktemp -d -t qg-plugin-XXXXXX)"
-  cat > "$d/qg" <<EOF
+  mkdir -p "$d/tools/quality-gate"
+  cat > "$d/tools/quality-gate/qg" <<EOF
 #!/usr/bin/env bash
 echo "stub-qg-args: \$*" >&2
 exit $rc
 EOF
-  chmod +x "$d/qg"
+  chmod +x "$d/tools/quality-gate/qg"
   echo "$d"
 }
 

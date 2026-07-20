@@ -18,7 +18,7 @@ Quality gate for Swift (SwiftPM) projects. Complies with the [v1 contract](../do
 ## Usage
 
 ```bash
-~/.quality-gate/swift/qg.sh --base origin/main
+~/.claude-plugin/tools/quality-gate/swift/qg.sh --base origin/main
 ```
 
 See [`docs/consume.md`](../docs/consume.md) for full usage.
@@ -49,5 +49,5 @@ See [`docs/languages/swift.md`](../docs/languages/swift.md).
 ## Tests for the script itself
 
 ```bash
-bats tests/swift-qg.bats
+bats tools/quality-gate/tests/swift-qg.bats
 ```

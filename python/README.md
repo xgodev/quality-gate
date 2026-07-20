@@ -14,7 +14,7 @@ Quality gate for Python projects. Complies with the [v1 contract](../docs/contra
 ## Usage
 
 ```bash
-~/.quality-gate/python/qg.sh --base origin/main
+~/.claude-plugin/tools/quality-gate/python/qg.sh --base origin/main
 ```
 
 See [`docs/consume.md`](../docs/consume.md) for full usage.
@@ -45,5 +45,5 @@ See [`docs/languages/python.md`](../docs/languages/python.md).
 ## Tests for the script itself
 
 ```bash
-bats tests/python-qg.bats
+bats tools/quality-gate/tests/python-qg.bats
 ```

@@ -168,7 +168,7 @@ EOF
   rm -rf "$tmp"
 }
 
-@test "web/qg.sh e2e: regressed contra baseline -> exit 1, verdict regressed (so fmt+lint)" {
+@test "web/qg.sh e2e: regressed against baseline -> exit 1, verdict regressed (fmt+lint only)" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path web regressed)"
@@ -185,7 +185,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "web/qg.sh e2e: baseline contra ele mesmo -> exit 0 passed" {
+@test "web/qg.sh e2e: baseline against itself -> exit 0 passed" {
   local logdir
   logdir=$(qg_tmp_dir)
   cd "$(qg_fixture_path web baseline)"

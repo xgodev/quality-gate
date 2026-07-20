@@ -16,7 +16,7 @@ O projeto-alvo precisa ter `org.jacoco:jacoco-maven-plugin` configurado para a m
 ## Usage
 
 ```bash
-~/.quality-gate/java/qg.sh --base origin/main
+~/.claude-plugin/tools/quality-gate/java/qg.sh --base origin/main
 ```
 
 See [`docs/consume.md`](../docs/consume.md) for full usage.
@@ -47,5 +47,5 @@ See [`docs/languages/java.md`](../docs/languages/java.md).
 ## Tests for the script itself
 
 ```bash
-bats tests/java-qg.bats
+bats tools/quality-gate/tests/java-qg.bats
 ```

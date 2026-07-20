@@ -632,3 +632,140 @@ EOF
   [ "$result" -gt 0 ] || { echo "expected >0 even with a loosened clippy.toml; got $result"; cat "$logdir/cx.log"; return 1; }
   rm -rf "$tmp" "$logdir"
 }
+
+@test "measure_test_and_coverage: ONE run yields failures AND coverage (perf fusion)" {
+  source "$QG_REPO_ROOT/rust/lib/measure.sh"
+  local logdir
+  logdir=$(qg_tmp_dir)
+  result=$(measure_test_and_coverage "$(qg_fixture_path rust regressed)" "$logdir/test.log" "$logdir/cov.json")
+  fails=$(echo "$result" | awk '{print $1}')
+  cov=$(echo "$result" | awk '{print $2}')
+  [ "$fails" -ge 1 ]                                   # test_failing_on_purpose detected
+  awk -v c="$cov" 'BEGIN { exit !(c > 0 && c < 100) }' # coverage measured in the same run
+  grep -qE 'test result:' "$logdir/test.log"           # test output captured for analysis
+  rm -rf "$logdir"
+}
+
+@test "comparative: base metrics are cached by base SHA (second run skips base measurement)" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  repo=$(qg_tmp_dir)
+  cp -R "$(qg_fixture_path rust baseline)/." "$repo/"
+  cd "$repo"
+  git -c init.defaultBranch=main init -q . && git config user.email t@t && git config user.name t
+  git add -A && git commit -qm base
+  git checkout -qb feature
+  echo '// touch' >> src/lib.rs && git add -A && git commit -qm change
+  cache_root="$repo/.qg-cache"
+  QG_BASELINE_CACHE_DIR="$cache_root" run bash "$QG_REPO_ROOT/rust/qg.sh" --base main --force-full --log-dir "$repo/logs1"
+  QG_BASELINE_CACHE_DIR="$cache_root" run bash "$QG_REPO_ROOT/rust/qg.sh" --base main --force-full --log-dir "$repo/logs2"
+  printf '%s' "$output" | grep -q 'base metrics: cached'
+  cd / && rm -rf "$repo"
+}
+
+# --- issue 17: diff-scoped cargo metrics -------------------------------------
+
+_scope_ws() { echo "$QG_REPO_ROOT/rust/test-fixtures/workspace"; }
+
+@test "scope: a change confined to a leaf crate scopes to that crate only" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  source "$QG_REPO_ROOT/rust/lib/scope.sh"
+  run qg_rust_scope "$(_scope_ws)" "crates/leaf/src/lib.rs"
+  [ "$status" -eq 0 ]
+  [ "$output" = "qgfix-leaf" ]
+}
+
+@test "scope: a change in a base crate pulls in its in-workspace reverse-dependents" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  source "$QG_REPO_ROOT/rust/lib/scope.sh"
+  run qg_rust_scope "$(_scope_ws)" "crates/core/src/lib.rs"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q '^qgfix-core$'
+  echo "$output" | grep -q '^qgfix-mid$'
+  echo "$output" | grep -q '^qgfix-leaf$'
+  # an unrelated crate is never dragged in -- that is the whole point of the issue
+  ! echo "$output" | grep -q 'qgfix-unrelated'
+}
+
+@test "scope: Cargo.lock forces full-workspace measurement" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  source "$QG_REPO_ROOT/rust/lib/scope.sh"
+  run qg_rust_scope "$(_scope_ws)" "Cargo.lock"
+  [ "$output" = "__FULL__" ]
+}
+
+@test "scope: root manifest and toolchain pin force full-workspace measurement" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  source "$QG_REPO_ROOT/rust/lib/scope.sh"
+  run qg_rust_scope "$(_scope_ws)" "Cargo.toml"
+  [ "$output" = "__FULL__" ]
+  run qg_rust_scope "$(_scope_ws)" "rust-toolchain.toml"
+  [ "$output" = "__FULL__" ]
+  run qg_rust_scope "$(_scope_ws)" ".cargo/config.toml"
+  [ "$output" = "__FULL__" ]
+}
+
+@test "scope: a member manifest scopes to that member, not the whole workspace" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  source "$QG_REPO_ROOT/rust/lib/scope.sh"
+  run qg_rust_scope "$(_scope_ws)" "crates/unrelated/Cargo.toml"
+  [ "$output" = "qgfix-unrelated" ]
+}
+
+@test "scope: cargo package flags are emitted one -p per package" {
+  source "$QG_REPO_ROOT/rust/lib/scope.sh"
+  run qg_rust_pkg_flags "$(printf 'a\nb\n')"
+  [ "$output" = "-p a -p b" ]
+  run qg_rust_pkg_flags "__FULL__"
+  [ "$output" = "--workspace" ]
+}
+
+@test "scope: baseline scope is the intersection with packages that exist on base" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  source "$QG_REPO_ROOT/rust/lib/scope.sh"
+  # qgfix-brandnew exists only in the PR tree -> must not be passed to the baseline
+  run qg_rust_intersect_scope "$(_scope_ws)" "$(printf 'qgfix-leaf\nqgfix-brandnew\n')"
+  [ "$output" = "qgfix-leaf" ]
+}
+
+@test "scope: base metrics cache key differs between full and narrow scope" {
+  source "$QG_REPO_ROOT/rust/lib/scope.sh"
+  full=$(qg_rust_scope_hash "__FULL__")
+  narrow=$(qg_rust_scope_hash "$(printf 'qgfix-leaf\n')")
+  [ -n "$full" ]
+  [ -n "$narrow" ]
+  [ "$full" != "$narrow" ]
+}
+
+@test "scope: resolves through a symlinked working dir (macOS /var -> /private/var)" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  source "$QG_REPO_ROOT/rust/lib/scope.sh"
+  # mktemp on macOS lives under /var, a symlink to /private/var: the canonical
+  # manifest_path from cargo would not prefix-match a logical pwd. Regression
+  # for the scope block silently falling back to __FULL__ on any symlinked path.
+  ws=$(qg_tmp_dir)
+  cp -R "$QG_REPO_ROOT/rust/test-fixtures/workspace/." "$ws/"
+  rm -f "$ws/Cargo.lock"
+  run qg_rust_scope "$ws" "crates/leaf/src/lib.rs"
+  [ "$status" -eq 0 ]
+  [ "$output" = "qgfix-leaf" ]
+  rm -rf "$ws"
+}
+
+@test "e2e: a leaf-only change scopes the gate to that crate, never the workspace" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  ws=$(qg_tmp_dir)
+  cp -R "$QG_REPO_ROOT/rust/test-fixtures/workspace/." "$ws/"
+  cd "$ws"
+  git -c init.defaultBranch=main init -q . && git config user.email t@t && git config user.name t
+  git add -A && git commit -qm base
+  git checkout -qb feature
+  printf '\npub fn extra() -> u32 { 1 }\n' >> crates/leaf/src/lib.rs
+  git add -A && git commit -qm 'change leaf only'
+  QG_BASELINE_CACHE_DIR="$ws/.qgc" run bash "$QG_REPO_ROOT/rust/qg.sh" --base main --log-dir "$ws/logs"
+  # scope must be the leaf crate, and the run must not report full-workspace
+  printf '%s\n' "$output" | grep -q 'qgfix-leaf'
+  ! printf '%s\n' "$output" | grep -q 'full workspace'
+  # the unrelated crate must never have been built by the gate
+  ! grep -rq 'qgfix-unrelated' "$ws/logs" 2>/dev/null
+  cd "$QG_REPO_ROOT"; rm -rf "$ws"
+}

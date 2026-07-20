@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Renders text and JSON output for the web (HTML + CSS).
-# Mede APENAS fmt + lint. build/test/complexity/coverage OMITIDAS
-# (ver web/lib/measure.sh + docs/languages/web.md).
+# Measures ONLY fmt + lint. build/test/complexity/coverage are OMITTED
+# (see web/lib/measure.sh + docs/languages/web.md).
 
 # Ensures a number; anything non-numeric (empty, "Unknown", "N/A") -> 0
 _num() {
