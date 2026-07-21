@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         # Grow this list as each language's Dockerfile lands.
-        lang: [rust]
+        lang: [rust, go, nodejs, web, python, java, kotlin, swift]
     steps:
       - uses: actions/checkout@v4
 
@@ -32,8 +32,10 @@ jobs:
           img="ghcr.io/${GITHUB_REPOSITORY}/${{ matrix.lang }}"
           img="${img,,}"  # GHCR requires a lowercase path
           tags="${img}:latest"
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            tags="${tags},${img}:${GITHUB_REF_NAME}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            ver="${GITHUB_REF_NAME}"   # vX.Y.Z
+            major="${ver%%.*}"         # vX -- the moving major tag consumers pin
+            tags="${tags},${img}:${ver},${img}:${major}"
           fi
           echo "tags=${tags}" >> "$GITHUB_OUTPUT"
 

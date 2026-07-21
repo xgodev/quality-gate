@@ -17,11 +17,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Rust metric tools: clippy + rustfmt (components), llvm-tools + cargo-llvm-cov
 # (coverage). cargo-binstall pulls a prebuilt binary instead of compiling it.
-RUN rustup component add clippy rustfmt llvm-tools-preview \
+# The gate never renders docs, so drop the rust-docs component and any leftover
+# doc/registry caches to keep the image lean.
+RUN rustup component remove rust-docs 2>/dev/null || true \
+    && rustup component add clippy rustfmt llvm-tools-preview \
     && curl -L --proto '=https' --tlsv1.2 -sSf \
          https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash \
     && cargo binstall -y cargo-llvm-cov \
-    && rm -rf /usr/local/cargo/registry
+    && rm -rf /usr/local/cargo/registry /usr/local/cargo/.package-cache \
+             /usr/local/rustup/toolchains/*/share/doc \
+             /usr/local/rustup/downloads
 
 # The gate itself. Kept at a fixed path so the dispatcher's ROOT is stable and
 # independent of the mounted project.
