@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.2]
 
 Fix: a git-lfs repo could not be gated at all. `git archive` runs the repo's
 configured filters, so on an LFS checkout it needs `git-lfs` on PATH and every
@@ -26,6 +26,8 @@ Fix: the hygiene scan follows what git says the repo owns (tracked + new files;
 ignored paths and nested checkouts excluded) instead of walking the tree. A
 nested checkout (vendored clone, worktree, agent scratch dir like
 `.solvers/issue-N`) previously multiplied every finding once per copy.
+
+## [1.0.0] - [1.0.1]
 
 Feature (#5-#11): per-language Docker images on GHCR
 (`ghcr.io/xgodev/quality-gate/<lang>`), each carrying the full gate shell plus
