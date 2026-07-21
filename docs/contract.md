@@ -377,6 +377,9 @@ projects:                             # monorepo: closed list of sub-projects
   - path: backend
     lang: go
   - path: frontend                    # lang omitted -> dispatcher detects
+system_packages:                      # OS packages the build links (apt only)
+  - libasound2-dev
+  - libjack-jackd2-dev
 ```
 
 ### `projects` block (monorepo)
@@ -388,7 +391,41 @@ list. `lang:` does NOT select the ruleset (that is a tamper-surface) -- it only 
 `<lang>/qg.sh --detect` to test inside the `path`.
 
 Full closed schema of `.qg.yaml`: `cov_margin`, `skip_metrics`,
-`extra_fast_path_paths`, `absolute_thresholds`, `projects`.
+`extra_fast_path_paths`, `absolute_thresholds`, `projects`, `system_packages`.
+
+### `system_packages` block
+
+Read ONLY by the `qg` dispatcher. A list of OS package names the project's
+build needs -- typically the C libraries that FFI/`*-sys` crates (or cgo, native
+node addons, etc.) link. The gate installs them **once**, before any language
+gate, so the baseline and the PR build against the same set. This keeps the
+shared images lean and generic: each project declares its own deps; the gate
+never bakes a project's libraries in.
+
+```yaml
+system_packages:
+  - libasound2-dev
+  - libjack-jackd2-dev
+```
+
+- **The project declares, the runner decides.** Nothing is installed unless
+  `QG_ALLOW_SYSTEM_PACKAGES=1` comes from whoever RUNS the gate; without it the
+  declaration is a `::warning::` and the run continues. `.qg.yaml` is written by
+  the developer under test, so an unchecked list would install arbitrary
+  packages as root (maintainer scripts included) or drop a distro
+  `cargo`/`golang-go` on `/usr/bin` that shadows the toolchain the image pins --
+  the gate would then measure a tool it does not ship. Same boundary as
+  `QG_RULESET_DIR`.
+- Entries must match `^[a-z0-9][a-z0-9._+-]*$` (Debian package names). Anything
+  else is exit 2, never a silent skip -- a leading dash would reach `apt-get` as
+  a FLAG, not a package.
+- Installed with `apt-get install --no-install-recommends`, as root, once,
+  before any language gate. The gate never calls `sudo`: it would hang on a
+  password prompt in CI, or hand the repo under test root on the runner. Not
+  root -> `::warning::` + continue.
+- Where `apt-get` is absent (local dev on macOS, etc.) the step is a no-op with a
+  `::warning::` -- the host is assumed to already provide the libraries.
+- A failed install is a tool/setup error -> exit 2, never a code verdict.
 
 Rules:
 

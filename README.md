@@ -129,6 +129,7 @@ docker run --rm -v "$PWD:/src" -w /src ghcr.io/xgodev/quality-gate/python:v1
 QG_BYPASS_REASON="incident hotfix"   # forces a pass, recorded in the output
 QG_BASE_REF=origin/main              # same as --base
 QG_RULESET_DIR=/custom/rules         # override the shipped ruleset (operator only)
+QG_ALLOW_SYSTEM_PACKAGES=1           # authorize .qg.yaml system_packages (operator only)
 ```
 
 ## In CI
@@ -159,6 +160,38 @@ Or the image directly, in any CI:
 ## Monorepos
 
 A `.qg.yaml` at the root with a `projects:` block lists the sub-projects; the dispatcher runs one gate per declared project plus the root. The aggregate verdict is the worst one (precedence `2 > 1 > 3 > 0`), and `--format json` emits `{aggregate_verdict, results:[...]}`.
+
+## Native build dependencies
+
+The images carry the language toolchain, not any project's C libraries. When a
+project's build links system libraries (audio, GUI, FFI/`*-sys` crates, …),
+declare them in `.qg.yaml` and the gate installs them once, before it builds --
+so the image stays lean and generic while the project owns its deps:
+
+```yaml
+system_packages:
+  - libasound2-dev
+  - libjack-jackd2-dev
+```
+
+**The project declares, the runner decides.** `.qg.yaml` belongs to the repo
+under test, so the gate installs nothing unless whoever runs it opts in with
+`QG_ALLOW_SYSTEM_PACKAGES=1` -- otherwise the declaration is a `::warning::`
+and the run continues. Same boundary as `QG_RULESET_DIR`, and for the same
+reason: an unchecked list would let a repo install arbitrary packages as root,
+or shadow the pinned toolchain with a distro one.
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src -e QG_ALLOW_SYSTEM_PACKAGES=1 \
+  ghcr.io/xgodev/quality-gate/rust:v1 --base origin/main
+```
+
+Installed with `apt-get install --no-install-recommends`, as root, once, before
+any measurement -- never through `sudo`. Entries must be Debian package names
+(`[a-z0-9][a-z0-9._+-]*`); anything else (an apt flag, a shell expression) is
+exit `2`. A failed install is exit `2` too -- a tool error, never a code
+verdict. Not root, or no `apt-get` (local macOS): `::warning::` and the host is
+assumed to provide them.
 
 ## Tamper-resistance
 
