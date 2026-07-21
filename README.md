@@ -11,7 +11,7 @@ docker run --rm -v "$PWD:/src" -w /src \
 
 ## The images
 
-Public on GHCR (no login needed). Multi-arch (`linux/amd64` + `linux/arm64`), except `swift` which is amd64-only -- see the note below the table:
+Public on GHCR (no login needed), multi-arch (`linux/amd64` + `linux/arm64`):
 
 | Image | Language detected by | Metrics |
 |---|---|---|
