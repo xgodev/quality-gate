@@ -117,8 +117,16 @@ fi
 # --- system_packages -------------------------------------------------------
 # OS packages the project's build needs (e.g. the C libraries that `*-sys`
 # crates link). Installed ONCE, before any language gate, so the baseline and
-# the PR both build against them. Keeps the shared image lean and generic --
-# each project declares its own deps in .qg.yaml, the gate never bakes them in.
+# the PR both build against them, and the shared image stays lean and generic.
+#
+# TRUST BOUNDARY: the list comes from `.qg.yaml`, a file the developer under
+# test controls, so the project may only DECLARE -- the runner DECIDES, via
+# QG_ALLOW_SYSTEM_PACKAGES=1 (same rule as QG_RULESET_DIR). Without that opt-in
+# a repo could have the gate install arbitrary packages as root, maintainer
+# scripts and all, or drop a distro `cargo`/`golang-go` on /usr/bin that
+# shadows the toolchain the image pins -- measuring a different tool than the
+# gate ships. Entries are validated as Debian package names for the same
+# reason: a leading dash turns "package" into an apt-get flag.
 SYSTEM_PACKAGES=""
 if [ -f "$QG_YAML" ]; then
   in_sp=0
@@ -129,8 +137,13 @@ if [ -f "$QG_YAML" ]; then
     if [ "$in_sp" = "1" ]; then
       case "$line" in
         "  - "*|"- "*)
-          pkg=$(echo "$line" | sed -E 's/^[[:space:]]*-[[:space:]]*"?([A-Za-z0-9._+-]+)"?.*/\1/')
-          [ -n "$pkg" ] && SYSTEM_PACKAGES="${SYSTEM_PACKAGES} ${pkg}"
+          pkg=$(echo "$line" | sed -E 's/^[[:space:]]*-[[:space:]]*//; s/[[:space:]]*(#.*)?$//; s/^"(.*)"$/\1/')
+          [ -z "$pkg" ] && continue
+          if ! echo "$pkg" | grep -qE '^[a-z0-9][a-z0-9._+-]*$'; then
+            echo "::error::.qg.yaml system_packages: '$pkg' is not a package name -- only [a-z0-9][a-z0-9._+-]* is accepted, so an apt flag or a shell expression can never reach apt-get" >&2
+            exit 2
+          fi
+          SYSTEM_PACKAGES="${SYSTEM_PACKAGES} ${pkg}"
           ;;
         ""|"#"*|"  #"*) ;;
         *) in_sp=0 ;;
@@ -139,23 +152,29 @@ if [ -f "$QG_YAML" ]; then
   done < "$QG_YAML"
 fi
 
-# Install the declared packages. Root + apt only (the CI image); a no-op where
-# apt is absent (local dev already provides them). A failed install is a
+# Install the declared packages. Root + apt only (the image); never escalates
+# privileges -- a `sudo` here either hangs on a password prompt or silently
+# grants the repo under test root on the runner. A failed install is a
 # tool/setup error (exit 2), never a code verdict.
 install_system_packages() {
   [ -z "${SYSTEM_PACKAGES// /}" ] && return 0
-  [ "${QG_SKIP_SYSTEM_PACKAGES:-0}" = "1" ] && return 0
+  if [ "${QG_ALLOW_SYSTEM_PACKAGES:-0}" != "1" ]; then
+    echo "::warning::.qg.yaml declares system_packages (${SYSTEM_PACKAGES# }) but the runner did not opt in -- set QG_ALLOW_SYSTEM_PACKAGES=1 to allow it; the list comes from the repo under test, so only whoever RUNS the gate can authorize an install" >&2
+    return 0
+  fi
+  if [ "$(id -u)" != "0" ]; then
+    echo "::warning::system_packages: not root -- assuming the host already provides:${SYSTEM_PACKAGES} (the gate never escalates privileges)" >&2
+    return 0
+  fi
   if ! command -v apt-get >/dev/null 2>&1; then
     echo "::warning::system_packages declared but apt-get is absent -- assuming the host already provides:${SYSTEM_PACKAGES}" >&2
     return 0
   fi
-  local sudo=""
-  [ "$(id -u)" != "0" ] && command -v sudo >/dev/null 2>&1 && sudo="sudo"
   echo "::group::system_packages install (${SYSTEM_PACKAGES# })" >&2
-  if ! $sudo apt-get update -qq >&2 \
-     || ! DEBIAN_FRONTEND=noninteractive $sudo apt-get install -y --no-install-recommends $SYSTEM_PACKAGES >&2; then
+  if ! apt-get update -qq >&2 \
+     || ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $SYSTEM_PACKAGES >&2; then
     echo "::endgroup::" >&2
-    echo "::error::system_packages: apt install failed for:${SYSTEM_PACKAGES}" >&2
+    echo "::error::system_packages: apt install failed for:${SYSTEM_PACKAGES} -- check the names against the image's distro (Debian bookworm)" >&2
     exit 2
   fi
   echo "::endgroup::" >&2

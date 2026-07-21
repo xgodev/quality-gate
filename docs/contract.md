@@ -408,12 +408,24 @@ system_packages:
   - libjack-jackd2-dev
 ```
 
-- Installed with `apt-get install --no-install-recommends` (root, as in the CI
-  images). A failed install is a tool/setup error -> exit 2, never a code verdict.
+- **The project declares, the runner decides.** Nothing is installed unless
+  `QG_ALLOW_SYSTEM_PACKAGES=1` comes from whoever RUNS the gate; without it the
+  declaration is a `::warning::` and the run continues. `.qg.yaml` is written by
+  the developer under test, so an unchecked list would install arbitrary
+  packages as root (maintainer scripts included) or drop a distro
+  `cargo`/`golang-go` on `/usr/bin` that shadows the toolchain the image pins --
+  the gate would then measure a tool it does not ship. Same boundary as
+  `QG_RULESET_DIR`.
+- Entries must match `^[a-z0-9][a-z0-9._+-]*$` (Debian package names). Anything
+  else is exit 2, never a silent skip -- a leading dash would reach `apt-get` as
+  a FLAG, not a package.
+- Installed with `apt-get install --no-install-recommends`, as root, once,
+  before any language gate. The gate never calls `sudo`: it would hang on a
+  password prompt in CI, or hand the repo under test root on the runner. Not
+  root -> `::warning::` + continue.
 - Where `apt-get` is absent (local dev on macOS, etc.) the step is a no-op with a
   `::warning::` -- the host is assumed to already provide the libraries.
-- `QG_SKIP_SYSTEM_PACKAGES=1` (runner env) skips the install entirely.
-- Package names are validated as `[A-Za-z0-9._+-]`; anything else is ignored.
+- A failed install is a tool/setup error -> exit 2, never a code verdict.
 
 Rules:
 

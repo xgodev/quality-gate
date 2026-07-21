@@ -1,5 +1,28 @@
 # Changelog
 
+## [Unreleased]
+
+Feature: `.qg.yaml` `system_packages` -- a project declares the OS packages its
+build links (the C libraries behind FFI/`*-sys` crates, cgo, native node addons,
+…) and the `qg` dispatcher installs them once, before any language gate, so the
+baseline and the PR build against the same set. Keeps the shared images lean and
+generic instead of baking a project's libraries in.
+
+The list lives in a file the developer under test controls, so the project only
+DECLARES -- the runner DECIDES: without `QG_ALLOW_SYSTEM_PACKAGES=1` from
+whoever RUNS the gate the declaration is a `::warning::` and nothing is
+installed (same trust boundary as `QG_RULESET_DIR`). Otherwise a repo could
+have the gate install arbitrary packages as root, maintainer scripts and all,
+or drop a distro `cargo`/`golang-go` on `/usr/bin` that shadows the toolchain
+the image pins. Entries are validated as Debian package names
+(`[a-z0-9][a-z0-9._+-]*`); anything else -- notably a leading dash, which
+`apt-get` would read as a FLAG -- is exit 2, not a silent skip. The install runs
+only as root and never calls `sudo` (it would hang on a password prompt in CI,
+or grant the repo under test root on the runner); non-root and no-`apt-get` are
+`::warning::` + continue. A failed install is exit 2, never a code verdict.
+Tests in `dispatcher.bats` cover opt-in, both rejections, the apt failure, the
+non-root path and the no-apt path.
+
 ## [1.0.2]
 
 Fix: a git-lfs repo could not be gated at all. `git archive` runs the repo's
@@ -28,15 +51,6 @@ nested checkout (vendored clone, worktree, agent scratch dir like
 `.solvers/issue-N`) previously multiplied every finding once per copy.
 
 ## [1.0.0] - [1.0.1]
-
-Feature: `.qg.yaml` `system_packages` -- a project declares the OS packages its
-build links (the C libraries behind FFI/`*-sys` crates, cgo, native node addons,
-…) and the `qg` dispatcher installs them once, before any language gate, so the
-baseline and the PR build against the same set. Keeps the shared images lean and
-generic instead of baking a project's libraries in. `apt-get` only (no-op with a
-`::warning::` where absent, e.g. local macOS); a failed install is exit 2, never
-a code verdict; `QG_SKIP_SYSTEM_PACKAGES=1` skips it. Allowed as a top-level key
-in every language gate; installed by the dispatcher. Tests in `dispatcher.bats`.
 
 Feature (#5-#11): per-language Docker images on GHCR
 (`ghcr.io/xgodev/quality-gate/<lang>`), each carrying the full gate shell plus
