@@ -307,3 +307,21 @@ EOS
   ! printf '%s' "$output" | grep -q 'hygiene' || return 1
   cd "$QG_REPO_ROOT"; rm -rf "$root" "$proj"
 }
+
+@test "dispatcher: system_packages parsed + installed before the gate, skippable" {
+  local root proj
+  root=$(qg_tmp_dir); proj=$(qg_tmp_dir)
+  make_fake_root "$root" go GO_SENTINEL 0
+  cd "$proj"; touch GO_SENTINEL
+  cat > .qg.yaml <<'YAML'
+system_packages:
+  - libfoo-dev
+  - libbar-dev
+YAML
+  # Skip the actual apt install; the gate must still dispatch cleanly and never
+  # reject the new key.
+  QG_SKIP_SYSTEM_PACKAGES=1 run "$root/qg" --base origin/main
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"unknown top-level key"* ]]
+  cd "$QG_REPO_ROOT"; rm -rf "$root" "$proj"
+}

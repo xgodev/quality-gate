@@ -182,12 +182,12 @@ if [ -f "$QG_YAML_FILE" ]; then
   while IFS= read -r line; do
     case "$line" in
       ""|"#"*) ;;
-      cov_margin:*|skip_metrics:*|extra_fast_path_paths:*|absolute_thresholds:*|projects:*|"  -"*|"    "*|"  "*) ;;
+      cov_margin:*|skip_metrics:*|extra_fast_path_paths:*|absolute_thresholds:*|projects:*|system_packages:*|"  -"*|"    "*|"  "*) ;;
       *)
         if echo "$line" | grep -qE "^[a-zA-Z_]+:"; then
           key=$(echo "$line" | sed -E 's/^([a-zA-Z_]+):.*/\1/')
           case "$key" in
-            cov_margin|skip_metrics|extra_fast_path_paths|absolute_thresholds|projects) ;;
+            cov_margin|skip_metrics|extra_fast_path_paths|absolute_thresholds|projects|system_packages) ;;
             *)
               echo "::error::.qg.yaml: unknown top-level key: $key" >&2
               exit 2

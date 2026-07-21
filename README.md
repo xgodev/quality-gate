@@ -160,6 +160,23 @@ Or the image directly, in any CI:
 
 A `.qg.yaml` at the root with a `projects:` block lists the sub-projects; the dispatcher runs one gate per declared project plus the root. The aggregate verdict is the worst one (precedence `2 > 1 > 3 > 0`), and `--format json` emits `{aggregate_verdict, results:[...]}`.
 
+## Native build dependencies
+
+The images carry the language toolchain, not any project's C libraries. When a
+project's build links system libraries (audio, GUI, FFI/`*-sys` crates, …),
+declare them in `.qg.yaml` and the gate installs them once, before it builds --
+so the image stays lean and generic while the project owns its deps:
+
+```yaml
+system_packages:
+  - libasound2-dev
+  - libjack-jackd2-dev
+```
+
+Installed via `apt-get` (root, as in CI). A failed install is exit `2` (tool
+error), never a code verdict; where `apt-get` is absent (local macOS) it is a
+no-op and the host is assumed to provide them. `QG_SKIP_SYSTEM_PACKAGES=1` skips it.
+
 ## Tamper-resistance
 
 The gate **ships and enforces its own rulesets** (`<lang>/rules/`). The target project's quality configs (`.eslintrc`, `clippy.toml`, `.stylelintrc`, `ruff.toml`, `detekt.yml`, ...) are **ignored by default** -- otherwise a dev loosens a rule in their own repo and the gate becomes theater. The only override is `QG_RULESET_DIR`, supplied by whoever *runs* the gate, never read from a file in the repo under test.

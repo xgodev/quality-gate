@@ -29,6 +29,15 @@ nested checkout (vendored clone, worktree, agent scratch dir like
 
 ## [1.0.0] - [1.0.1]
 
+Feature: `.qg.yaml` `system_packages` -- a project declares the OS packages its
+build links (the C libraries behind FFI/`*-sys` crates, cgo, native node addons,
+…) and the `qg` dispatcher installs them once, before any language gate, so the
+baseline and the PR build against the same set. Keeps the shared images lean and
+generic instead of baking a project's libraries in. `apt-get` only (no-op with a
+`::warning::` where absent, e.g. local macOS); a failed install is exit 2, never
+a code verdict; `QG_SKIP_SYSTEM_PACKAGES=1` skips it. Allowed as a top-level key
+in every language gate; installed by the dispatcher. Tests in `dispatcher.bats`.
+
 Feature (#5-#11): per-language Docker images on GHCR
 (`ghcr.io/xgodev/quality-gate/<lang>`), each carrying the full gate shell plus
 only that language's toolchain. All build locally and pass an in-container e2e

@@ -377,6 +377,9 @@ projects:                             # monorepo: closed list of sub-projects
   - path: backend
     lang: go
   - path: frontend                    # lang omitted -> dispatcher detects
+system_packages:                      # OS packages the build links (apt only)
+  - libasound2-dev
+  - libjack-jackd2-dev
 ```
 
 ### `projects` block (monorepo)
@@ -388,7 +391,29 @@ list. `lang:` does NOT select the ruleset (that is a tamper-surface) -- it only 
 `<lang>/qg.sh --detect` to test inside the `path`.
 
 Full closed schema of `.qg.yaml`: `cov_margin`, `skip_metrics`,
-`extra_fast_path_paths`, `absolute_thresholds`, `projects`.
+`extra_fast_path_paths`, `absolute_thresholds`, `projects`, `system_packages`.
+
+### `system_packages` block
+
+Read ONLY by the `qg` dispatcher. A list of OS package names the project's
+build needs -- typically the C libraries that FFI/`*-sys` crates (or cgo, native
+node addons, etc.) link. The gate installs them **once**, before any language
+gate, so the baseline and the PR build against the same set. This keeps the
+shared images lean and generic: each project declares its own deps; the gate
+never bakes a project's libraries in.
+
+```yaml
+system_packages:
+  - libasound2-dev
+  - libjack-jackd2-dev
+```
+
+- Installed with `apt-get install --no-install-recommends` (root, as in the CI
+  images). A failed install is a tool/setup error -> exit 2, never a code verdict.
+- Where `apt-get` is absent (local dev on macOS, etc.) the step is a no-op with a
+  `::warning::` -- the host is assumed to already provide the libraries.
+- `QG_SKIP_SYSTEM_PACKAGES=1` (runner env) skips the install entirely.
+- Package names are validated as `[A-Za-z0-9._+-]`; anything else is ignored.
 
 Rules:
 
