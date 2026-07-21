@@ -2,6 +2,19 @@
 
 Go-specific gate documentation. For the common contract, see [`../contract.md`](../contract.md).
 
+## Run it with Docker (recommended)
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src \
+  ghcr.io/xgodev/quality-gate/go:v1 --base origin/main
+```
+
+The image carries the gate and the whole go toolchain -- nothing to install. It is detected by `go.mod`. `/src` must be the checkout **with its `.git`** (the baseline uses `git archive <base>`); in GitHub Actions set `fetch-depth: 0`. Omit `--base` for absolute mode.
+
+`golangci-lint` is pinned to the v1 line inside the image because the shipped `.golangci.yml` uses the v1 config schema; the gate falls back to `go vet` only if it is genuinely absent.
+
+See the [README](../../README.md) for tags, exit codes, flags and CI snippets. The sections below describe what each metric measures and how to run the script directly, without the image.
+
 ## Build system
 
 Quality Gate Go assumes **go modules** (official, built into the toolchain). It does not support legacy GOPATH or dep.
@@ -124,7 +137,7 @@ And make sure `$(go env GOPATH)/bin` is on `$PATH`.
 ### Stale baseline cache after changing the base branch
 
 ```bash
-~/.claude-plugin/tools/quality-gate/go/qg.sh --base origin/main --refresh-baseline
+./quality-gate/go/qg.sh --base origin/main --refresh-baseline
 ```
 
 or
@@ -151,4 +164,4 @@ None in V1. Future candidates:
 - `vuln` via `govulncheck` -- vulnerabilities in dependencies and code.
 - `staticcheck_advanced` -- additional checks outside the golangci-lint default.
 
-To add, follow the contract (section "Extending") and the maintainer-only `add-quality-gate` skill (project-local, `.claude/skills/add-quality-gate/` in the gate repo).
+To add, follow the contract (section "Extending") and the process in [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md).

@@ -2,6 +2,19 @@
 
 Kotlin-specific gate documentation. For the common contract, see [`../contract.md`](../contract.md).
 
+## Run it with Docker (recommended)
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src \
+  ghcr.io/xgodev/quality-gate/kotlin:v1 --base origin/main
+```
+
+The image carries the gate and the whole kotlin toolchain -- nothing to install. It is detected by `build.gradle` / `build.gradle.kts`. `/src` must be the checkout **with its `.git`** (the baseline uses `git archive <base>`); in GitHub Actions set `fetch-depth: 0`. Omit `--base` for absolute mode.
+
+The Gradle wrapper is authoritative: `./gradlew` is used when committed, and the image's system `gradle` is only the fallback.
+
+See the [README](../../README.md) for tags, exit codes, flags and CI snippets. The sections below describe what each metric measures and how to run the script directly, without the image.
+
 ## Build system
 
 Quality Gate Kotlin assumes **Gradle (`gradle`/`gradlew`) + `build.gradle.kts`** as the canonical build in V1. The sentinel also detects `build.gradle` (Groovy DSL) but the gate has only been tested with the Kotlin DSL.
@@ -121,7 +134,7 @@ And the XML report is generated at `build/reports/kover/report.xml` after `gradl
 ### Stale baseline cache after changing the base branch
 
 ```bash
-~/.claude-plugin/tools/quality-gate/kotlin/qg.sh --base origin/main --refresh-baseline
+./quality-gate/kotlin/qg.sh --base origin/main --refresh-baseline
 # OR
 rm -rf /tmp/qg-baseline-kotlin
 ```
@@ -145,4 +158,4 @@ None in V1. Future candidates:
 - `binary_compat` via `kotlinx-binary-compatibility-validator` -- breaking API changes.
 - `unused_deps` via `gradle nebula.dependency-lock` or similar.
 
-To add, follow the contract (section "Extending") and the maintainer-only `add-quality-gate` skill (project-local, `.claude/skills/add-quality-gate/` in the gate repo).
+To add, follow the contract (section "Extending") and the process in [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md).

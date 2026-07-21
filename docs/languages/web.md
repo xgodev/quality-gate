@@ -3,6 +3,19 @@
 `web`-specific gate documentation. For the common contract, see
 [`../contract.md`](../contract.md).
 
+## Run it with Docker (recommended)
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src \
+  ghcr.io/xgodev/quality-gate/web:v1 --base origin/main
+```
+
+The image carries the gate and the whole web toolchain -- nothing to install. It is detected by HTML/CSS at the root **with no `package.json`**. `/src` must be the checkout **with its `.git`** (the baseline uses `git archive <base>`); in GitHub Actions set `fetch-depth: 0`. Omit `--base` for absolute mode.
+
+A project with `package.json` -- including React/Vue/Svelte/Angular -- is a **nodejs** project, not web.
+
+See the [README](../../README.md) for tags, exit codes, flags and CI snippets. The sections below describe what each metric measures and how to run the script directly, without the image.
+
 ## Scope
 
 The `web` gate covers **pure static sites**: HTML + CSS/SCSS without a

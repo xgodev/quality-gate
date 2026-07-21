@@ -2,6 +2,19 @@
 
 Swift-specific gate documentation. For the common contract, see [`../contract.md`](../contract.md).
 
+## Run it with Docker (recommended)
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src \
+  ghcr.io/xgodev/quality-gate/swift:v1 --base origin/main
+```
+
+The image carries the gate and the whole swift toolchain -- nothing to install. It is detected by `Package.swift`. `/src` must be the checkout **with its `.git`** (the baseline uses `git archive <base>`); in GitHub Actions set `fetch-depth: 0`. Omit `--base` for absolute mode.
+
+swiftlint and swift-format are built into the image (no prebuilt arm64 SwiftLint exists upstream, so the arm64 variant compiles it from source at image-build time -- not at gate runtime).
+
+See the [README](../../README.md) for tags, exit codes, flags and CI snippets. The sections below describe what each metric measures and how to run the script directly, without the image.
+
 ## Build system
 
 Quality Gate Swift assumes **SwiftPM (`swift build`/`swift test`) + `Package.swift`** as the canonical build in V1. Xcode-only projects (without `Package.swift`) are NOT supported in V1 -- the sentinel detects `.xcodeproj`/`.xcworkspace` in the fast-path but `swift build` fails without `Package.swift`.
@@ -124,7 +137,7 @@ See the fixtures: `.swift-format` disables `multiElementCollectionTrailingCommas
 ### Stale baseline cache after changing the base branch
 
 ```bash
-~/.claude-plugin/tools/quality-gate/swift/qg.sh --base origin/main --refresh-baseline
+./quality-gate/swift/qg.sh --base origin/main --refresh-baseline
 # OR
 rm -rf /tmp/qg-baseline-swift
 ```
@@ -148,4 +161,4 @@ None in V1. Future candidates:
 - `xcodebuild` instead of `swift build` for Xcode-only projects.
 - `force_unwrap` count via `swiftlint` -- already part of `lint`, but could be split out.
 
-To add, follow the contract (section "Extending") and the maintainer-only `add-quality-gate` skill (project-local, `.claude/skills/add-quality-gate/` in the gate repo).
+To add, follow the contract (section "Extending") and the process in [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md).

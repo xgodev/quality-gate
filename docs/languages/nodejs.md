@@ -2,6 +2,19 @@
 
 Node.js-specific gate documentation. For the common contract, see [`../contract.md`](../contract.md).
 
+## Run it with Docker (recommended)
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src \
+  ghcr.io/xgodev/quality-gate/nodejs:v1 --base origin/main
+```
+
+The image carries the gate and the whole nodejs toolchain -- nothing to install. It is detected by `package.json`. `/src` must be the checkout **with its `.git`** (the baseline uses `git archive <base>`); in GitHub Actions set `fetch-depth: 0`. Omit `--base` for absolute mode.
+
+prettier, eslint, typescript and c8 are pre-installed at pinned versions, so no registry access is needed at runtime. npm/yarn/pnpm are honored per the project's lockfile (corepack is enabled).
+
+See the [README](../../README.md) for tags, exit codes, flags and CI snippets. The sections below describe what each metric measures and how to run the script directly, without the image.
+
 ## Build system
 
 Quality Gate Node.js assumes **npm** + `package.json`. The measurement tools (prettier, eslint, c8, typescript) are downloaded on demand via `npx --yes` -- they do not require `npm install` in the target project. If the project already has `node_modules` with specific versions, `npx` prioritizes them.
@@ -104,7 +117,7 @@ export default [{ files: ['**/*.js'], rules: { 'no-unused-vars': 'error' } }];
 ### Stale baseline cache after changing the base branch
 
 ```bash
-~/.claude-plugin/tools/quality-gate/nodejs/qg.sh --base origin/main --refresh-baseline
+./quality-gate/nodejs/qg.sh --base origin/main --refresh-baseline
 # OR
 rm -rf /tmp/qg-baseline-nodejs
 ```
@@ -128,4 +141,4 @@ None in V1. Future candidates:
 - `bundle_size` via `bundlesize` or `size-limit` -- output size.
 - `type_coverage` via `typescript-coverage-report` -- % of code without `any`.
 
-To add, follow the contract (section "Extending") and the maintainer-only `add-quality-gate` skill (project-local, `.claude/skills/add-quality-gate/` in the gate repo).
+To add, follow the contract (section "Extending") and the process in [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md).

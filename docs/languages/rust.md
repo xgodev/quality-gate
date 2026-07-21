@@ -2,6 +2,19 @@
 
 Rust-specific gate documentation. For the common contract, see [`../contract.md`](../contract.md).
 
+## Run it with Docker (recommended)
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src \
+  ghcr.io/xgodev/quality-gate/rust:v1 --base origin/main
+```
+
+The image carries the gate and the whole rust toolchain -- nothing to install. It is detected by `Cargo.toml`. `/src` must be the checkout **with its `.git`** (the baseline uses `git archive <base>`); in GitHub Actions set `fetch-depth: 0`. Omit `--base` for absolute mode.
+
+The gate scopes cargo to the workspace packages your diff touches (plus their in-workspace reverse-dependents), so wall-clock tracks the diff, not the whole workspace.
+
+See the [README](../../README.md) for tags, exit codes, flags and CI snippets. The sections below describe what each metric measures and how to run the script directly, without the image.
+
 ## Build system
 
 Quality Gate Rust assumes **Cargo** (official). It does not support xargo, standalone miri, or others.
@@ -122,7 +135,7 @@ cargo install cargo-llvm-cov --force
 ### Stale baseline cache after changing the base branch
 
 ```bash
-~/.claude-plugin/tools/quality-gate/rust/qg.sh --base origin/main --refresh-baseline
+./quality-gate/rust/qg.sh --base origin/main --refresh-baseline
 ```
 
 or
@@ -149,4 +162,4 @@ None in V1. Future candidates:
 - `audit` via `cargo audit` -- vulnerabilities in dependencies.
 - `unsafe_count` via `cargo geiger` -- use of `unsafe` blocks.
 
-To add, follow the contract (section "Extending") and the maintainer-only `add-quality-gate` skill (project-local, `.claude/skills/add-quality-gate/` in the gate repo).
+To add, follow the contract (section "Extending") and the process in [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md).

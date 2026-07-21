@@ -2,6 +2,19 @@
 
 Python-specific gate documentation. For the common contract, see [`../contract.md`](../contract.md).
 
+## Run it with Docker (recommended)
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src \
+  ghcr.io/xgodev/quality-gate/python:v1 --base origin/main
+```
+
+The image carries the gate and the whole python toolchain -- nothing to install. It is detected by `pyproject.toml`, `setup.py` or `requirements*.txt`. `/src` must be the checkout **with its `.git`** (the baseline uses `git archive <base>`); in GitHub Actions set `fetch-depth: 0`. Omit `--base` for absolute mode.
+
+The image ships poetry, pdm, uv and pipenv, so a project's lockfile manager is honored. A lockfile whose manager is missing is a tool-error (exit 2) -- the gate never silently substitutes pip.
+
+See the [README](../../README.md) for tags, exit codes, flags and CI snippets. The sections below describe what each metric measures and how to run the script directly, without the image.
+
 ## Build system
 
 Quality Gate Python assumes **pip + pyproject.toml** as the default build/deps. It does not support poetry, uv, pdm in V1 (the sentinel only checks `pyproject.toml`/`setup.py`/`setup.cfg`/`requirements*.txt` -- compatible with any of them, but the gate's canonical tools -- `ruff`, `pytest`, `radon` -- are installed via `pip`).
@@ -101,7 +114,7 @@ brew install ruff   # macOS
 ### Stale baseline cache after changing the base branch
 
 ```bash
-~/.claude-plugin/tools/quality-gate/python/qg.sh --base origin/main --refresh-baseline
+./quality-gate/python/qg.sh --base origin/main --refresh-baseline
 # OR
 rm -rf /tmp/qg-baseline-python
 ```
@@ -125,4 +138,4 @@ None in V1. Future candidates:
 - `security` via `bandit -q -r .` -- security issues.
 - `vuln` via `pip-audit` -- vulnerabilities in dependencies.
 
-To add, follow the contract (section "Extending") and the maintainer-only `add-quality-gate` skill (project-local, `.claude/skills/add-quality-gate/` in the gate repo).
+To add, follow the contract (section "Extending") and the process in [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md).

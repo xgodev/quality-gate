@@ -34,6 +34,53 @@ A project with `package.json` -- **including React/Vue/Svelte/Angular** -- is a 
 | `:v1.2.3` | Exact release. Pin for byte-reproducible verdicts. |
 | `:latest` | Tracks the newest release. Do not pin in CI. |
 
+## Run it on your machine
+
+Same command for every language -- only the image name changes. Run it from the
+root of the checkout:
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src \
+  ghcr.io/xgodev/quality-gate/<lang>:v1 --base origin/main
+```
+
+Copy-paste per language:
+
+```bash
+# rust
+docker run --rm -v "$PWD:/src" -w /src ghcr.io/xgodev/quality-gate/rust:v1 --base origin/main
+# go
+docker run --rm -v "$PWD:/src" -w /src ghcr.io/xgodev/quality-gate/go:v1 --base origin/main
+# python
+docker run --rm -v "$PWD:/src" -w /src ghcr.io/xgodev/quality-gate/python:v1 --base origin/main
+# nodejs (also React/Vue/Svelte/Angular)
+docker run --rm -v "$PWD:/src" -w /src ghcr.io/xgodev/quality-gate/nodejs:v1 --base origin/main
+# java
+docker run --rm -v "$PWD:/src" -w /src ghcr.io/xgodev/quality-gate/java:v1 --base origin/main
+# kotlin
+docker run --rm -v "$PWD:/src" -w /src ghcr.io/xgodev/quality-gate/kotlin:v1 --base origin/main
+# swift
+docker run --rm -v "$PWD:/src" -w /src ghcr.io/xgodev/quality-gate/swift:v1 --base origin/main
+# web (static HTML/CSS, no package.json)
+docker run --rm -v "$PWD:/src" -w /src ghcr.io/xgodev/quality-gate/web:v1 --base origin/main
+```
+
+Not sure which one? Ask the gate -- `--detect` prints the language slug(s) and exits:
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src ghcr.io/xgodev/quality-gate/go:v1 --detect
+```
+
+Practical notes for local runs:
+
+- Drop `--base` for absolute mode (measure the current state, no comparison).
+- The base ref must exist locally -- `git fetch origin main` first if needed.
+- Toolchain caches live inside the container and are lost on `--rm`. To reuse
+  them across runs, mount a named volume, e.g. Go:
+  `-v qg-go:/go/pkg/mod -v qg-gobuild:/root/.cache/go-build`, Rust:
+  `-v qg-cargo:/usr/local/cargo/registry`.
+- If Docker cannot write to the mount (SELinux hosts), use `-v "$PWD:/src:z"`.
+
 ## Requirements for the mount
 
 `/src` must be the checkout **with its `.git`** -- the baseline is produced with `git archive <base>`, so the base ref must exist locally:

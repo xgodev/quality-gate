@@ -2,6 +2,19 @@
 
 Java-specific gate documentation. For the common contract, see [`../contract.md`](../contract.md).
 
+## Run it with Docker (recommended)
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src \
+  ghcr.io/xgodev/quality-gate/java:v1 --base origin/main
+```
+
+The image carries the gate and the whole java toolchain -- nothing to install. It is detected by `pom.xml`. `/src` must be the checkout **with its `.git`** (the baseline uses `git archive <base>`); in GitHub Actions set `fetch-depth: 0`. Omit `--base` for absolute mode.
+
+**Maven only.** A Gradle project (`build.gradle[.kts]` without `pom.xml`) is a tool-error (exit 2), never a silent `mvn` run. `./mvnw` wins over the system `mvn` when committed.
+
+See the [README](../../README.md) for tags, exit codes, flags and CI snippets. The sections below describe what each metric measures and how to run the script directly, without the image.
+
 ## Build system
 
 Quality Gate Java assumes **Maven (`mvn`) + `pom.xml`** as the canonical build in V1. Gradle is detected by the sentinel (`build.gradle`/`build.gradle.kts`) -- the sentinel only prevents "language absent", but `count_build_errors` and `count_test_failures` run `mvn`. In a Gradle target project, these metrics need to be adapted (future).
@@ -124,7 +137,7 @@ PMD 7.x changed the CLI. Use `pmd check` (not `pmd-cli check`). If you installed
 ### Stale baseline cache after changing the base branch
 
 ```bash
-~/.claude-plugin/tools/quality-gate/java/qg.sh --base origin/main --refresh-baseline
+./quality-gate/java/qg.sh --base origin/main --refresh-baseline
 # OR
 rm -rf /tmp/qg-baseline-java
 ```
@@ -148,4 +161,4 @@ None in V1. Future candidates:
 - `spotbugs` -- static bugs (partial overlap with pmd; use as a complement).
 - `architecture` via `archunit` -- layering rules.
 
-To add, follow the contract (section "Extending") and the maintainer-only `add-quality-gate` skill (project-local, `.claude/skills/add-quality-gate/` in the gate repo).
+To add, follow the contract (section "Extending") and the process in [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md).
