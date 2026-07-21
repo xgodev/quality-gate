@@ -29,6 +29,14 @@ jobs:
         # Grow this list as each language's Dockerfile lands.
         lang: [rust, go, nodejs, web, python, java, kotlin, swift]
         platform: [amd64, arm64]
+        exclude:
+          # swift is amd64-only: realm ships no arm64 swiftlint binary, so an
+          # arm64 image has to compile SwiftLint from source (~20+ min every
+          # release). Not worth holding releases for the least-used image --
+          # Apple Silicon runs the swift image emulated via
+          # `docker run --platform linux/amd64`.
+          - lang: swift
+            platform: arm64
     runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4

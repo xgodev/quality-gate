@@ -11,7 +11,7 @@ docker run --rm -v "$PWD:/src" -w /src \
 
 ## The images
 
-Public on GHCR (no login needed), multi-arch (`linux/amd64` + `linux/arm64`):
+Public on GHCR (no login needed). Multi-arch (`linux/amd64` + `linux/arm64`), except `swift` which is amd64-only -- see the note below the table:
 
 | Image | Language detected by | Metrics |
 |---|---|---|
@@ -136,3 +136,12 @@ Detection is 100% shell, zero AI: `qg` calls `<lang>/qg.sh --detect` to discover
 - [`docs/consume.md`](docs/consume.md) -- integrating the gate into a project.
 - [`docs/languages/`](docs/languages/) -- per-language metrics, tools and troubleshooting.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) -- development and the release process.
+
+### Platform note
+
+Every image is multi-arch except **`swift`**, which is `linux/amd64` only: there is no prebuilt arm64 SwiftLint binary for Linux, and compiling it from source adds ~20 min to every release. On Apple Silicon, run that one emulated:
+
+```bash
+docker run --rm --platform linux/amd64 -v "$PWD:/src" -w /src \
+  ghcr.io/xgodev/quality-gate/swift:v1 --base origin/main
+```
