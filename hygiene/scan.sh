@@ -18,6 +18,37 @@ warn() { echo "::warning::hygiene: $*" >&2; }
 EXCL_DIRS='--exclude-dir=.git --exclude-dir=node_modules --exclude-dir=target --exclude-dir=dist --exclude-dir=build --exclude-dir=vendor --exclude-dir=.next --exclude-dir=coverage --exclude-dir=.venv'
 TEST_RE='(go test|pytest|cargo test|npm test|yarn test|pnpm test|gradlew? test|swift test|mvn [^|;&]*test|bats )'
 
+# --- what the scan looks at --------------------------------------------------
+# The files the repo OWNS: tracked, plus new files not yet committed (a local
+# run must see debt the dev just wrote), minus everything .gitignore excludes
+# and the vendored/generated dirs. What this buys: a nested checkout (a
+# vendored clone, a worktree, an agent scratch dir like .solvers/issue-N) is a
+# separate repo, so git reports it as one directory entry and never descends --
+# its copy of every source file no longer multiplies each finding and buries
+# the repo's own. Outside a git repo (a bare directory), fall back to find over
+# the same exclusions.
+_hy_files() {
+  local pat="${1:-*}"
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git ls-files -z --cached --others --exclude-standard -- "$pat" \
+      ':(exclude)node_modules/**' ':(exclude)**/node_modules/**' \
+      ':(exclude)target/**' ':(exclude)dist/**' ':(exclude)build/**' \
+      ':(exclude)vendor/**' ':(exclude).next/**' ':(exclude)coverage/**' \
+      ':(exclude).venv/**' 2>/dev/null
+  else
+    find . \( -name .git -o -name node_modules -o -name target -o -name dist \
+              -o -name build -o -name vendor -o -name .next -o -name coverage \
+              -o -name .venv \) -prune -o -type f -name "$pat" -print0 2>/dev/null
+  fi
+}
+
+# grep over that file list. /dev/null keeps the filename prefix on single-file
+# runs and makes an empty list a clean no-match instead of a stdin hang.
+_hy_grep() {
+  local flags="$1" pat="$2" glob="${3:-*}"
+  _hy_files "$glob" | xargs -0 grep "$flags" "$pat" /dev/null 2>/dev/null
+}
+
 # --- #7: a test suite that cannot fail the build ---------------------------
 for f in .github/workflows/*.yml .github/workflows/*.yaml; do
   [ -f "$f" ] || continue
@@ -57,7 +88,7 @@ $(find . -maxdepth 3 \( -name .git -o -name node_modules -o -name target -o -nam
 EOF
 
 # --- #15: debt markers must reference an OPEN tracker ------------------------
-refs=$(grep -rnoE $EXCL_DIRS '(TODO|FIXME|HACK)\(#[0-9]+\)' . 2>/dev/null \
+refs=$(_hy_grep -noE '(TODO|FIXME|HACK)\(#[0-9]+\)' \
         | grep -oE '#[0-9]+' | tr -d '#' | sort -un)
 if [ -n "$refs" ]; then
   if command -v gh >/dev/null 2>&1; then
@@ -73,7 +104,7 @@ if [ -n "$refs" ]; then
     warn "gh not available -- TODO(#N) tracker references not verified"
   fi
 fi
-bare=$(grep -rnE $EXCL_DIRS '\b(TODO|FIXME|HACK)\b' . 2>/dev/null \
+bare=$(_hy_grep -nE '\b(TODO|FIXME|HACK)\b' \
         | grep -vE '(TODO|FIXME|HACK)\(#[0-9]+\)' | grep -c . || true)
 [ "${bare:-0}" -gt 0 ] \
   && warn "$bare debt marker(s) (TODO/FIXME/HACK) without a tracker reference -- point each at an OPEN issue: TODO(#N)"
@@ -101,7 +132,7 @@ while IFS=: read -r f ln line; do
 $lints
 EOF2
 done <<EOF
-$(grep -rn $EXCL_DIRS --include='*.rs' -E '^[[:space:]]*#!\[allow\(' . 2>/dev/null)
+$(_hy_grep -nE '^[[:space:]]*#!\[allow\(' '*.rs')
 EOF
 
 # File-level eslint-disable (no rule names) disables EVERY configured rule.
@@ -113,7 +144,7 @@ while IFS=: read -r f ln _; do
     warn "$f:$ln: file-level /* eslint-disable */ with no rule names -- blanket suppression"
   fi
 done <<EOF
-$(grep -rn $EXCL_DIRS --include='*.js' --include='*.jsx' --include='*.ts' --include='*.tsx' -E '/\*[[:space:]]*eslint-disable[[:space:]]*\*/' . 2>/dev/null)
+$(for g in '*.js' '*.jsx' '*.ts' '*.tsx'; do _hy_grep -nE '/\*[[:space:]]*eslint-disable[[:space:]]*\*/' "$g"; done)
 EOF
 
 # File-level noqa disables every configured python lint for the whole file.
@@ -121,7 +152,7 @@ while IFS=: read -r f ln _; do
   [ -n "$f" ] || continue
   warn "$f:$ln: file-level noqa (ruff/flake8) -- blanket suppression covering all future code in this file"
 done <<EOF
-$(grep -rn $EXCL_DIRS --include='*.py' -E '#[[:space:]]*(ruff|flake8):[[:space:]]*noqa' . 2>/dev/null)
+$(_hy_grep -nE '#[[:space:]]*(ruff|flake8):[[:space:]]*noqa' '*.py')
 EOF
 
 exit "$viol"

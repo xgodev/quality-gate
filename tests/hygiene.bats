@@ -135,3 +135,25 @@ mk_repo() {
   QG_HYGIENE=0 run -0 "$QG_REPO_ROOT/qg"
   cd / && rm -rf "$repo"
 }
+
+# A nested checkout (worktree, vendored clone, agent scratch dir like
+# .solvers/issue-N) is ANOTHER repo's code. Scanning it duplicates every
+# finding once per copy and buries the repo's own -- the scan follows what git
+# says this repo owns (tracked + new, ignored and nested checkouts excluded).
+@test "hygiene: a nested checkout is not scanned (findings not multiplied)" {
+  repo=$(mk_repo)
+  cd "$repo"
+  git config user.email t@t; git config user.name t
+  printf '#![allow(dead_code)]\nfn a() {}\n' > own.rs
+  git add own.rs >/dev/null && git commit -qm init >/dev/null
+
+  mkdir -p .solvers/issue-1
+  git -C .solvers/issue-1 -c init.defaultBranch=main init -q
+  printf '#![allow(dead_code)]\nfn b() {}\n' > .solvers/issue-1/copy.rs
+  printf 'TODO: untracked debt\n' > .solvers/issue-1/notes.txt
+
+  run bash "$SCAN"
+  printf '%s' "$output" | grep -q 'own.rs' || return 1
+  ! printf '%s' "$output" | grep -q 'copy.rs' || return 1
+  cd / && rm -rf "$repo"
+}

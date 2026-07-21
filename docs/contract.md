@@ -281,6 +281,19 @@ violation (details on stderr). The N-language envelope's
 language is detected: a hygiene violation turns the usual exit 3 into
 exit 1.
 
+Scope: the files git says the repo owns -- tracked plus new (uncommitted,
+non-ignored) files. Ignored paths and **nested checkouts** (a vendored
+clone, a worktree, an agent scratch dir) are out: git reports a nested
+repo as a single directory entry and never descends, so its copy of every
+source file cannot multiply each finding and bury the repo's own. Outside
+a git repo the scan falls back to a `find` over the same exclusions
+(`node_modules/`, `target/`, `dist/`, `build/`, `vendor/`, `.next/`,
+`coverage/`, `.venv/`).
+
+The scan is SKIPPED after a tool error (exit 2). That run measured
+nothing, so the tool error is the only actionable finding; hundreds of
+hygiene warnings printed under it read as "the gate ran fine".
+
 `QG_HYGIENE=0` disables the scan -- an env supplied by whoever RUNS the
 gate, never a project file (tamper-resistance law applies).
 
@@ -465,6 +478,8 @@ yet; the rust resolver (`rust/lib/scope.sh`) is the reference for adopting it.
 
 - Without `--baseline-dir`: `git archive <base>` into `/tmp/qg-baseline-<lang>` (cached). A successful extract writes a sentinel file `.qg-baseline-prepared`; the cache is reused only if the sentinel is present. A directory that exists without the sentinel (e.g. `/tmp` pruned, prior run died mid-extract) is treated as stale and re-extracted -- never reused. `--refresh-baseline` forces re-extraction regardless.
 - **Submodules**: `git archive` does not expand git submodules, so after the archive each submodule registered at the base ref is extracted at the exact commit it is pinned to (sourced from the working tree's already-initialized submodule object store, recursing into nested submodules). Without this, a submodule-dependent build fails in the baseline, the base metrics undercount, and every PR is reported as a false `regressed` (#2). No-op for repos without `.gitmodules`; a submodule that cannot be extracted yields a `::warning::` and is skipped (never aborts the gate).
+- **git-lfs**: the extraction (shared by all 8 gates, `lib/baseline-archive.sh`) neutralizes the repo's lfs filters (`filter.lfs.process/smudge/clean`, `required=false`). `git archive` otherwise runs them, which needs `git-lfs` on PATH and every LFS blob in the local object store -- absent inside the gate image, the archive dies with `the remote end hung up unexpectedly` and the whole run exits 2. LFS paths land in the baseline as **pointer files**: the baseline exists to be measured on source, and LFS content is binary payload. The bypass is announced with a `::notice::`, never silent.
+- An extraction failure reports **git's own stderr** in the `::error::` line -- never a generic "try `git fetch origin`" that hides the real cause.
 - With `--baseline-dir`: assumes the directory is ready, **including submodules** (CI checked out into a separate path with `git submodule update --init --recursive`). No sentinel check, no submodule extraction.
 - Language absent in baseline (e.g. PR adds `Cargo.toml` for the 1st time): `::warning::language absent in baseline -- gate skipped` + exit 0. Reached only after a successful `prepare_baseline` (or with `--baseline-dir`) -- never as a side-effect of a corrupt cache.
 

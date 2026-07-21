@@ -444,7 +444,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "measure_coverage: > 50% no baseline (jacoco conta default constructor como linha)" {
+@test "measure_coverage: > 50% on the baseline (jacoco counts the default constructor as a line)" {
   source "$QG_REPO_ROOT/java/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)
@@ -453,7 +453,7 @@ EOF
   rm -rf "$logdir"
 }
 
-@test "measure_coverage: < baseline no regressed" {
+@test "measure_coverage: < baseline on the regressed fixture" {
   source "$QG_REPO_ROOT/java/lib/measure.sh"
   local logdir
   logdir=$(qg_tmp_dir)

@@ -89,7 +89,9 @@ Practical notes for local runs:
 docker run --rm -v "$PWD:/src" -w /src ghcr.io/xgodev/quality-gate/go:v1 --base origin/main
 ```
 
-In GitHub Actions that means `fetch-depth: 0`. If the base ref is missing, the gate exits `2` telling you to `git fetch`.
+In GitHub Actions that means `fetch-depth: 0`. If the base ref is missing, the gate exits `2` and the error quotes git's own message.
+
+**git-lfs repos work without git-lfs.** The baseline extraction bypasses the repo's lfs filters, so LFS paths land in the baseline as pointer files and the run needs neither `git-lfs` in the image nor the blobs in your object store. It says so with a `::notice::`. Source is measured normally -- LFS carries binary payload, not code.
 
 ## Two modes
 

@@ -17,6 +17,8 @@ export LC_ALL=C
 QG_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../lib/changed-files.sh
 source "$QG_SCRIPT_DIR/../lib/changed-files.sh"
+# shellcheck source=../lib/baseline-archive.sh
+source "$QG_SCRIPT_DIR/../lib/baseline-archive.sh"
 # shellcheck source=lib/measure.sh
 source "$QG_SCRIPT_DIR/lib/measure.sh"
 # shellcheck source=lib/output.sh
@@ -446,8 +448,7 @@ prepare_baseline() {
   rm -rf "$target"
   mkdir -p "$target"
   git fetch origin --quiet 2>/dev/null || true
-  if ! git archive "$QG_BASE_REF_ARG" 2>/dev/null | tar -xC "$target"; then
-    echo "::error::failed to extract '$QG_BASE_REF_ARG' via git archive -- try 'git fetch origin'" >&2
+  if ! qg_extract_base_archive "$QG_BASE_REF_ARG" "$target"; then
     return 1
   fi
   # git archive omits submodules; populate them so submodule-dependent builds do

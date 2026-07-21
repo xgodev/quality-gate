@@ -289,3 +289,21 @@ EOS
   [ "$status" -eq 3 ]
   cd "$QG_REPO_ROOT"; rm -rf "$root" "$proj"
 }
+
+@test "dispatcher: gate tool-error (exit 2) -- hygiene is skipped, exit stays 2" {
+  local root proj
+  root=$(qg_tmp_dir); proj=$(qg_tmp_dir)
+  make_fake_root "$root" go GO_SENTINEL 2
+  mkdir -p "$root/hygiene"
+  cp "$QG_REPO_ROOT/hygiene/scan.sh" "$root/hygiene/scan.sh"
+  mkdir -p "$proj/.github/workflows"
+  # A hard hygiene violation: it must NOT be reported, because the run aborted
+  # before measuring anything -- the tool error is the only actionable finding.
+  printf 'on:\n  pull_request:\njobs:\n  t:\n    steps:\n      - run: pytest || true\n' > "$proj/.github/workflows/ci.yml"
+  cd "$proj"
+  touch GO_SENTINEL
+  run "$root/qg" --base origin/main
+  [ "$status" -eq 2 ] || return 1
+  ! printf '%s' "$output" | grep -q 'hygiene' || return 1
+  cd "$QG_REPO_ROOT"; rm -rf "$root" "$proj"
+}

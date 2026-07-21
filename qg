@@ -177,7 +177,12 @@ worst_exit() {
 # Repo-level hygiene scan (issues #7 #8 #11 #15): runs once at the target
 # root after the language gate(s). Findings go to stderr only; a violation
 # contributes exit 1 to the aggregate. QG_HYGIENE=0 (runner env) disables.
+#
+# It is SKIPPED after a tool error (exit 2): that run measured nothing, so the
+# only actionable finding is the tool error itself -- burying it under hundreds
+# of hygiene warnings is how a reader concludes "it worked".
 run_hygiene() {
+  [ "${1:-0}" = "2" ] && return 0
   [ "${QG_HYGIENE:-1}" = "0" ] && return 0
   local hs="$ROOT/hygiene/scan.sh"
   [ -f "$hs" ] || return 0
@@ -188,7 +193,7 @@ run_hygiene() {
 if [ -z "$MATCHES" ]; then
   echo "::error::no supported language detected" >&2
   rc=3
-  if ! run_hygiene; then rc=$(worst_exit "$rc" 1); fi
+  if ! run_hygiene "$rc"; then rc=$(worst_exit "$rc" 1); fi
   exit "$rc"
 fi
 
@@ -209,7 +214,7 @@ if [ "$N_MATCHES" -eq 1 ]; then
   wd=$(echo "$MATCHES" | head -1 | cut -d'|' -f2-)
   ( cd "$wd" && "$ROOT/$slug/qg.sh" "$@" )
   rc=$?
-  if ! run_hygiene; then rc=$(worst_exit "$rc" 1); fi
+  if ! run_hygiene "$rc"; then rc=$(worst_exit "$rc" 1); fi
   exit "$rc"
 fi
 
@@ -246,7 +251,7 @@ while IFS='|' read -r slug wd; do
   agg_exit=$(worst_exit "$agg_exit" "$rc")
 done <<< "$MATCHES"
 
-if ! run_hygiene; then agg_exit=$(worst_exit "$agg_exit" 1); fi
+if ! run_hygiene "$agg_exit"; then agg_exit=$(worst_exit "$agg_exit" 1); fi
 
 if [ "$FMT" = "json" ]; then
   agg_verdict=$(verdict_for_exit "$agg_exit")

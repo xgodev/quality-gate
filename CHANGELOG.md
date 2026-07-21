@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+Fix: a git-lfs repo could not be gated at all. `git archive` runs the repo's
+configured filters, so on an LFS checkout it needs `git-lfs` on PATH and every
+blob in the local object store -- inside the images it has neither, and the run
+died with `git-lfs: not found` / `the remote end hung up unexpectedly`, exit 2,
+before measuring anything. The extraction now moves to a single shared
+implementation, `lib/baseline-archive.sh` (sourced by all 8 `<lang>/qg.sh`,
+replacing 8 copies of the same block), which neutralizes `filter.lfs.*` and
+extracts LFS paths as pointer files -- offline, fast, deterministic, and
+announced with a `::notice::` rather than done silently. Installing git-lfs in
+the images was rejected: it would materialize the blobs (1.6 GB on the repo
+that surfaced this) to measure binary payload that no metric reads.
+
+Fix: an extraction failure printed a generic "try `git fetch origin`" because
+git's stderr went to `/dev/null`. The `::error::` now quotes git's own message,
+which is what identified the LFS cause above.
+
+Fix: the hygiene scan no longer runs after a tool error (exit 2). That run
+measured nothing, so the tool error is the only actionable finding -- burying it
+under hundreds of hygiene warnings is how a reader concludes it worked.
+
+Fix: the hygiene scan follows what git says the repo owns (tracked + new files;
+ignored paths and nested checkouts excluded) instead of walking the tree. A
+nested checkout (vendored clone, worktree, agent scratch dir like
+`.solvers/issue-N`) previously multiplied every finding once per copy.
+
 Feature (#5-#11): per-language Docker images on GHCR
 (`ghcr.io/xgodev/quality-gate/<lang>`), each carrying the full gate shell plus
 only that language's toolchain. All build locally and pass an in-container e2e

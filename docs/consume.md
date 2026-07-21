@@ -105,7 +105,8 @@ The bypass is recorded in `target/qg-logs/bypass.log`. Use with discretion.
 | `::error::cargo-llvm-cov not found` | Missing prereq | `cargo install cargo-llvm-cov` |
 | Red gate on a PR that did not touch Rust | Fast-path did not trigger | Check whether some `Cargo.*` or `.rs` was modified |
 | Stale baseline cache | Divergent cache (when the gate's own staleness check is bypassed via `--baseline-dir`) | `--refresh-baseline` or `rm -rf /tmp/qg-baseline-*`. For default-cache runs the baseline dir is keyed by project and base SHA, so a new base automatically gets a fresh extraction. |
-| `git archive` failed | Ref does not exist locally | `git fetch origin` |
+| `git archive` failed | The `::error::` quotes git's own message -- read it. Usually the ref does not exist locally | `git fetch origin` |
+| `::notice::baseline: git-lfs filters bypassed` | The repo tracks paths through git-lfs | Nothing to do: LFS paths are measured as pointer files, source is unaffected |
 | `::warning::baseline: submodule '<x>' is not initialized` | A submodule the build needs is absent from the working tree, so it cannot be extracted into the baseline | `git submodule update --init --recursive`, then re-run (or `--refresh-baseline`) |
 
 Per-language details in [`languages/<lang>.md`](languages/).
