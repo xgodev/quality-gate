@@ -1,6 +1,11 @@
+# The running gate needs only the dispatcher + per-language shell/rules/lib.
+# test-fixtures/ and tests/ are for the bats suite (CI), never at runtime --
+# excluding them keeps every image ~340MB slimmer (swift fixtures alone carry
+# committed + local .build artifacts). Also drop docs, CI metadata, docker/.
 .git
 docker
 .github
 docs
-**/test-fixtures/**/target
+tests
+**/test-fixtures
 **/*.md

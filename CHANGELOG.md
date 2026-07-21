@@ -1,5 +1,47 @@
 # Changelog
 
+## [Unreleased]
+
+Feature (#5-#11): per-language Docker images on GHCR
+(`ghcr.io/xgodev/quality-gate/<lang>`), each carrying the full gate shell plus
+only that language's toolchain. All build locally and pass an in-container e2e
+smoke (gate runs against the language's baseline fixture and produces a verdict
+with every metric measured); each enforces the gate's OWN ruleset, never the
+mounted project's config. Sizes: go 921MB, java 666MB, kotlin 872MB, nodejs
+1.16GB, web 1.13GB, python 1.2GB, rust 1.72GB, swift (multi-stage). Tooling
+notes worth remembering:
+- **go**: golangci-lint is PINNED to v1.64.8 -- v2 rewrote the config schema and
+  rejects the shipped v1 `.golangci.yml` (exit 3), which silently degrades the
+  gate to the `go vet` fallback; and its installer is fetched from the release
+  TAG (not `master`, whose checksum table was stale and never verified).
+- **nodejs/web**: prettier/eslint/typescript/c8 (node) and
+  prettier/stylelint/htmlhint (web) are pre-installed at pinned versions so
+  `npx` needs no registry at runtime (node smoke verified under `--network none`).
+- **python**: ruff/radon/pytest/pytest-cov plus the poetry/pdm/uv/pipenv
+  resolvers, so a project's lockfile manager is honored (never a silent pip).
+- **java**: google-java-format + PMD from pinned release artifacts; the
+  google-java-format launcher passes the JDK 21 `--add-exports` flags.
+- **kotlin**: gradle + ktlint + detekt from pinned releases (detekt's launcher
+  is `bin/detekt-cli`).
+- **swift**: swiftlint + swift-format compiled from source (pinned tags) in a
+  builder stage, binaries copied into the runtime -- no prebuilt Linux binaries
+  exist.
+
+Release (#12): `build-publish.yml` now publishes each image on a `vX.Y.Z` tag
+with three tags -- the exact `:vX.Y.Z`, a moving major `:vX` (re-pointed every
+release, what consumers pin), and `:latest`. A plain `main` push refreshes only
+`:latest`. Release process and the `:v1` compatibility promise documented in
+`CONTRIBUTING.md`.
+
+Optimization (#13): trimmed the per-language Docker images. The gate copy
+(`/opt/quality-gate`) no longer carries `test-fixtures/` or `tests/` -- those
+serve the bats suite, never the runtime -- via `.dockerignore`, shrinking that
+layer from ~344MB to ~0.6MB across every image. The rust image additionally
+drops the `rust-docs` component and leftover cargo/rustup caches. Measured
+rust image: **2.06GB -> 1.72GB (-340MB, -16.5%)**; e2e smoke (absolute mode
+against the rust baseline fixture, inside the container) still passes with all
+six metrics measured. The `.dockerignore` change benefits every language image.
+
 ## [0.4.0]
 
 Changed: distribution moved to the single `xgodev-plugins` marketplace
