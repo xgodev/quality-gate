@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.1.0]
 
 Feature: `.qg.yaml` `system_packages` -- a project declares the OS packages its
 build links (the C libraries behind FFI/`*-sys` crates, cgo, native node addons,
@@ -22,6 +22,22 @@ or grant the repo under test root on the runner); non-root and no-`apt-get` are
 `::warning::` + continue. A failed install is exit 2, never a code verdict.
 Tests in `dispatcher.bats` cover opt-in, both rejections, the apt failure, the
 non-root path and the no-apt path.
+
+Docs: the per-language docs claimed the target project's quality config was
+respected -- `pyproject.toml [tool.ruff]`, `.golangci.yml`, `rustfmt.toml`,
+`.prettierrc`/`eslint.config.*`, `.editorconfig`/`detekt.yml`,
+`.swift-format`/`.swiftlint.yml`, a project `pmd-ruleset.xml`. The code has
+always done the opposite (tamper-resistance: every tool is invoked with QG's
+own ruleset and the flags that suppress project-config discovery), so the docs
+were the only thing disagreeing with the contract. Every `**Configuration:**`
+paragraph and every `Runs ...` command now states the real invocation, and each
+`Fix:` command carries the gate's config so a local fix converges on the gate
+instead of away from it. Python gains a "Reproduce the gate's verdict locally"
+section -- the sharp case is `line-length`, where a project configured wider
+formats every line further from the gate's 88 and collects an `E501` each.
+Also corrects `docs/languages/python.md`'s build-system section, which said
+poetry/pdm/uv were unsupported while the image ships all four and the gate
+honors the project's lockfile. Docs only -- no behavior change. (#19)
 
 ## [1.0.2]
 

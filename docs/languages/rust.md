@@ -74,11 +74,11 @@ scope, `--all` / `--all-targets` become `-p <pkg> ... --lib --bins --tests`.
 
 ### `fmt` -- formatting
 
-Runs `cargo fmt --all -- --check` (full scope) or `cargo fmt -p <pkg> ... -- --check` (narrowed). Counts lines starting with `Diff in `, which indicate a file diverging from the rustfmt config.
+Runs `cargo fmt --all -- --check --config-path <QG>/rust/rules/rustfmt.toml` (full scope) or the same with `-p <pkg> ...` (narrowed). Counts lines starting with `Diff in `, which indicate a file diverging from the rustfmt config.
 
-**Configuration:** if the project has a `rustfmt.toml` at the root, it is respected. Without it, rustfmt defaults.
+**Configuration:** the gate enforces **its own** ruleset and the project's config is ignored (see the "Tamper-resistance" section of [`../contract.md`](../contract.md)). `--config-path` points at `<QG>/rust/rules/rustfmt.toml`, so the project's `rustfmt.toml` does not affect the verdict; clippy likewise reads `clippy.toml` from `CLIPPY_CONF_DIR=<QG>/rust/rules`, never from the project. To predict the verdict locally, pass the same `--config-path`.
 
-**How to interpret a regression:** the PR introduced an unformatted file. Fix: `cargo fmt --all`.
+**How to interpret a regression:** the PR introduced an unformatted file. Fix: `cargo fmt --all -- --config-path <quality-gate>/rust/rules/rustfmt.toml` -- a plain `cargo fmt --all` formats to *your* config and can leave the gate red.
 
 ### `lint` -- clippy
 

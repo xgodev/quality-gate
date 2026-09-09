@@ -53,28 +53,26 @@ sudo apt install -y jq
 
 ### `fmt` -- formatting
 
-Runs `swift-format lint --strict <file>` on each `.swift` under the directory (excluding `.build`). Counts files whose `--strict` output is non-empty (swift-format warnings/errors become exit !=0 with `--strict`).
+Runs `swift-format lint --strict --configuration <QG>/swift/rules/.swift-format <file>` on each `.swift` under the directory (excluding `.build`). Counts files whose `--strict` output is non-empty (swift-format warnings/errors become exit !=0 with `--strict`).
 
-**Configuration:** the project may have a `.swift-format` at the root (JSON with keys like `lineLength`, `indentation`, `multiElementCollectionTrailingCommas`). Without it, swift-format defaults (which ask for a trailing comma -- may conflict with swiftlint; `multiElementCollectionTrailingCommas: false` recommended).
+**Configuration:** the gate enforces **its own** ruleset and the project's config is ignored (see the "Tamper-resistance" section of [`../contract.md`](../contract.md)). `--configuration` points at `<QG>/swift/rules/.swift-format`, so a `.swift-format` at the project root does not affect the verdict.
 
-**How to interpret a regression:** the PR introduced an unformatted file. Fix: `swift-format format -i Sources/**/*.swift Tests/**/*.swift`.
+**How to interpret a regression:** the PR introduced an unformatted file. Fix: `swift-format format -i --configuration <quality-gate>/swift/rules/.swift-format Sources/**/*.swift Tests/**/*.swift` -- without `--configuration` you format to a different style than the one being measured.
 
 ### `lint` -- swiftlint
 
-Runs `swiftlint lint --no-cache --quiet`. Counts lines in the format `path:line:col: warning|error: msg (rule)`.
+Runs `swiftlint lint --no-cache --quiet --config <QG>/swift/rules/.swiftlint.yml <sources>` (the sources -- `Sources/`, `Tests/` -- are passed explicitly so `.build/` is never scanned). Counts lines in the format `path:line:col: warning|error: msg (rule)`.
 
-**Configuration:** the project must have a `.swiftlint.yml` to define the desired rules. The fixtures use:
+**Configuration:** the gate enforces **its own** ruleset and the project's config is ignored (see the "Tamper-resistance" section of [`../contract.md`](../contract.md)). `--config` points at `<QG>/swift/rules/.swiftlint.yml`, so the project's `.swiftlint.yml` does not affect the verdict -- a project without one is not unlinted either. QG's ruleset is:
 
 ```yaml
-excluded:
-  - .build
-disabled_rules:
-  - identifier_name
-  - line_length
-  - file_length
-opt_in_rules:
-  - force_unwrapping
+excluded: [.build, Pods, .swiftpm]
+disabled_rules: [todo, identifier_name, trailing_comma]
+opt_in_rules: [empty_count, force_unwrapping]
+line_length: 120
 ```
+
+`trailing_comma` is disabled on purpose: `swift-format` (the `fmt` metric) *requires* the trailing comma that swiftlint's default forbids, so the gate adopts the swift-format convention on both sides.
 
 **How to interpret a regression:** the PR introduced an issue swiftlint detects. Fix: read `target/qg-logs/pr-lint.log`, decide between a code fix or `// swiftlint:disable:next <rule>` with a documented root cause.
 

@@ -17,7 +17,7 @@ See the [README](../../README.md) for tags, exit codes, flags and CI snippets. T
 
 ## Build system
 
-Quality Gate Python assumes **pip + pyproject.toml** as the default build/deps. It does not support poetry, uv, pdm in V1 (the sentinel only checks `pyproject.toml`/`setup.py`/`setup.cfg`/`requirements*.txt` -- compatible with any of them, but the gate's canonical tools -- `ruff`, `pytest`, `radon` -- are installed via `pip`).
+The project's lockfile decides the resolver: `poetry.lock` -> `poetry install`, `pdm.lock` -> `pdm install`, `uv.lock` -> `uv sync --frozen`, `Pipfile.lock` -> `pipenv sync`; otherwise pip with `requirements*.txt` / `pyproject.toml`. If the lockfile's manager is not on `PATH` that is a tool-error (exit 2) -- the gate never falls back to pip, because a different resolution measures a different project. The gate's own tools (`ruff`, `pytest`, `radon`) are always installed via `pip`, independently of the project's manager.
 
 The presence sentinel is one of these at the root: `pyproject.toml`, `setup.py`, `setup.cfg` or `requirements*.txt`. If none exists in the baseline, the gate emits a warning and exits 0.
 
@@ -43,19 +43,19 @@ Make sure `~/.local/bin` (or the active venv's `bin`) is on `$PATH`.
 
 ### `fmt` -- formatting
 
-Runs `ruff format --check .`. Counts `Would reformat: <path>` lines (each unformatted file is one line).
+Runs `ruff format --check --config <QG>/python/rules/ruff.toml .`. Counts `Would reformat: <path>` lines (each unformatted file is one line).
 
-**Configuration:** if the project has a `pyproject.toml` with `[tool.ruff]`, it is respected. Without it, ruff defaults (a Black-like format).
+**Configuration:** the gate enforces **its own** ruleset. An explicit `--config` file makes ruff skip config discovery, so the project's `pyproject.toml [tool.ruff]` (or a root `ruff.toml`) has **no effect on the verdict** -- see the "Tamper-resistance" section of [`../contract.md`](../contract.md). The gate's width is `line-length = 88`. A project that configures a wider width is the common surprise: `ruff format` locally reflows to *your* width, which is exactly what the gate then counts as unformatted. The fix is to mirror the gate (`line-length = 88` in your own config), not to widen it. To predict the verdict, see [Reproduce the gate's verdict locally](#reproduce-the-gates-verdict-locally).
 
-**How to interpret a regression:** the PR introduced an unformatted file. Fix: `ruff format .`.
+**How to interpret a regression:** the PR introduced an unformatted file. Fix: `ruff format --config <quality-gate>/python/rules/ruff.toml .` -- a plain `ruff format .` reformats to *your* config and can leave the gate red.
 
 ### `lint` -- ruff check
 
-Runs `ruff check --output-format=concise .`. Counts lines in the format `path:line:col: CODE message` (each issue is one line).
+Runs `ruff check --config <QG>/python/rules/ruff.toml --output-format=concise .`. Counts lines in the format `path:line:col: CODE message` (each issue is one line).
 
-**Configuration:** if the project has `[tool.ruff.lint]` in `pyproject.toml`, it is respected. Without it, ruff defaults (E + F rules from pyflakes/pycodestyle).
+**Configuration:** same tamper-resistance rule as `fmt` -- the project's `[tool.ruff.lint]` is ignored. The gate's ruleset selects `E`, `F`, `W` and `I` (pycodestyle, pyflakes, warnings, import sorting) at `line-length = 88`, so a project configured wider collects one `E501` per long line on top of the `fmt` failure, plus `I001` wherever imports are not in ruff's order.
 
-**How to interpret a regression:** the PR introduced an issue ruff detects. Fix: run `ruff check --fix .` (simple auto-fix) or read `target/qg-logs/pr-lint.log` and fix manually. If it is a false positive, `# noqa: <CODE>` with a documented root cause.
+**How to interpret a regression:** the PR introduced an issue ruff detects. Fix: run `ruff check --fix --config <quality-gate>/python/rules/ruff.toml .` (simple auto-fix -- again with the gate's config, not yours) or read `target/qg-logs/pr-lint.log` and fix manually. If it is a false positive, `# noqa: <CODE>` with a documented root cause.
 
 ### `build` -- bytecode compilation
 
@@ -92,6 +92,29 @@ Runs `pytest --cov=. --cov-report=json:<path>` and extracts `.totals.percent_cov
 **Tolerance margin:** default 1.0pp (see `--cov-margin` or `.qg.yaml: cov_margin`).
 
 **How to interpret a regression:** the PR added code without a corresponding test. Fixes: add a test covering the new path; or (with discretion) raise the margin in `.qg.yaml` if the case is justified.
+
+## Reproduce the gate's verdict locally
+
+`ruff check .` run with your own config predicts nothing: the gate ignores that config. To see what the gate will see, run ruff against the gate's ruleset. Straight out of the image, no clone needed (the image also pins the ruff version the gate uses):
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src --entrypoint ruff \
+  ghcr.io/xgodev/quality-gate/python:v1 \
+  format --check --config /opt/quality-gate/python/rules/ruff.toml .
+
+docker run --rm -v "$PWD:/src" -w /src --entrypoint ruff \
+  ghcr.io/xgodev/quality-gate/python:v1 \
+  check --config /opt/quality-gate/python/rules/ruff.toml --output-format=concise .
+```
+
+With a clone of this repository and `ruff` on `PATH`:
+
+```bash
+ruff format --check --config <quality-gate>/python/rules/ruff.toml .
+ruff check --config <quality-gate>/python/rules/ruff.toml --output-format=concise .
+```
+
+Clean output from those two commands is what a green `fmt`/`lint` means. `QG_RULESET_DIR` points the gate at a different ruleset, but only from the environment of whoever **runs** the gate -- it is never read from the repository under test.
 
 ## Common troubleshooting
 

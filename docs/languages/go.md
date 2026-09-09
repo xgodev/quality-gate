@@ -70,11 +70,11 @@ Runs `gofmt -l .` in the directory. Counts lines ending in `.go` (each unformatt
 
 ### `lint` -- linter
 
-By default it runs `golangci-lint run --out-format=line-number ./...`. If the binary fails (e.g. an incompatibility between the golangci-lint version and the installed Go version -- exit code != 0/1), the gate automatically falls back to `go vet ./...` and emits a `::warning::` to alert you.
+By default it runs `golangci-lint run -c <QG>/go/rules/.golangci.yml --out-format=line-number ./...`. If the binary fails (e.g. an incompatibility between the golangci-lint version and the installed Go version -- exit code != 0/1), the gate automatically falls back to `go vet ./...` and emits a `::warning::` to alert you.
 
 Counts lines in the format `path/file.go:LINE:COL:` (each issue is one line).
 
-**Configuration:** if the project has a `.golangci.yml`/`.golangci.yaml`, it is respected. Without it, golangci-lint defaults.
+**Configuration:** the gate enforces **its own** ruleset and the project's config is ignored (see the "Tamper-resistance" section of [`../contract.md`](../contract.md)). `-c` points at `<QG>/go/rules/.golangci.yml`, so the project's `.golangci.yml`/`.golangci.yaml` does not affect the verdict. To predict it locally, run golangci-lint with the same `-c`. (The `go vet` fallback has no config either way.)
 
 **Force fallback:** export `QG_GO_LINT_FORCE_VET=1` to use `go vet` even if golangci-lint is installed (useful when you know the binary version does not match the Go version).
 
