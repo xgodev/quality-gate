@@ -62,11 +62,11 @@ Runs `google-java-format --dry-run <file>` on each `.java` under `src/`. Counts 
 
 ### `lint` -- pmd errorprone
 
-Runs `pmd check --no-cache --no-progress -R category/java/errorprone.xml -d src/main/java -f text`. Counts lines in the format `file.java:line: RuleName: msg`.
+Runs `pmd check --no-cache --no-progress -R <QG>/java/rules/pmd.xml -d src/main/java -f text`. Counts lines in the format `file.java:line: RuleName: msg`.
 
-The `errorprone` category focuses on real bugs (NPE, broken equals/hashCode, AvoidLiteralsInIfCondition, etc.) and rarely produces noise. For style rules, use `category/java/codestyle.xml` in the `.qg.yaml`/local override.
+QG's `pmd.xml` builds on the `errorprone` category, which focuses on real bugs (NPE, broken equals/hashCode, AvoidLiteralsInIfCondition, etc.) and rarely produces noise.
 
-**Configuration:** if you need additional rules, keep a `pmd-ruleset.xml` file in the project and adjust the gate (or add an extra metric).
+**Configuration:** the gate enforces **its own** ruleset and the project's config is ignored (see the "Tamper-resistance" section of [`../contract.md`](../contract.md)). `-R` points at `<QG>/java/rules/pmd.xml`, so a `pmd-ruleset.xml` in the project does not affect the verdict; changing the rules means changing `java/rules/pmd.xml` in this repository (or, for whoever *runs* the gate, `QG_RULESET_DIR`).
 
 **How to interpret a regression:** the PR introduced an issue pmd detects. Fix: read `target/qg-logs/pr-lint.log`, identify the rule, fix the code. `@SuppressWarnings("PMD.RuleName")` only with a documented root cause.
 

@@ -44,21 +44,21 @@ sudo apt install -y nodejs jq
 
 ### `fmt` -- formatting
 
-Runs `npx --yes prettier --check .`. Counts `[warn] <path>` lines (each diverging file).
+Runs `npx --yes prettier --check --config <QG>/nodejs/rules/.prettierrc.json --no-editorconfig --ignore-path <QG>/nodejs/rules/.prettierignore .`. Counts `[warn] <path>` lines (each diverging file).
 
-**Configuration:** if the project has `.prettierrc*` or `prettier.config.*`, it is respected. Same for `.prettierignore`. Without config, prettier defaults.
+**Configuration:** the gate enforces **its own** ruleset and the project's config is ignored (see the "Tamper-resistance" section of [`../contract.md`](../contract.md)). `--config` + `--no-editorconfig` mean the project's `.prettierrc*` / `prettier.config.*` / `.editorconfig` do not affect the verdict, and `--ignore-path` is QG's canonical ignore, never the project's `.prettierignore`. The gate's width is `printWidth: 80`; a project configured wider still fails `fmt`, and the fix is to mirror the gate rather than widen it.
 
-**How to interpret a regression:** the PR introduced an unformatted file. Fix: `npx prettier --write .`.
+**How to interpret a regression:** the PR introduced an unformatted file. Fix: `npx prettier --write --config <quality-gate>/nodejs/rules/.prettierrc.json --no-editorconfig .` -- a plain `npx prettier --write .` formats to *your* config and can leave the gate red.
 
 ### `lint` -- eslint
 
-Runs `npx --yes eslint .` if the project has an eslint config (`eslint.config.*`, `.eslintrc.*`); otherwise `npx --yes eslint --no-config-lookup --rule '{"no-unused-vars":"error"}' .`.
+Runs `npx --yes eslint --no-config-lookup --config <QG>/nodejs/rules/eslint.config.mjs .`.
 
 Counts lines in the format `  N:N  error  msg  rule` (eslint stylish output).
 
-**Configuration:** if the project has `eslint.config.js` (flat config eslint v9+) or `.eslintrc.json` (legacy), it is respected. Without config, a minimal fallback (only `no-unused-vars`).
+**Configuration:** the gate enforces **its own** ruleset and the project's config is ignored (see the "Tamper-resistance" section of [`../contract.md`](../contract.md)). `--no-config-lookup` + `--config` mean the project's `eslint.config.*` / `.eslintrc.*` does not affect the verdict -- neither to add rules nor to loosen them. To predict it locally, run eslint with the same two flags.
 
-**How to interpret a regression:** the PR introduced an issue eslint detects. Fix: `npx eslint --fix .` (simple auto-fix), or read `target/qg-logs/pr-lint.log` and fix manually. `// eslint-disable-next-line` only with a documented root cause.
+**How to interpret a regression:** the PR introduced an issue eslint detects. Fix: `npx eslint --fix --no-config-lookup --config <quality-gate>/nodejs/rules/eslint.config.mjs .` (simple auto-fix -- with the gate's config, not yours), or read `target/qg-logs/pr-lint.log` and fix manually. `// eslint-disable-next-line` only with a documented root cause.
 
 ### `build` -- compilation / parse
 
@@ -86,7 +86,7 @@ Counts the number N from the summary `ℹ fail N` (node:test) OR `# fail N` (jes
 
 ### `complexity` -- cyclomatic complexity
 
-Runs `npx --yes eslint --no-config-lookup --rule '{"complexity":["error",15]}' .`. Counts functions with `has a complexity of N` in the output.
+Runs `npx --yes eslint --no-config-lookup --config <QG>/nodejs/rules/eslint.config.mjs --rule '{"complexity":["error",15]}' .`. Counts functions with `has a complexity of N` in the output. The QG config is passed so the canonical `ignores` applies -- without it eslint would sweep `dist/`/`build/` and minified bundles would inflate the metric.
 
 **Threshold:** `15` (same as the equivalent metric in Go/Rust for cross-language consistency).
 

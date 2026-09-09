@@ -55,17 +55,17 @@ sudo ln -sf "/opt/detekt-cli-${DETEKT_VERSION}/bin/detekt-cli" /usr/local/bin/de
 
 ### `fmt` -- formatting
 
-Runs `ktlint 'src/**/*.kt' --reporter=plain`. Counts ONE line per violation in the format `file:line:col: msg`.
+Runs `ktlint --editorconfig=<QG>/kotlin/rules/.editorconfig 'src/**/*.kt' --reporter=plain`. Counts ONE line per violation in the format `file:line:col: msg`.
 
-**Configuration:** if the project has an `.editorconfig` at the root, it is respected by ktlint. Without it, ktlint defaults (strict "Kotlin coding conventions", including multi-line function signatures).
+**Configuration:** the gate enforces **its own** ruleset and the project's config is ignored (see the "Tamper-resistance" section of [`../contract.md`](../contract.md)). `--editorconfig` points at `<QG>/kotlin/rules/.editorconfig`, so the project's root `.editorconfig` does not affect the verdict.
 
-**How to interpret a regression:** the PR introduced unformatted code. Fix: `ktlint 'src/**/*.kt' --format` (auto-fix) and review the diff.
+**How to interpret a regression:** the PR introduced unformatted code. Fix: `ktlint --editorconfig=<quality-gate>/kotlin/rules/.editorconfig 'src/**/*.kt' --format` (auto-fix) and review the diff -- without `--editorconfig` ktlint formats to the project's rules, not the gate's.
 
 ### `lint` -- detekt
 
-Runs `detekt --input src/main/kotlin --report txt:<log>`. Counts lines in the format `file:line:col: ... [RuleName]`.
+Runs `detekt -c <QG>/kotlin/rules/detekt.yml --input src/main/kotlin --report txt:<log>`. Counts lines in the format `file:line:col: ... [RuleName]`.
 
-**Configuration:** if the project has `detekt.yml` (default name) or another file passed via `--config`, it is respected. Without config, detekt defaults ("default" rules without opt-ins).
+**Configuration:** the gate enforces **its own** ruleset and the project's config is ignored (see the "Tamper-resistance" section of [`../contract.md`](../contract.md)). `-c` points at `<QG>/kotlin/rules/detekt.yml`, so the project's `detekt.yml` does not affect the verdict. To predict it locally, run detekt with the same `-c`.
 
 **How to interpret a regression:** the PR introduced an issue detekt detects. Fix: read `target/qg-logs/pr-lint.log`, identify the rule, fix the code. `@Suppress("RuleName")` only with a documented root cause.
 
