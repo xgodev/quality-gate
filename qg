@@ -114,6 +114,72 @@ if [ -f "$QG_YAML" ]; then
   fi
 fi
 
+# --- system_packages -------------------------------------------------------
+# OS packages the project's build needs (e.g. the C libraries that `*-sys`
+# crates link). Installed ONCE, before any language gate, so the baseline and
+# the PR both build against them, and the shared image stays lean and generic.
+#
+# TRUST BOUNDARY: the list comes from `.qg.yaml`, a file the developer under
+# test controls, so the project may only DECLARE -- the runner DECIDES, via
+# QG_ALLOW_SYSTEM_PACKAGES=1 (same rule as QG_RULESET_DIR). Without that opt-in
+# a repo could have the gate install arbitrary packages as root, maintainer
+# scripts and all, or drop a distro `cargo`/`golang-go` on /usr/bin that
+# shadows the toolchain the image pins -- measuring a different tool than the
+# gate ships. Entries are validated as Debian package names for the same
+# reason: a leading dash turns "package" into an apt-get flag.
+SYSTEM_PACKAGES=""
+if [ -f "$QG_YAML" ]; then
+  in_sp=0
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      "system_packages:"*) in_sp=1; continue ;;
+    esac
+    if [ "$in_sp" = "1" ]; then
+      case "$line" in
+        "  - "*|"- "*)
+          pkg=$(echo "$line" | sed -E 's/^[[:space:]]*-[[:space:]]*//; s/[[:space:]]*(#.*)?$//; s/^"(.*)"$/\1/')
+          [ -z "$pkg" ] && continue
+          if ! echo "$pkg" | grep -qE '^[a-z0-9][a-z0-9._+-]*$'; then
+            echo "::error::.qg.yaml system_packages: '$pkg' is not a package name -- only [a-z0-9][a-z0-9._+-]* is accepted, so an apt flag or a shell expression can never reach apt-get" >&2
+            exit 2
+          fi
+          SYSTEM_PACKAGES="${SYSTEM_PACKAGES} ${pkg}"
+          ;;
+        ""|"#"*|"  #"*) ;;
+        *) in_sp=0 ;;
+      esac
+    fi
+  done < "$QG_YAML"
+fi
+
+# Install the declared packages. Root + apt only (the image); never escalates
+# privileges -- a `sudo` here either hangs on a password prompt or silently
+# grants the repo under test root on the runner. A failed install is a
+# tool/setup error (exit 2), never a code verdict.
+install_system_packages() {
+  [ -z "${SYSTEM_PACKAGES// /}" ] && return 0
+  if [ "${QG_ALLOW_SYSTEM_PACKAGES:-0}" != "1" ]; then
+    echo "::warning::.qg.yaml declares system_packages (${SYSTEM_PACKAGES# }) but the runner did not opt in -- set QG_ALLOW_SYSTEM_PACKAGES=1 to allow it; the list comes from the repo under test, so only whoever RUNS the gate can authorize an install" >&2
+    return 0
+  fi
+  if [ "$(id -u)" != "0" ]; then
+    echo "::warning::system_packages: not root -- assuming the host already provides:${SYSTEM_PACKAGES} (the gate never escalates privileges)" >&2
+    return 0
+  fi
+  if ! command -v apt-get >/dev/null 2>&1; then
+    echo "::warning::system_packages declared but apt-get is absent -- assuming the host already provides:${SYSTEM_PACKAGES}" >&2
+    return 0
+  fi
+  echo "::group::system_packages install (${SYSTEM_PACKAGES# })" >&2
+  if ! apt-get update -qq >&2 \
+     || ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $SYSTEM_PACKAGES >&2; then
+    echo "::endgroup::" >&2
+    echo "::error::system_packages: apt install failed for:${SYSTEM_PACKAGES} -- check the names against the image's distro (Debian bookworm)" >&2
+    exit 2
+  fi
+  echo "::endgroup::" >&2
+}
+
 # --- Discovery -------------------------------------------------------------
 # Emits "slug|workdir" lines for each gate to run.
 discover() {
@@ -198,6 +264,9 @@ if [ -z "$MATCHES" ]; then
 fi
 
 N_MATCHES=$(echo "$MATCHES" | grep -c . || true)
+
+# A language gate will run -> make the project's declared OS deps present first.
+install_system_packages
 
 # Discover --format from the forwarded arguments (to envelope JSON when N>1).
 FMT="text"
