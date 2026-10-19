@@ -113,3 +113,13 @@ anything so a future session does not repeat past mistakes.
   non-standard hook files. Doc-verified forms are not runtime-verified: any
   change to plugin registration (manifest keys, hooks, skills layout) must be
   smoke-tested in a real Claude Code session before release.
+- Writing a doc `Fix:` / reproduce command as the bare tool (`ruff format .`,
+  `cargo fmt --all`, `ktlint --format`, `npx eslint --fix .`) — it picks up
+  the project's config and formats *away* from the gate. Every command a doc
+  tells the user to run must point at the QG ruleset (`--config
+  <quality-gate>/<lang>/rules/...`, `--no-config-lookup`, ...). Until #19 the
+  per-language docs even claimed the project config was respected.
+- Merging to `main` and calling it released — a merge refreshes only
+  `:latest`; consumers pinning `:v1` stay on the previous release until a
+  `vX.Y.Z` tag is pushed. Before cutting, check `[Unreleased]` for
+  merged-but-untagged work (`system_packages`, #17, sat untagged until 1.1.0).
