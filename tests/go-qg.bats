@@ -374,6 +374,60 @@ EOF
   rm -rf "$logdir"
 }
 
+@test "measure_coverage: generated code (// Code generated ... DO NOT EDIT.) is NOT counted (#21)" {
+  source "$QG_REPO_ROOT/go/lib/measure.sh"
+  local logdir
+  logdir=$(qg_tmp_dir)
+  result=$(measure_coverage "$(qg_fixture_path go generated)" "$logdir/cov.json")
+  # gen/gen.go is uncovered and holds most of the statements; only lib.go counts.
+  [ "$(printf '%.0f' "$result")" = "100" ]
+  rm -rf "$logdir"
+}
+
+@test "measure_test_and_coverage: generated code is NOT counted (#21)" {
+  source "$QG_REPO_ROOT/go/lib/measure.sh"
+  local logdir
+  logdir=$(qg_tmp_dir)
+  result=$(measure_test_and_coverage "$(qg_fixture_path go generated)" "$logdir/test.log" "$logdir/cov.json")
+  [ "$(echo "$result" | awk '{print $1}')" = "0" ]
+  [ "$(printf '%.0f' "$(echo "$result" | awk '{print $2}')")" = "100" ]
+  rm -rf "$logdir"
+}
+
+@test "_qg_go_strip_generated: drops the generated file's blocks and keeps the source's (#21)" {
+  source "$QG_REPO_ROOT/go/lib/measure.sh"
+  local logdir profile
+  logdir=$(qg_tmp_dir)
+  profile="$logdir/cov.profile"
+  cat > "$profile" <<'PROF'
+mode: atomic
+qggenerated/lib.go:4.31,6.2 1 1
+qggenerated/gen/gen.go:14.23,20.11 4 0
+qggenerated/gen/gen.go:20.11,22.3 1 0
+PROF
+  _qg_go_strip_generated "$(qg_fixture_path go generated)" "$profile"
+  [ "$(head -1 "$profile")" = "mode: atomic" ]
+  grep -q 'qggenerated/lib.go' "$profile"
+  ! grep -q 'gen/gen.go' "$profile"
+  rm -rf "$logdir"
+}
+
+@test "_qg_go_strip_generated: a file without the marker is kept (no over-filtering, #21)" {
+  source "$QG_REPO_ROOT/go/lib/measure.sh"
+  local logdir profile before
+  logdir=$(qg_tmp_dir)
+  profile="$logdir/cov.profile"
+  cat > "$profile" <<'PROF'
+mode: atomic
+qgregressed/lib.go:4.31,6.2 1 1
+qgregressed/lib.go:8.40,10.2 1 0
+PROF
+  before=$(cat "$profile")
+  _qg_go_strip_generated "$(qg_fixture_path go regressed)" "$profile"
+  [ "$(cat "$profile")" = "$before" ]
+  rm -rf "$logdir"
+}
+
 @test "e2e: running regressed against baseline -> exit 1, JSON with verdict regressed" {
   local logdir
   logdir=$(qg_tmp_dir)
@@ -455,7 +509,7 @@ EOF
   cat > "$tmp/lib.go" <<'EOF'
 package qgvendortest
 
-// Add soma dois inteiros.
+// Add returns the sum of two integers.
 func Add(a, b int) int {
 	return a + b
 }

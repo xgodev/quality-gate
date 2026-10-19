@@ -1,11 +1,11 @@
 package qgbaseline
 
-// Add soma dois inteiros.
+// Add returns the sum of two integers.
 func Add(a, b int) int {
 	return a + b
 }
 
-// Multiply multiplica dois inteiros.
+// Multiply returns the product of two integers.
 func Multiply(a, b int) int {
 	return a * b
 }

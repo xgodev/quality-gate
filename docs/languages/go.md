@@ -110,6 +110,10 @@ Runs `gocyclo -over 15 .`. Counts functions with cyclomatic complexity > 15.
 
 Runs `go test ./... -count=1 -vet=off -covermode=atomic -coverprofile=<path>` and extracts the `total:` line from `go tool cover -func=<path>`.
 
+**Generated code does not count.** Before the total is computed, the gate drops from the profile every file whose header matches the Go convention for generated code -- a line matching `^// Code generated .* DO NOT EDIT\.$` before the `package` clause ([go.dev/s/generatedcode](https://go.dev/s/generatedcode)). Since Go 1.22 `-coverprofile` counts every package, generated or not, and a project that commits its generated code (a `gen/` tree, a generated `cmd/<app>/main.go`) could never reach a high `absolute_thresholds.coverage` however well the source is tested. The marker is the Go convention, not a project setting -- there is nothing to configure and nothing to tamper with. A profile entry the gate cannot resolve to a file inside the module declared in `go.mod` is kept (on a doubt the gate never under-counts), and a module whose every file is generated has no source left to measure, so it reports `0.00`.
+
+Note the asymmetry with `fmt`/`lint`/`complexity`: those exclude generated **directories** by path (`vendor/`, `build/`, ...), so a generated file living outside those dirs is still formatted and linted like source -- only `coverage` reads the header marker.
+
 **Tolerance margin:** default 1.0pp (see `--cov-margin` or `.qg.yaml: cov_margin`).
 
 **How to interpret a regression:** the PR added code without a corresponding test. Fixes: add a test covering the new path; or (with discretion) raise the margin in `.qg.yaml` if the case is justified.
