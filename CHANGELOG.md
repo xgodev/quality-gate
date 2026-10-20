@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.3.0] -- 2026-10-20
 
 Added: the baseline and the PR are now measured **concurrently** (`--parallel` /
 `--no-parallel`, `QG_PARALLEL`). A comparative run measures two independent
