@@ -106,6 +106,30 @@ docker run --rm -v "$PWD:/src" -w /src ghcr.io/xgodev/quality-gate/python:v1 --b
 docker run --rm -v "$PWD:/src" -w /src ghcr.io/xgodev/quality-gate/python:v1
 ```
 
+## Quick mode, for the run before the PR
+
+A full comparative run on a compiled language costs real wall-clock, and a gate
+that is too slow to run before opening a PR gets bypassed instead. `--quick`
+defers the heaviest metrics -- **coverage** (an instrumented build plus a second
+test run) and **complexity**:
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src \
+  ghcr.io/xgodev/quality-gate/rust:v1 --base origin/main --quick
+```
+
+A deferred metric is **not measured**: it is reported as `skipped`, with no
+numbers, and cannot fail the run. The report carries `"quick": true` and
+`schema_version: "1.2"` so a consumer can reject it.
+
+Each gate defers only what is genuinely expensive **for its own tools**: Rust
+keeps `complexity` (it rides the clippy pass that measures `lint`), Java keeps
+`coverage` (it rides the `mvn test` that measures `test`), and `web` defers
+nothing at all. See [`docs/contract.md`](docs/contract.md#quick-mode---quick).
+
+**Never use `--quick` in CI.** It is a partial run by construction, and the
+gate warns on every quick run.
+
 ## Exit codes
 
 | Code | Meaning |
@@ -121,6 +145,7 @@ docker run --rm -v "$PWD:/src" -w /src ghcr.io/xgodev/quality-gate/python:v1
 --base <ref>        # comparative mode against this git ref
 --format json       # machine-readable output (default: text table)
 --detect            # print the detected language slug(s) and exit
+--quick             # fast pre-PR mode: defers coverage + complexity (never in CI)
 --cov-margin <pp>   # coverage tolerance in percentage points (default 1.0)
 --log-dir <path>    # where to write the per-metric tool logs
 ```
@@ -128,6 +153,7 @@ docker run --rm -v "$PWD:/src" -w /src ghcr.io/xgodev/quality-gate/python:v1
 ```bash
 QG_BYPASS_REASON="incident hotfix"   # forces a pass, recorded in the output
 QG_BASE_REF=origin/main              # same as --base
+QG_QUICK=1                           # same as --quick
 QG_RULESET_DIR=/custom/rules         # override the shipped ruleset (operator only)
 QG_ALLOW_SYSTEM_PACKAGES=1           # authorize .qg.yaml system_packages (operator only)
 ```

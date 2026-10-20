@@ -150,6 +150,14 @@ The base ref does not exist locally. Fix:
 git fetch origin
 ```
 
+## Quick mode (`--quick`)
+
+Defers `complexity` and `coverage`. `coverage` makes pytest run under coverage.py's tracer, and `complexity` is a separate `radon cc` pass.
+
+A deferred metric is reported as `skipped` with no numbers and cannot fail the
+run; the JSON carries `"quick": true` and `schema_version: "1.2"`. Never in CI
+-- see [`../contract.md`](../contract.md#quick-mode---quick).
+
 ## Omitted metrics
 
 None. Python supports the 6 reserved metrics with official tools.

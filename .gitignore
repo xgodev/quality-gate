@@ -53,7 +53,7 @@ target/qg-logs/
 /tmp/qg-baseline-*/
 .qg.yaml.local
 
-# Build artifacts em test-fixtures (nunca commitar)
+# Build artifacts inside test-fixtures (never commit these)
 .gradle/
 build/
 .build/

@@ -428,6 +428,24 @@ PROF
   rm -rf "$logdir"
 }
 
+@test "--quick: the table reports complexity and coverage as skipped (#18)" {
+  command -v go >/dev/null || skip "go not available"
+  local logdir
+  logdir=$(qg_tmp_dir)
+  cd "$(qg_fixture_path go baseline)"
+  run --separate-stderr bash "$(qg_script_path go)" \
+    --base origin/main \
+    --baseline-dir "$(qg_fixture_path go baseline)" \
+    --log-dir "$logdir" \
+    --force-full \
+    --quick
+  [ "$status" -eq 0 ]
+  printf '%s' "$output" | grep -qE '^complexity +- +- +.*skipped'
+  printf '%s' "$output" | grep -qE '^coverage +- +- +.*skipped'
+  cd "$QG_REPO_ROOT"
+  rm -rf "$logdir"
+}
+
 @test "e2e: running regressed against baseline -> exit 1, JSON with verdict regressed" {
   local logdir
   logdir=$(qg_tmp_dir)

@@ -18,6 +18,11 @@ export LC_ALL=C
 QG_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../lib/changed-files.sh
 source "$QG_SCRIPT_DIR/../lib/changed-files.sh"
+# shellcheck source=../lib/quick.sh
+source "$QG_SCRIPT_DIR/../lib/quick.sh"
+# This gate measures only fmt + lint: there is nothing expensive to defer, so
+# a quick run here is a COMPLETE run.
+QG_QUICK_DEFERRED=""
 # shellcheck source=../lib/baseline-archive.sh
 source "$QG_SCRIPT_DIR/../lib/baseline-archive.sh"
 # shellcheck source=lib/measure.sh
@@ -43,11 +48,14 @@ Options:
   --log-dir <dir>       Where to write logs. Default: target/qg-logs
   --refresh-baseline    Re-extract baseline even if a cache exists.
   --force-full          Skip fast-path.
+  --quick               Fast pre-PR mode: defers coverage and complexity. The web
+                        gate measures neither, so nothing is deferred here.
   --format text|json    Output format. Default: text.
   -h, --help            This message.
 
 Equivalent environment variables: QG_BASE_REF, QG_BASELINE_DIR, QG_COV_MARGIN,
-QG_LOG_DIR, QG_REFRESH_BASELINE, QG_FORCE_FULL, QG_FORMAT, QG_BYPASS_REASON.
+QG_LOG_DIR, QG_REFRESH_BASELINE, QG_FORCE_FULL, QG_FORMAT, QG_QUICK,
+QG_BYPASS_REASON.
 
 More details: docs/contract.md
 EOF
@@ -71,6 +79,7 @@ while [ $# -gt 0 ]; do
     --log-dir) QG_LOG_DIR_ARG="${2:-}"; shift 2 ;;
     --refresh-baseline) QG_REFRESH_BASELINE_ARG=1; shift ;;
     --force-full) QG_FORCE_FULL_ARG=1; shift ;;
+    --quick) QG_QUICK=1; shift ;;
     --format) QG_FORMAT_ARG="${2:-}"; shift 2 ;;
     -h|--help) show_help; exit 0 ;;
     *)
@@ -104,6 +113,8 @@ case "$QG_FORMAT_ARG" in
     exit 2
     ;;
 esac
+
+qg_quick_warn
 
 if ! awk -v m="$QG_COV_MARGIN_ARG" 'BEGIN { exit !(m+0 == m) }' 2>/dev/null; then
   echo "::error::--cov-margin must be numeric (got: '$QG_COV_MARGIN_ARG')" >&2
@@ -480,7 +491,9 @@ else
 echo "-- measuring base --" >&2
 base_fmt=$(count_fmt_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-fmt.log")
 base_lint=$(count_lint_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-lint.log")
-  if [ -n "$QG_BASE_METRICS_CACHE" ]; then
+  # A quick run did not measure every metric: caching its numbers would hand a
+  # later full run a fabricated baseline.
+  if [ -n "$QG_BASE_METRICS_CACHE" ] && [ "${QG_QUICK:-0}" != "1" ]; then
     printf '%s\t%s\n' "$base_fmt" "$base_lint" > "$QG_BASE_METRICS_CACHE"
   fi
 fi

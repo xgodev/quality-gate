@@ -130,6 +130,14 @@ The base ref does not exist locally. Fix:
 git fetch origin
 ```
 
+## Quick mode (`--quick`)
+
+Defers `complexity` and `coverage`. `coverage` wraps the test run in `c8`, and `complexity` is a second `npx eslint` pass.
+
+A deferred metric is reported as `skipped` with no numbers and cannot fail the
+run; the JSON carries `"quick": true` and `schema_version: "1.2"`. Never in CI
+-- see [`../contract.md`](../contract.md#quick-mode---quick).
+
 ## Omitted metrics
 
 None. Node.js supports the 6 reserved metrics via prettier/eslint/tsc/node-test/c8.

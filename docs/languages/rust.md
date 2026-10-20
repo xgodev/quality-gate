@@ -152,6 +152,14 @@ The base ref does not exist locally. Fix:
 git fetch origin
 ```
 
+## Quick mode (`--quick`)
+
+Defers `coverage` only. `coverage` is a whole instrumented build plus a second test run under `cargo llvm-cov`. `complexity` is NOT deferred: it comes out of the same `cargo clippy` invocation that measures `lint`, so deferring it would discard a number the gate measured anyway.
+
+A deferred metric is reported as `skipped` with no numbers and cannot fail the
+run; the JSON carries `"quick": true` and `schema_version: "1.2"`. Never in CI
+-- see [`../contract.md`](../contract.md#quick-mode---quick).
+
 ## Omitted metrics
 
 None. Rust supports the 6 reserved metrics with official tools.

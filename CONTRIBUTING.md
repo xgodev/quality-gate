@@ -11,17 +11,24 @@
 
 ### With AI (recommended)
 
-Invoke the `add-quality-gate` skill (in `skills/add-quality-gate/`):
+The `add-quality-gate` skill ships with the **`xgodev` Claude Code plugin**, not
+with this repo. With the plugin installed:
 
 ```
 add quality gate for Go
 ```
 
-The skill follows a mandatory 22-step checklist. Do not skip any.
+It follows a mandatory checklist -- do not skip steps.
 
 ### Manual (without AI)
 
-Follow the same checklist documented in `skills/add-quality-gate/SKILL.md`.
+[`docs/contract.md`](docs/contract.md) is the specification; an existing
+`<lang>/` is the reference implementation. A new language ships with its own
+`<lang>/rules/`, `--detect`, absolute mode, dependency resolution, `_num`
+sanitization, a `QG_QUICK_DEFERRED` declaration (which of its metrics `--quick`
+defers, and why the rest are not deferrable), `docker/<lang>.Dockerfile`,
+`docs/languages/<lang>.md`, and `tests/<lang>-qg.bats` covering tamper
+resistance, generated-dir exclusion, toolchain authority and quick mode.
 
 ## Change the contract
 
@@ -29,7 +36,7 @@ Follow the same checklist documented in `skills/add-quality-gate/SKILL.md`.
 2. Update ALL `<lang>/qg.sh` to comply with the new version.
 3. Bump `QG_CONTRACT_VERSION` in each script's header.
 4. Update test fixtures if the change affects output.
-5. Update `skills/add-quality-gate/SKILL.md` if it affects the process.
+5. Update `docs/output-format.md` and the per-language docs it affects.
 
 Breaking change -> bump major (v1 -> v2). The *contract* version
 (`QG_CONTRACT_VERSION`) is independent of the image *release* tags below.
@@ -72,13 +79,18 @@ quality-gate/
 |-- qg                     # dispatcher
 |-- docker/<lang>.Dockerfile   # one per-language image, published to GHCR
 |-- .github/workflows/build-publish.yml
+|-- .github/workflows/gate.yml # reusable workflow consumers call
 |-- docs/
 |   |-- contract.md
 |   |-- contract-v1.schema.json
 |   |-- output-format.md
 |   |-- consume.md
 |   `-- languages/<lang>.md
-|-- skills/add-quality-gate/
+|-- lib/                   # shared by every gate (changed-files, baseline, quick)
+|-- hygiene/scan.sh        # repo-level scan, run by the dispatcher
+|-- tests/                 # bats suites + helpers
+|-- CHANGELOG.md
+|-- CLAUDE.md
 `-- <lang>/
     |-- qg.sh
     |-- README.md

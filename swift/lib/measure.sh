@@ -162,7 +162,12 @@ count_build_errors() {
 count_test_failures() {
   local dir="$1" log="$2"
   : > "$log"
-  ( cd "$dir" && swift test --enable-code-coverage ) > "$log" 2>&1 || true
+  # `--enable-code-coverage` exists to feed `coverage`, which reuses this very
+  # build. When quick mode defers coverage nobody reads the instrumentation, so
+  # it is pure cost: an instrumented rebuild of the whole package.
+  local cov=(--enable-code-coverage)
+  if [ "${QG_QUICK:-0}" = "1" ]; then cov=(); fi
+  ( cd "$dir" && swift test "${cov[@]}" ) > "$log" 2>&1 || true
   # XCTest prints "Executed N tests, with F failures (UF unexpected)" in the summary.
   # Sums all "with F failures" -- takes the last occurrence (all-tests summary).
   local n

@@ -80,6 +80,19 @@ anything so a future session does not repeat past mistakes.
   the regressed fixture. In Rust, keeping a lint at warn level under
   `-D warnings` requires `--force-warn`: a per-lint `-W` loses to the
   `warnings` group whatever the flag order (#18).
+- **A metric is only deferrable when deferring it saves work.** `--quick`
+  (`QG_QUICK=1`) reports the deferred metrics as `skipped` with `null` numbers
+  and excludes them from the verdict; the set is **per-language**
+  (`QG_QUICK_DEFERRED` in `<lang>/qg.sh`), never the same list everywhere. A
+  metric that falls out of an invocation the gate performs anyway is a
+  byproduct (rust `complexity` rides the `lint` clippy pass, java `coverage`
+  rides the jacoco-bound `mvn test`): deferring it discards a number already in
+  hand and saves nothing, so it stays OUT of the set and the gate must not
+  carry a guard that can never fire. A quick run must also stop measuring, not
+  just stop reporting -- swift drops `--enable-code-coverage` from its test
+  run -- and must NEVER write the base-metrics cache, or the next full run
+  inherits a fabricated baseline. Quick output is `schema_version: "1.2"` +
+  `quick: true`; non-quick output stays byte-identical at `1.1`.
 - **Numeric sanitization before `jq --argjson`/arithmetic.** Every metric
   value passes through `_num` (non-numeric/empty/"Unknown" → `0`). A raw
   non-number into `jq --argjson` crashes the whole gate.
@@ -140,6 +153,11 @@ anything so a future session does not repeat past mistakes.
   uses the relative manifest path) they overwrote each other's artifacts and
   three measurement tests flipped between pass and fail depending on which
   fixture compiled last. Fixture package names must be unique per fixture.
+- Shipping a documented feature no code implements (`.qg.yaml skip_metrics`
+  was specified with expiry warnings and metric-dropping; every gate parses,
+  validates and then ignores it). A spec with no implementation is a lie with a
+  schema. Either implement it or document the inertness -- and for anything a
+  project file could use to weaken the gate, the answer is the latter.
 - Merging to `main` and calling it released — a merge refreshes only
   `:latest`; consumers pinning `:v1` stay on the previous release until a
   `vX.Y.Z` tag is pushed. Before cutting, check `[Unreleased]` for

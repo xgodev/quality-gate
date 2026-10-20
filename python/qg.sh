@@ -15,6 +15,8 @@ export LC_ALL=C
 QG_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../lib/changed-files.sh
 source "$QG_SCRIPT_DIR/../lib/changed-files.sh"
+# shellcheck source=../lib/quick.sh
+source "$QG_SCRIPT_DIR/../lib/quick.sh"
 # shellcheck source=../lib/baseline-archive.sh
 source "$QG_SCRIPT_DIR/../lib/baseline-archive.sh"
 # shellcheck source=lib/measure.sh
@@ -36,11 +38,14 @@ Options:
   --log-dir <dir>       Where to write logs. Default: target/qg-logs
   --refresh-baseline    Re-extract baseline even if a cache exists.
   --force-full          Skip fast-path.
+  --quick               Fast pre-PR mode: defers coverage and complexity (reported
+                        as skipped, never blocking). Never use it in CI.
   --format text|json    Output format. Default: text.
   -h, --help            This message.
 
 Equivalent environment variables: QG_BASE_REF, QG_BASELINE_DIR, QG_COV_MARGIN,
-QG_LOG_DIR, QG_REFRESH_BASELINE, QG_FORCE_FULL, QG_FORMAT, QG_BYPASS_REASON.
+QG_LOG_DIR, QG_REFRESH_BASELINE, QG_FORCE_FULL, QG_FORMAT, QG_QUICK,
+QG_BYPASS_REASON.
 
 More details: docs/contract.md
 EOF
@@ -86,6 +91,10 @@ while [ $# -gt 0 ]; do
       QG_FORCE_FULL_ARG=1
       shift
       ;;
+    --quick)
+      QG_QUICK=1
+      shift
+      ;;
     --format)
       QG_FORMAT_ARG="${2:-}"
       shift 2
@@ -125,6 +134,8 @@ case "$QG_FORMAT_ARG" in
     exit 2
     ;;
 esac
+
+qg_quick_warn
 
 if ! awk -v m="$QG_COV_MARGIN_ARG" 'BEGIN { exit !(m+0 == m) }' 2>/dev/null; then
   echo "::error::--cov-margin must be numeric (got: '$QG_COV_MARGIN_ARG')" >&2
@@ -351,9 +362,19 @@ if [ "$QG_ABSOLUTE_MODE" = "1" ]; then
   abs_fmt=$(count_fmt_errors "." "$QG_LOG_DIR_ARG/abs-fmt.log")
   abs_lint=$(count_lint_errors "." "$QG_LOG_DIR_ARG/abs-lint.log")
   abs_build=$(count_build_errors "." "$QG_LOG_DIR_ARG/abs-build.log")
-  abs_complex=$(count_complexity "." "$QG_LOG_DIR_ARG/abs-complex.log")
-  set -- $(measure_test_and_coverage "." "$QG_LOG_DIR_ARG/abs-test.log" "$QG_LOG_DIR_ARG/abs-cov.json")
-  abs_test="$1"; abs_cov="$2"
+  if qg_quick_defers complexity; then
+    abs_complex=0
+  else
+    abs_complex=$(count_complexity "." "$QG_LOG_DIR_ARG/abs-complex.log")
+  fi
+  if qg_quick_defers coverage; then
+    # No instrumented build and no second test run: plain test count.
+    abs_test=$(count_test_failures "." "$QG_LOG_DIR_ARG/abs-test.log")
+    abs_cov=0
+  else
+    set -- $(measure_test_and_coverage "." "$QG_LOG_DIR_ARG/abs-test.log" "$QG_LOG_DIR_ARG/abs-cov.json")
+    abs_test="$1"; abs_cov="$2"
+  fi
 
   branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "<detached>")
   started_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -365,6 +386,10 @@ if [ "$QG_ABSOLUTE_MODE" = "1" ]; then
   t_test=$(qg_abs_threshold test)
   t_complex=$(qg_abs_threshold complexity)
   t_cov=$(qg_abs_threshold coverage)
+  # A metric deferred by quick mode was not measured: kind "skip" makes the
+  # renderers report it as skipped instead of checking it against a threshold.
+  k_complex=count; qg_quick_defers complexity && k_complex=skip
+  k_cov=cov; qg_quick_defers coverage && k_cov=skip
 
   if [ "$QG_FORMAT_ARG" = "json" ]; then
     render_absolute_json "$branch" "$started_at" "$duration" \
@@ -372,8 +397,8 @@ if [ "$QG_ABSOLUTE_MODE" = "1" ]; then
       lint "$abs_lint" "$t_lint" count \
       build "$abs_build" "$t_build" count \
       test "$abs_test" "$t_test" count \
-      complexity "$abs_complex" "$t_complex" count \
-      coverage "$abs_cov" "$t_cov" cov
+      complexity "$abs_complex" "$t_complex" "$k_complex" \
+      coverage "$abs_cov" "$t_cov" "$k_cov"
     exit $?
   else
     render_absolute_text "$branch" "$started_at" "$duration" "$QG_LOG_DIR_ARG" \
@@ -381,8 +406,8 @@ if [ "$QG_ABSOLUTE_MODE" = "1" ]; then
       "lint" "$abs_lint" "$t_lint" count \
       "build" "$abs_build" "$t_build" count \
       "test fails" "$abs_test" "$t_test" count \
-      "complexity" "$abs_complex" "$t_complex" count \
-      "coverage" "$abs_cov" "$t_cov" cov
+      "complexity" "$abs_complex" "$t_complex" "$k_complex" \
+      "coverage" "$abs_cov" "$t_cov" "$k_cov"
     exit $?
   fi
 fi
@@ -537,10 +562,22 @@ echo "-- measuring base --" >&2
 base_fmt=$(count_fmt_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-fmt.log")
 base_lint=$(count_lint_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-lint.log")
 base_build=$(count_build_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-build.log")
-base_complex=$(count_complexity "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-complex.log")
-set -- $(measure_test_and_coverage "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-test.log" "$QG_LOG_DIR_ARG/base-cov.json")
-base_test="$1"; base_cov="$2"
-  if [ -n "$QG_BASE_METRICS_CACHE" ]; then
+if qg_quick_defers complexity; then
+  base_complex=0
+else
+  base_complex=$(count_complexity "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-complex.log")
+fi
+if qg_quick_defers coverage; then
+  # No instrumented build and no second test run: plain test count.
+  base_test=$(count_test_failures "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-test.log")
+  base_cov=0
+else
+  set -- $(measure_test_and_coverage "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-test.log" "$QG_LOG_DIR_ARG/base-cov.json")
+  base_test="$1"; base_cov="$2"
+fi
+  # A quick run did not measure every metric: caching its numbers would hand a
+  # later full run a fabricated baseline.
+  if [ -n "$QG_BASE_METRICS_CACHE" ] && [ "${QG_QUICK:-0}" != "1" ]; then
     printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$base_fmt" "$base_lint" "$base_build" "$base_test" "$base_complex" "$base_cov" > "$QG_BASE_METRICS_CACHE"
   fi
 fi
@@ -549,9 +586,19 @@ echo "-- measuring PR --" >&2
 pr_fmt=$(count_fmt_errors "." "$QG_LOG_DIR_ARG/pr-fmt.log")
 pr_lint=$(count_lint_errors "." "$QG_LOG_DIR_ARG/pr-lint.log")
 pr_build=$(count_build_errors "." "$QG_LOG_DIR_ARG/pr-build.log")
-pr_complex=$(count_complexity "." "$QG_LOG_DIR_ARG/pr-complex.log")
-set -- $(measure_test_and_coverage "." "$QG_LOG_DIR_ARG/pr-test.log" "$QG_LOG_DIR_ARG/pr-cov.json")
-pr_test="$1"; pr_cov="$2"
+if qg_quick_defers complexity; then
+  pr_complex=0
+else
+  pr_complex=$(count_complexity "." "$QG_LOG_DIR_ARG/pr-complex.log")
+fi
+if qg_quick_defers coverage; then
+  # No instrumented build and no second test run: plain test count.
+  pr_test=$(count_test_failures "." "$QG_LOG_DIR_ARG/pr-test.log")
+  pr_cov=0
+else
+  set -- $(measure_test_and_coverage "." "$QG_LOG_DIR_ARG/pr-test.log" "$QG_LOG_DIR_ARG/pr-cov.json")
+  pr_test="$1"; pr_cov="$2"
+fi
 
 branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "<detached>")
 started_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")

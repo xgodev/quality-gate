@@ -150,6 +150,14 @@ The base ref does not exist locally. Fix:
 git fetch origin
 ```
 
+## Quick mode (`--quick`)
+
+Defers `complexity` only. `complexity` is a separate `pmd check` pass. `coverage` is NOT deferred: jacoco is bound to the very `mvn test` the gate runs for `test`, so the number comes for free.
+
+A deferred metric is reported as `skipped` with no numbers and cannot fail the
+run; the JSON carries `"quick": true` and `schema_version: "1.2"`. Never in CI
+-- see [`../contract.md`](../contract.md#quick-mode---quick).
+
 ## Omitted metrics
 
 None. Java supports the 6 reserved metrics with official tools (google-java-format, pmd, mvn compile/test, jacoco).

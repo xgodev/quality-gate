@@ -5,20 +5,19 @@ Tests in [bats](https://github.com/bats-core/bats-core).
 ## Run all
 
 ```bash
-bats tools/quality-gate/tests/
+bats tests/
 ```
 
 ## Run only one language
 
 ```bash
-bats tools/quality-gate/tests/rust-qg.bats
+bats tests/rust-qg.bats
 ```
 
 ## Structure
 
 - `tests/<lang>-qg.bats` -- tests for each language's script.
 - `tests/dispatcher.bats` -- dispatcher (`qg`) routing tests.
-- `tests/hook-pr.bats` -- PR-gate hook tests.
 - `tests/hygiene.bats` -- repo-level hygiene scan tests.
 - `tests/helpers/setup.bash` -- shared helpers.
 
@@ -36,8 +35,9 @@ assertions, or run bats with bash >= 4 first on `PATH`
 
 ## CI
 
-`.github/workflows/tests.yml` runs on every push and PR: the hook unit
-tests, manifest validation, and the bats suites whose toolchains are
-CI-installable (`dispatcher`, `hook-pr`, `hygiene`, `python`, `nodejs`, `go`). The
-`java`, `kotlin`, `rust`, `swift`, and `web` suites need heavier
-toolchains and run locally before a gate change ships.
+This repository's workflows build and publish the per-language images
+(`.github/workflows/build-publish.yml`) and expose the reusable gate
+(`.github/workflows/gate.yml`). The bats suites are **not** run in CI yet:
+run them locally before a gate change ships. `dispatcher`, `hygiene`,
+`baseline-archive` and `web` need no language toolchain; `go`, `python`,
+`nodejs`, `java`, `kotlin`, `rust` and `swift` each need theirs.
