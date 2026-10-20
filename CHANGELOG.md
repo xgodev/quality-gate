@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.1.1]
 
 Fix (go): `coverage` counted generated code. `go test -coverprofile` counts
 every statement of every package -- since Go 1.22 even packages without tests
