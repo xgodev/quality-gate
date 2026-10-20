@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.1.1]
+
+Fix (go): `coverage` counted generated code. `go test -coverprofile` counts
+every statement of every package -- since Go 1.22 even packages without tests
+-- and the canonical generated/vendored **dir** ignore only reaches
+`gofmt`/`gocyclo`, which scan by path. A project that commits its generated
+code (a `gen/` tree, a generated `cmd/<app>/main.go`) therefore dragged every
+untested generated statement into the denominator: in the case that surfaced
+this, 251 of 368 statements (68%) were generated and
+`absolute_thresholds.coverage: 100` was unreachable however well the source was
+tested. The Go gate now drops from the profile, before computing `total:`,
+every file whose header matches the Go convention for generated code
+(`^// Code generated .* DO NOT EDIT\.$` before the `package` clause,
+https://go.dev/s/generatedcode). The marker is the language convention, not a
+project setting, so there is nothing to configure and nothing to tamper with;
+a profile entry that cannot be resolved to a file inside the module declared in
+`go.mod` is kept, so a doubt never under-counts. New `go/test-fixtures/generated`
+(covered source + uncovered generated `gen/gen.go`) reaches 100%, and
+`tests/go-qg.bats` also asserts a file without the marker is never filtered.
+Documented in `docs/contract.md` (new LAW section) and
+`docs/languages/go.md`. (#21)
+
 ## [1.1.0]
 
 Feature: `.qg.yaml` `system_packages` -- a project declares the OS packages its

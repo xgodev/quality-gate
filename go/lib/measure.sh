@@ -198,6 +198,57 @@ count_complexity() {
   printf '%d\n' "$(_num "${n:-0}")"
 }
 
+# QG CANONICAL generated-code exclusion for COVERAGE. LAW (docs/contract.md):
+# the metrics measure SOURCE, not generated output. `gofmt`/`gocyclo` get the
+# generated/vendored DIRS via `_qg_go_excl_re`, but `go test -coverprofile`
+# counts every statement of every package, generated or not -- so a project
+# that commits its generated code (`gen/`, a generated `main.go`) can never
+# reach a high absolute coverage threshold no matter how the source is tested.
+# The Go convention (https://go.dev/s/generatedcode) marks such a file with a
+# header line matching the regex below, before the package clause.
+_qg_go_generated_re='^// Code generated .* DO NOT EDIT\.$'
+
+# Drops from the coverage profile (IN PLACE) every block belonging to a
+# generated file, so `go tool cover -func` computes `total:` over source only.
+# Profile line: "<import-path>/<file>.go:<l>.<c>,<l>.<c> <stmts> <count>".
+# The import path is resolved to a file on disk by stripping the module path
+# declared in <dir>/go.mod; a path outside that module cannot be resolved, so
+# it is KEPT (never under-count on a doubt).
+_qg_go_strip_generated() {
+  local dir="$1" profile="$2"
+  [ -s "$profile" ] || return 0
+  local module
+  module=$(sed -nE 's/^module[[:space:]]+([^[:space:]]+).*/\1/p' "$dir/go.mod" 2>/dev/null | head -1)
+  [ -n "$module" ] || return 0
+  local drop f rel
+  drop=$(mktemp -t qg-cov-drop-XXXXXX) || return 0
+  while IFS= read -r f; do
+    case "$f" in
+      "$module"/*) rel="${f#"$module"/}" ;;
+      *) continue ;;
+    esac
+    [ -f "$dir/$rel" ] || continue
+    # The marker only counts before the package clause (go.dev/s/generatedcode).
+    if sed -n '1,/^package[[:space:]]/p' "$dir/$rel" | grep -qE "$_qg_go_generated_re"; then
+      printf '%s\n' "$f" >> "$drop"
+    fi
+  done < <(awk 'NR > 1 { p = $1; sub(/:[0-9]+\.[0-9]+,[0-9]+\.[0-9]+$/, "", p); print p }' "$profile" | sort -u)
+  if [ -s "$drop" ]; then
+    local tmp
+    tmp=$(mktemp -t qg-cov-prof-XXXXXX)
+    if awk -v dropfile="$drop" '
+          BEGIN { while ((getline l < dropfile) > 0) gen[l] = 1 }
+          NR == 1 { print; next }
+          { p = $1; sub(/:[0-9]+\.[0-9]+,[0-9]+\.[0-9]+$/, "", p); if (!(p in gen)) print }
+        ' "$profile" > "$tmp"; then
+      mv "$tmp" "$profile"
+    else
+      rm -f "$tmp"
+    fi
+  fi
+  rm -f "$drop"
+}
+
 # Perf fusion: `go test -coverprofile` runs the suite ONCE and yields both the
 # failure count and the coverage percentage -- the separate plain `go test`
 # execution was a full extra suite run per side. Echoes "<failures> <pct>".
@@ -209,6 +260,8 @@ measure_test_and_coverage() {
   ( cd "$dir" && GOFLAGS=-mod=mod go test ./... -count=1 -vet=off -covermode=atomic -coverprofile="$profile" ) > "$log" 2>&1 || true
   local n pct=0
   n=$(_grep_count '^--- FAIL:' "$log")
+  # Generated code is not source: drop it before computing `total:` (#21).
+  _qg_go_strip_generated "$dir" "$profile"
   if [ -s "$profile" ]; then
     pct=$( ( cd "$dir" && go tool cover -func="$profile" ) 2>/dev/null             | awk '/^total:/ { gsub("%","",$NF); print $NF; exit }')
   fi
@@ -221,6 +274,8 @@ measure_coverage() {
   profile="${out%.json}.profile"
   ( cd "$dir" && GOFLAGS=-mod=mod go test ./... -count=1 -vet=off -covermode=atomic -coverprofile="$profile" ) >/dev/null 2>&1 || true
   local pct=0
+  # Generated code is not source: drop it before computing `total:` (#21).
+  _qg_go_strip_generated "$dir" "$profile"
   if [ -s "$profile" ]; then
     # go tool cover -func emits the line "total: (statements) X.X%"
     pct=$( ( cd "$dir" && go tool cover -func="$profile" ) 2>/dev/null \

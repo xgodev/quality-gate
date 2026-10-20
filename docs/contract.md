@@ -360,6 +360,26 @@ files `*.min.js`, `*.min.css`, `*.bundle.js`, `*.chunk.js`, `*-lock.json`,
 Override is **external only** (`QG_RULESET_DIR`), never from a project file --
 same tamper rule as the ruleset.
 
+### LAW: `coverage` measures SOURCE CODE too (generated files excluded)
+
+A coverage tool counts statements per package, not per path, so the canonical
+dir ignore above does not reach it: a project that **commits** its generated
+code (a `gen/` tree, a generated `main.go`) drags every untested generated
+statement into the denominator, and a high absolute threshold becomes
+unreachable no matter how the source is tested.
+
+**LAW:** a file the language's own convention marks as generated is dropped
+from the coverage profile before the total is computed. The marker is the
+language convention, not a QG invention, and never a project setting:
+
+| Language | Generated-file marker honored in `coverage` |
+|---|---|
+| go | header line matching `^// Code generated .* DO NOT EDIT\.$` before the `package` clause ([go.dev/s/generatedcode](https://go.dev/s/generatedcode)) |
+| others | not implemented yet -- the dir-level ignore is all that applies |
+
+A path the gate cannot resolve to a file on disk (a profile entry outside the
+declared module) is **kept**: on a doubt the gate never under-counts.
+
 ## Per-repo config (`.qg.yaml` optional)
 
 Read from the target project root if it exists. **Closed** schema -- unknown key -> exit 2.
