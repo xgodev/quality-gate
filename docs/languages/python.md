@@ -158,6 +158,13 @@ A deferred metric is reported as `skipped` with no numbers and cannot fail the
 run; the JSON carries `"quick": true` and `schema_version: "1.2"`. Never in CI
 -- see [`../contract.md`](../contract.md#quick-mode---quick).
 
+## Parallel sides
+
+The baseline and the PR are measured concurrently by default (from 4 usable
+cores); the numbers are identical to a sequential run. `--no-parallel` forces
+one side after the other -- see
+[`../contract.md`](../contract.md#parallel-sides---parallel----no-parallel).
+
 ## Omitted metrics
 
 None. Python supports the 6 reserved metrics with official tools.

@@ -17,6 +17,8 @@ QG_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$QG_SCRIPT_DIR/../lib/changed-files.sh"
 # shellcheck source=../lib/quick.sh
 source "$QG_SCRIPT_DIR/../lib/quick.sh"
+# shellcheck source=../lib/parallel.sh
+source "$QG_SCRIPT_DIR/../lib/parallel.sh"
 # shellcheck source=../lib/baseline-archive.sh
 source "$QG_SCRIPT_DIR/../lib/baseline-archive.sh"
 # shellcheck source=lib/measure.sh
@@ -40,12 +42,15 @@ Options:
   --force-full          Skip fast-path.
   --quick               Fast pre-PR mode: defers coverage and complexity (reported
                         as skipped, never blocking). Never use it in CI.
+  --parallel            Measure baseline and PR concurrently (default: on when the
+                        machine has >= 4 cores). --no-parallel forces sequential.
+  --no-parallel         Never measure the two sides concurrently.
   --format text|json    Output format. Default: text.
   -h, --help            This message.
 
 Equivalent environment variables: QG_BASE_REF, QG_BASELINE_DIR, QG_COV_MARGIN,
 QG_LOG_DIR, QG_REFRESH_BASELINE, QG_FORCE_FULL, QG_FORMAT, QG_QUICK,
-QG_BYPASS_REASON.
+QG_PARALLEL, QG_BYPASS_REASON.
 
 More details: docs/contract.md
 EOF
@@ -93,6 +98,14 @@ while [ $# -gt 0 ]; do
       ;;
     --quick)
       QG_QUICK=1
+      shift
+      ;;
+    --parallel)
+      QG_PARALLEL=1
+      shift
+      ;;
+    --no-parallel)
+      QG_PARALLEL=0
       shift
       ;;
     --format)
@@ -552,51 +565,74 @@ if ! qg_resolve_deps "." "$QG_LOG_DIR_ARG/pr-deps.log"; then
   echo "::error::failed to resolve nodejs dependencies (PR) -- see $QG_LOG_DIR_ARG/pr-deps.log" >&2
   exit 2
 fi
+# One side = one tree: the baseline archive under --baseline-dir, or the working
+# copy. Each side writes its metrics to its own TSV and shares no variable, log
+# or build cache with the other, which is what makes measuring the two
+# concurrently safe -- see lib/parallel.sh (#18).
+QG_BASE_TSV="$QG_LOG_DIR_ARG/side-base.tsv"
+QG_PR_TSV="$QG_LOG_DIR_ARG/side-pr.tsv"
+
+qg_measure_base_side() {
+  local TSV="$QG_BASE_TSV"
+  echo "-- measuring base --" >&2
+  local fmt lint build tests complex cov
+  fmt=$(count_fmt_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-fmt.log")
+  lint=$(count_lint_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-lint.log")
+  build=$(count_build_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-build.log")
+  if qg_quick_defers complexity; then
+    complex=0
+  else
+    complex=$(count_complexity "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-complex.log")
+  fi
+  if qg_quick_defers coverage; then
+    # No instrumented build and no second test run: plain test count.
+    tests=$(count_test_failures "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-test.log")
+    cov=0
+  else
+    set -- $(measure_test_and_coverage "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-test.log" "$QG_LOG_DIR_ARG/base-cov.json")
+    tests="$1"; cov="$2"
+  fi
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$fmt" "$lint" "$build" "$tests" "$complex" "$cov" > "$TSV"
+}
+
+qg_measure_pr_side() {
+  local TSV="$QG_PR_TSV"
+  echo "-- measuring PR --" >&2
+  local fmt lint build tests complex cov
+  fmt=$(count_fmt_errors "." "$QG_LOG_DIR_ARG/pr-fmt.log")
+  lint=$(count_lint_errors "." "$QG_LOG_DIR_ARG/pr-lint.log")
+  build=$(count_build_errors "." "$QG_LOG_DIR_ARG/pr-build.log")
+  if qg_quick_defers complexity; then
+    complex=0
+  else
+    complex=$(count_complexity "." "$QG_LOG_DIR_ARG/pr-complex.log")
+  fi
+  if qg_quick_defers coverage; then
+    # No instrumented build and no second test run: plain test count.
+    tests=$(count_test_failures "." "$QG_LOG_DIR_ARG/pr-test.log")
+    cov=0
+  else
+    set -- $(measure_test_and_coverage "." "$QG_LOG_DIR_ARG/pr-test.log" "$QG_LOG_DIR_ARG/pr-cov.json")
+    tests="$1"; cov="$2"
+  fi
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$fmt" "$lint" "$build" "$tests" "$complex" "$cov" > "$TSV"
+}
+
 if [ -n "$QG_BASE_METRICS_CACHE" ] && [ -s "$QG_BASE_METRICS_CACHE" ]; then
   echo "-- base metrics: cached ($QG_BASE_METRICS_CACHE) --" >&2
-  IFS=$'\t' read -r base_fmt base_lint base_build base_test base_complex base_cov < "$QG_BASE_METRICS_CACHE"
+  cp "$QG_BASE_METRICS_CACHE" "$QG_BASE_TSV"
+  qg_measure_pr_side || exit 2
 else
-echo "-- measuring base --" >&2
-base_fmt=$(count_fmt_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-fmt.log")
-base_lint=$(count_lint_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-lint.log")
-base_build=$(count_build_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-build.log")
-if qg_quick_defers complexity; then
-  base_complex=0
-else
-  base_complex=$(count_complexity "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-complex.log")
-fi
-if qg_quick_defers coverage; then
-  # No instrumented build and no second test run: plain test count.
-  base_test=$(count_test_failures "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-test.log")
-  base_cov=0
-else
-  set -- $(measure_test_and_coverage "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-test.log" "$QG_LOG_DIR_ARG/base-cov.json")
-  base_test="$1"; base_cov="$2"
-fi
+  qg_run_sides qg_measure_base_side qg_measure_pr_side "$QG_BASELINE_DIR_ARG" "." || exit 2
   # A quick run did not measure every metric: caching its numbers would hand a
   # later full run a fabricated baseline.
   if [ -n "$QG_BASE_METRICS_CACHE" ] && [ "${QG_QUICK:-0}" != "1" ]; then
-    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$base_fmt" "$base_lint" "$base_build" "$base_test" "$base_complex" "$base_cov" > "$QG_BASE_METRICS_CACHE"
+    cp "$QG_BASE_TSV" "$QG_BASE_METRICS_CACHE"
   fi
 fi
 
-echo "-- measuring PR --" >&2
-pr_fmt=$(count_fmt_errors "." "$QG_LOG_DIR_ARG/pr-fmt.log")
-pr_lint=$(count_lint_errors "." "$QG_LOG_DIR_ARG/pr-lint.log")
-pr_build=$(count_build_errors "." "$QG_LOG_DIR_ARG/pr-build.log")
-if qg_quick_defers complexity; then
-  pr_complex=0
-else
-  pr_complex=$(count_complexity "." "$QG_LOG_DIR_ARG/pr-complex.log")
-fi
-if qg_quick_defers coverage; then
-  # No instrumented build and no second test run: plain test count.
-  pr_test=$(count_test_failures "." "$QG_LOG_DIR_ARG/pr-test.log")
-  pr_cov=0
-else
-  set -- $(measure_test_and_coverage "." "$QG_LOG_DIR_ARG/pr-test.log" "$QG_LOG_DIR_ARG/pr-cov.json")
-  pr_test="$1"; pr_cov="$2"
-fi
+IFS=$'\t' read -r base_fmt base_lint base_build base_test base_complex base_cov < "$QG_BASE_TSV"
+IFS=$'\t' read -r pr_fmt pr_lint pr_build pr_test pr_complex pr_cov < "$QG_PR_TSV"
 
 branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "<detached>")
 started_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")

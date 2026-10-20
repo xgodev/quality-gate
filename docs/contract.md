@@ -25,6 +25,9 @@ Options:
   --quick               Fast pre-PR mode: DEFERS the heaviest metrics (coverage,
                         complexity). They are reported as `skipped` and cannot
                         fail the run. Never for CI.
+  --parallel            Measure the baseline and the PR concurrently. Default:
+                        on when the machine reports >= 4 usable cores.
+  --no-parallel         Force the two sides to be measured one after the other.
   --format text|json    Output format on stdout. Default: text.
   -h, --help            Show help.
 ```
@@ -113,6 +116,47 @@ store, so caching it would hand the next full run a fabricated baseline.
 check, never a substitute for the full gate in CI` on stderr, and the JSON
 carries `"quick": true` so a consumer can reject the report.
 
+## Parallel sides (`--parallel` / `--no-parallel`)
+
+A comparative run measures two independent trees: the **baseline**, an archive
+extracted under `--baseline-dir`, and the **PR**, the working copy. Measuring
+them concurrently is the one parallelism that cannot change a number, because
+no tool invocation on one side can see the other's sources, build cache, target
+dir or logs. Wall-clock becomes roughly the slower side instead of the sum.
+
+Each side writes its metrics to its own TSV under `--log-dir`
+(`side-base.tsv`, `side-pr.tsv`); the gate reads both afterwards, so the
+rendered output is identical to a sequential run.
+
+**Default: on when the machine reports >= 4 usable cores**, sequential below
+that -- two concurrent builds on two cores trade a context-switch storm for no
+wall-clock, and risk the OOM the contract classifies as a tool-error. The core
+count honors the cgroup CPU quota (`/sys/fs/cgroup/cpu.max`), because inside a
+container `nproc` reports the HOST's cores. Force it either way with
+`--parallel` / `--no-parallel` or `QG_PARALLEL=1` / `0` (`auto` = decide from
+the core count).
+
+**A side that dies is infrastructure, not a regression.** If either side exits
+non-zero (segfault, ICE, OOM, killed), the gate exits **2** with an `::error::`
+that says so and suggests `--no-parallel`; it never reports the dead side's
+metrics as a regression.
+
+**Metrics within one side are deliberately NOT parallelised.** `fmt`, `lint`,
+`build`, `test` and `coverage` of one directory share that directory's build
+cache, and the build systems serialise on it anyway (cargo and gradle take an
+exclusive lock on the target/build dir), so that "parallelism" buys a lock wait
+while two tools compete for the same cores.
+
+Rust has one extra rule: an operator-set `CARGO_TARGET_DIR` points both trees
+at a single build dir, and two checkouts of the same workspace produce the
+**same crate metadata hash**, so each side would link the other's artifacts.
+The Rust gate therefore gives each side its own dir under it
+(`$CARGO_TARGET_DIR/qg-base`, `$CARGO_TARGET_DIR/qg-pr`). The cargo default --
+a per-tree `./target` -- is already isolated and is left alone.
+
+With a **cached baseline** there is nothing to parallelise: only the PR side is
+measured.
+
 ## Exit codes
 
 | Code | Meaning |
@@ -137,6 +181,7 @@ carries `"quick": true` so a consumer can reject the report.
 | `QG_REFRESH_BASELINE` | `0` | `1` equivalent to `--refresh-baseline`. |
 | `QG_FORCE_FULL` | `0` | `1` equivalent to `--force-full`. |
 | `QG_FORMAT` | `text` | Equivalent to `--format`. |
+| `QG_PARALLEL` | `auto` | `1`/`0` equivalent to `--parallel`/`--no-parallel`. `auto` = parallel when >= 4 usable cores. See [Parallel sides](#parallel-sides---parallel----no-parallel). |
 | `QG_QUICK` | `0` | `1` equivalent to `--quick`. Defers coverage + complexity (reported `skipped`). Never in CI. |
 | `QG_RULESET_DIR` | (empty) | Override of the bundled `rules/` (tamper-resistance). Only honored if it comes from the ENVIRONMENT of whoever runs the gate -- NEVER from `.qg.yaml`/a project file. Empty -> uses `<QG>/<lang>/rules/`. |
 
@@ -151,6 +196,8 @@ Fixed structure in 3 blocks:
   baseline:      <path>
   cov margin:    <pp>pp
   logs:          <dir>/
+
+[-- measuring base and PR in parallel (<n> cores; --no-parallel to disable) --]
 
 ── measuring base ──
 [silent; logs in <log-dir>/base-*.log]
@@ -542,6 +589,8 @@ project:
 
 - `--quick` / `QG_QUICK=1` -- defers the heaviest metrics, reports them as
   `skipped`, warns on every run. See [Quick mode](#quick-mode---quick).
+- `--parallel` (default on from 4 cores) -- measures baseline and PR at the same
+  time, same numbers. See [Parallel sides](#parallel-sides---parallel----no-parallel).
 - `QG_BYPASS_REASON` -- passes the whole run, audited. See the Bypass section.
 
 Rules:

@@ -16,6 +16,7 @@ For the canonical specification, see [`contract.md`](contract.md). This document
   cov margin:    1.0pp
   logs:          target/qg-logs/
 
+-- measuring base and PR in parallel (8 cores; --no-parallel to disable) --
 ── measuring base ──
 ── measuring PR ──
 
@@ -32,6 +33,11 @@ coverage     82.3%    82.5%   ✅ improved
 ```
 
 Exit code: 0.
+
+Those three lines are progress on **stderr**, never part of the parsed output.
+The first one appears only on a parallel run (the default from 4 usable cores;
+`--no-parallel` removes it), and because both sides really are running, the
+`measuring base` / `measuring PR` lines may interleave with each other.
 
 ### Verdict: regressed
 

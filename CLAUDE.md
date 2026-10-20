@@ -80,6 +80,21 @@ anything so a future session does not repeat past mistakes.
   the regressed fixture. In Rust, keeping a lint at warn level under
   `-D warnings` requires `--force-warn`: a per-lint `-W` loses to the
   `warnings` group whatever the flag order (#18).
+- **Parallelism is allowed only between the two SIDES, never between metrics.**
+  The baseline (`--baseline-dir`) and the PR (working copy) are disjoint trees:
+  measuring them concurrently (`lib/parallel.sh`, `qg_measure_base_side` /
+  `qg_measure_pr_side` + per-side TSV in every gate) cannot change a number.
+  Metrics within one side share that directory's build cache and the build
+  systems serialise on its lock, so "parallel metrics" buys a lock wait -- do
+  not add it. Three invariants: a side that dies is a **tool-error (exit 2)**
+  with a message naming infrastructure, never a regression; overlapping trees
+  (`--baseline-dir` inside or equal to the working tree) fall back to
+  sequential even when `--parallel` is explicit, because they would share one
+  `.qg-venv`/`target/`/coverage file; and any shared build dir an operator
+  configures must be split per side (Rust `CARGO_TARGET_DIR` -> `qg-base` /
+  `qg-pr`, since two checkouts of one workspace produce the same crate
+  metadata hash). Default on from 4 usable cores, counted from the cgroup
+  quota when there is one (`nproc` in a container reports the HOST's cores).
 - **A metric is only deferrable when deferring it saves work.** `--quick`
   (`QG_QUICK=1`) reports the deferred metrics as `skipped` with `null` numbers
   and excludes them from the verdict; the set is **per-language**

@@ -1,5 +1,55 @@
 # Changelog
 
+## [Unreleased]
+
+Added: the baseline and the PR are now measured **concurrently** (`--parallel` /
+`--no-parallel`, `QG_PARALLEL`). A comparative run measures two independent
+trees -- the archive extracted under `--baseline-dir` and the working copy --
+so running them at the same time is the one parallelism that cannot change a
+number: neither side can see the other's sources, build cache, target dir or
+logs. Wall-clock becomes roughly the slower side instead of the sum. Each side
+now writes its metrics to its own TSV under `--log-dir` (`side-base.tsv`,
+`side-pr.tsv`) through a `qg_measure_base_side` / `qg_measure_pr_side` pair in
+every gate, and the shared driver is `lib/parallel.sh`. Default: on from 4
+usable cores, sequential below that, because two concurrent builds on two cores
+trade a context-switch storm for no wall-clock and risk the OOM the contract
+classifies as a tool-error; the core count honors the cgroup CPU quota, since
+`nproc` inside a container reports the HOST's cores. A side that dies (ICE,
+OOM, killed) is exit 2 with an `::error::` that says it is infrastructure and
+suggests `--no-parallel` -- never a regressed metric. (#18)
+
+Metrics *within* a side are deliberately NOT parallelised: `fmt`, `lint`,
+`build`, `test` and `coverage` of one directory share that directory's build
+cache and the build systems serialise on its lock, so it would buy a lock wait
+while two tools fight for the same cores.
+
+Fixed (found while building the above, and a hazard already present in
+sequential runs): with an operator-set `CARGO_TARGET_DIR`, both Rust trees
+shared one build dir -- and two checkouts of the same workspace produce the
+SAME crate metadata hash, so one side could link the other's artifacts. The
+Rust gate now gives each side its own dir under it (`.../qg-base`,
+`.../qg-pr`); the cargo default (a per-tree `./target`) is already isolated and
+is left alone.
+
+Also: `--baseline-dir` may legitimately point at the working tree itself (or at
+a directory inside it), and then the two "sides" are one directory sharing one
+`.qg-venv`/`target/`/coverage file. Overlapping trees are detected
+(`qg_sides_isolated`, symlinks resolved) and measured sequentially with a
+`::notice::`, even when `--parallel` was passed explicitly.
+
+Docs: `docs/consume.md` gained a section on keeping the toolchain cache warm
+across containerized runs -- a named volume plus the one env var per language
+(cargo registry + target, GOMODCACHE/GOCACHE, maven repo, GRADLE_USER_HOME, npm
+cache, PIP_CACHE_DIR, the SwiftPM cache path), with the two warnings that
+matter: the cache is build input and never measurement input, and one volume
+shared by two concurrent runs is a lock fight.
+
+Tests: new `tests/parallel.bats` -- the sides really overlap in time, numbers
+are identical with `--parallel` and `--no-parallel`, a dead side is exit 2 in
+both modes, overlapping trees fall back to sequential, the cgroup/core
+threshold decides `auto`, every gate wires the same driver exactly once, and a
+cached baseline measures only the PR side.
+
 ## [1.2.0] -- 2026-10-20
 
 Added: `--quick` / `QG_QUICK=1`, a sanctioned fast pre-PR mode. A full

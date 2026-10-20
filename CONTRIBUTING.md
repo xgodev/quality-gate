@@ -26,9 +26,12 @@ It follows a mandatory checklist -- do not skip steps.
 `<lang>/` is the reference implementation. A new language ships with its own
 `<lang>/rules/`, `--detect`, absolute mode, dependency resolution, `_num`
 sanitization, a `QG_QUICK_DEFERRED` declaration (which of its metrics `--quick`
-defers, and why the rest are not deferrable), `docker/<lang>.Dockerfile`,
-`docs/languages/<lang>.md`, and `tests/<lang>-qg.bats` covering tamper
-resistance, generated-dir exclusion, toolchain authority and quick mode.
+defers, and why the rest are not deferrable), a
+`qg_measure_base_side`/`qg_measure_pr_side` pair driven by
+`qg_run_sides` (one TSV per side, so the two can be measured concurrently),
+`docker/<lang>.Dockerfile`, `docs/languages/<lang>.md`, and
+`tests/<lang>-qg.bats` covering tamper resistance, generated-dir exclusion,
+toolchain authority and quick mode.
 
 ## Change the contract
 

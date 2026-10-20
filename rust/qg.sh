@@ -14,6 +14,8 @@ QG_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$QG_SCRIPT_DIR/../lib/changed-files.sh"
 # shellcheck source=../lib/quick.sh
 source "$QG_SCRIPT_DIR/../lib/quick.sh"
+# shellcheck source=../lib/parallel.sh
+source "$QG_SCRIPT_DIR/../lib/parallel.sh"
 # `complexity` rides the same clippy pass as `lint`: it costs nothing extra,
 # so deferring it would only discard a number already measured.
 QG_QUICK_DEFERRED="coverage"
@@ -43,12 +45,15 @@ Options:
   --quick               Fast pre-PR mode: defers coverage (reported as skipped,
                         never blocking); complexity rides the lint pass, so it
                         is measured anyway. Never use it in CI.
+  --parallel            Measure baseline and PR concurrently (default: on when the
+                        machine has >= 4 cores). --no-parallel forces sequential.
+  --no-parallel         Never measure the two sides concurrently.
   --format text|json    Output format. Default: text.
   -h, --help            This message.
 
 Equivalent environment variables: QG_BASE_REF, QG_BASELINE_DIR, QG_COV_MARGIN,
 QG_LOG_DIR, QG_REFRESH_BASELINE, QG_FORCE_FULL, QG_FORMAT, QG_QUICK,
-QG_BYPASS_REASON.
+QG_PARALLEL, QG_BYPASS_REASON.
 
 More details: docs/contract.md
 EOF
@@ -96,6 +101,14 @@ while [ $# -gt 0 ]; do
       ;;
     --quick)
       QG_QUICK=1
+      shift
+      ;;
+    --parallel)
+      QG_PARALLEL=1
+      shift
+      ;;
+    --no-parallel)
+      QG_PARALLEL=0
       shift
       ;;
     --format)
@@ -588,17 +601,37 @@ if ! qg_resolve_deps "." "$QG_LOG_DIR_ARG/pr-deps.log"; then
   echo "::error::failed to resolve rust dependencies (PR) -- see $QG_LOG_DIR_ARG/pr-deps.log" >&2
   exit 2
 fi
-if [ -n "$QG_BASE_METRICS_CACHE" ] && [ -s "$QG_BASE_METRICS_CACHE" ]; then
-  echo "── base metrics: cached ($QG_BASE_METRICS_CACHE) ──" >&2
-  IFS=$'\t' read -r base_fmt base_lint base_build base_test base_complex base_cov < "$QG_BASE_METRICS_CACHE"
-else
+# One side = one tree: the baseline archive under --baseline-dir, or the working
+# copy. Each side writes its metrics to its own TSV and shares no variable, log
+# or build cache with the other, which is what makes measuring the two
+# concurrently safe -- see lib/parallel.sh (#18).
+QG_BASE_TSV="$QG_LOG_DIR_ARG/side-base.tsv"
+QG_PR_TSV="$QG_LOG_DIR_ARG/side-pr.tsv"
+
+# Captured ONCE, before either side touches it. An operator-set
+# CARGO_TARGET_DIR points both trees at one build dir, and that is not just a
+# cargo lock both sides would queue on: two checkouts of the same workspace
+# produce the SAME crate metadata hash (cargo hashes the path relative to the
+# workspace root), so each side would link the other side's artifacts. Each
+# side gets its own dir under it. The cargo default -- a per-tree ./target --
+# is already isolated and left alone.
+QG_CARGO_TARGET_DIR_ORIG="${CARGO_TARGET_DIR:-}"
+qg_isolate_cargo_target() {
+  [ -n "$QG_CARGO_TARGET_DIR_ORIG" ] || return 0
+  export CARGO_TARGET_DIR="${QG_CARGO_TARGET_DIR_ORIG%/}/qg-$1"
+}
+
+qg_measure_base_side() {
+  local TSV="$QG_BASE_TSV"
+  qg_isolate_cargo_target base
   echo "── measuring base ($QG_SCOPE_DESC) ──" >&2
+  local fmt lint build tests complex cov
   # The baseline predates the PR: a package the PR ADDS does not exist there and
   # `cargo -p` on it is a hard error. Measure the intersection; an added package
   # legitimately reads base=0 because it did not exist.
-  _pr_scope_pkgs="$QG_SCOPE_PKGS"
-  _pr_scope_seed="$QG_SCOPE_SEED_PKGS"
-  _base_all_new=0
+  local _pr_scope_pkgs="$QG_SCOPE_PKGS"
+  local _pr_scope_seed="$QG_SCOPE_SEED_PKGS"
+  local _base_all_new=0 _base_scope
   if [ "$QG_SCOPE_LIST" != "__FULL__" ]; then
     _base_scope=$(qg_rust_intersect_scope "$QG_BASELINE_DIR_ARG" "$QG_SCOPE_LIST")
     if [ -z "$_base_scope" ]; then
@@ -608,49 +641,73 @@ else
       QG_SCOPE_SEED_PKGS=$(qg_rust_pkg_flags "$(qg_rust_intersect_scope "$QG_BASELINE_DIR_ARG" "$_seeds")")
     fi
   fi
-
   if [ "$_base_all_new" = "1" ]; then
     # Every affected package is new in this PR. There is nothing to measure on
     # the base, and measuring the full workspace instead would compare unrelated
     # trees. Zero is the honest baseline: the code did not exist.
     echo "::warning::all affected packages are new in this PR -- base metrics are 0 (nothing to compare against)" >&2
-    base_fmt=0; base_lint=0; base_build=0; base_complex=0; base_test=0; base_cov=0
-  else
-    base_fmt=$(count_fmt_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-fmt.log")
-    set -- $(measure_lint_and_complexity "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-lint.log" "$QG_LOG_DIR_ARG/base-complex.log")
-    base_lint="$1"; base_complex="$2"
-    base_build=$(count_build_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-build.log")
-    if qg_quick_defers coverage; then
-      # No instrumented build and no second test run: plain test count.
-      base_test=$(count_test_failures "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-test.log")
-      base_cov=0
-    else
-      set -- $(measure_test_and_coverage "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-test.log" "$QG_LOG_DIR_ARG/base-cov.json")
-      base_test="$1"; base_cov="$2"
-    fi
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' 0 0 0 0 0 0 > "$TSV"
+    QG_SCOPE_PKGS="$_pr_scope_pkgs"
+    QG_SCOPE_SEED_PKGS="$_pr_scope_seed"
+    return 0
   fi
+  fmt=$(count_fmt_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-fmt.log")
+  # One clippy pass yields BOTH lint and complexity: a second one would be a
+  # full rebuild of the scope (CLIPPY_ARGS is part of cargo's fingerprint).
+  set -- $(measure_lint_and_complexity "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-lint.log" "$QG_LOG_DIR_ARG/base-complex.log")
+  lint="$1"; complex="$2"
+  build=$(count_build_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-build.log")
+  if qg_quick_defers coverage; then
+    # No instrumented build and no second test run: plain test count.
+    tests=$(count_test_failures "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-test.log")
+    cov=0
+  else
+    set -- $(measure_test_and_coverage "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-test.log" "$QG_LOG_DIR_ARG/base-cov.json")
+    tests="$1"; cov="$2"
+  fi
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$fmt" "$lint" "$build" "$tests" "$complex" "$cov" > "$TSV"
+  # Sequential mode runs this in the gate's own shell: hand the PR scope back.
   QG_SCOPE_PKGS="$_pr_scope_pkgs"
   QG_SCOPE_SEED_PKGS="$_pr_scope_seed"
+}
+
+qg_measure_pr_side() {
+  local TSV="$QG_PR_TSV"
+  qg_isolate_cargo_target pr
+  echo "── measuring PR ($QG_SCOPE_DESC) ──" >&2
+  local fmt lint build tests complex cov
+  fmt=$(count_fmt_errors "." "$QG_LOG_DIR_ARG/pr-fmt.log")
+  # One clippy pass yields BOTH lint and complexity: a second one would be a
+  # full rebuild of the scope (CLIPPY_ARGS is part of cargo's fingerprint).
+  set -- $(measure_lint_and_complexity "." "$QG_LOG_DIR_ARG/pr-lint.log" "$QG_LOG_DIR_ARG/pr-complex.log")
+  lint="$1"; complex="$2"
+  build=$(count_build_errors "." "$QG_LOG_DIR_ARG/pr-build.log")
+  if qg_quick_defers coverage; then
+    # No instrumented build and no second test run: plain test count.
+    tests=$(count_test_failures "." "$QG_LOG_DIR_ARG/pr-test.log")
+    cov=0
+  else
+    set -- $(measure_test_and_coverage "." "$QG_LOG_DIR_ARG/pr-test.log" "$QG_LOG_DIR_ARG/pr-cov.json")
+    tests="$1"; cov="$2"
+  fi
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$fmt" "$lint" "$build" "$tests" "$complex" "$cov" > "$TSV"
+}
+
+if [ -n "$QG_BASE_METRICS_CACHE" ] && [ -s "$QG_BASE_METRICS_CACHE" ]; then
+  echo "── base metrics: cached ($QG_BASE_METRICS_CACHE) ──" >&2
+  cp "$QG_BASE_METRICS_CACHE" "$QG_BASE_TSV"
+  qg_measure_pr_side || exit 2
+else
+  qg_run_sides qg_measure_base_side qg_measure_pr_side "$QG_BASELINE_DIR_ARG" "." || exit 2
   # A quick run did not measure every metric: caching its numbers would hand a
   # later full run a fabricated baseline.
   if [ -n "$QG_BASE_METRICS_CACHE" ] && [ "${QG_QUICK:-0}" != "1" ]; then
-    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$base_fmt" "$base_lint" "$base_build" "$base_test" "$base_complex" "$base_cov" > "$QG_BASE_METRICS_CACHE"
+    cp "$QG_BASE_TSV" "$QG_BASE_METRICS_CACHE"
   fi
 fi
 
-echo "── measuring PR ($QG_SCOPE_DESC) ──" >&2
-pr_fmt=$(count_fmt_errors "." "$QG_LOG_DIR_ARG/pr-fmt.log")
-set -- $(measure_lint_and_complexity "." "$QG_LOG_DIR_ARG/pr-lint.log" "$QG_LOG_DIR_ARG/pr-complex.log")
-pr_lint="$1"; pr_complex="$2"
-pr_build=$(count_build_errors "." "$QG_LOG_DIR_ARG/pr-build.log")
-if qg_quick_defers coverage; then
-  # No instrumented build and no second test run: plain test count.
-  pr_test=$(count_test_failures "." "$QG_LOG_DIR_ARG/pr-test.log")
-  pr_cov=0
-else
-  set -- $(measure_test_and_coverage "." "$QG_LOG_DIR_ARG/pr-test.log" "$QG_LOG_DIR_ARG/pr-cov.json")
-  pr_test="$1"; pr_cov="$2"
-fi
+IFS=$'\t' read -r base_fmt base_lint base_build base_test base_complex base_cov < "$QG_BASE_TSV"
+IFS=$'\t' read -r pr_fmt pr_lint pr_build pr_test pr_complex pr_cov < "$QG_PR_TSV"
 
 branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "<detached>")
 started_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
