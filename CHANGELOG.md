@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.2.0] -- 2026-10-20
 
 Added: `--quick` / `QG_QUICK=1`, a sanctioned fast pre-PR mode. A full
 comparative run on a compiled language costs enough wall-clock that developers
