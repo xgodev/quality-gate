@@ -16,6 +16,12 @@ invocation (PATH stub) and numeric parity with the two old passes on both the
 baseline and the regressed fixture, which are kept as oracles. Same shape as the
 existing `test`+`coverage` fusion. (#18)
 
+Fix (tests): `rust/test-fixtures/regressed` was declared with the same package
+name as the baseline fixture, so with a shared `CARGO_TARGET_DIR` the two
+fixtures clobbered each other's artifacts and the `count_lint`/`count_test`/
+`count_complexity` tests failed depending on which compiled last. Renamed to
+`qg-regressed-fixture`.
+
 ## [1.1.1]
 
 Fix (go): `coverage` counted generated code. `go test -coverprofile` counts

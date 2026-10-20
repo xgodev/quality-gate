@@ -1,5 +1,5 @@
 [package]
-name = "qg-baseline-fixture"
+name = "qg-regressed-fixture"
 version = "0.1.0"
 edition = "2021"
 
