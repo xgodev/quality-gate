@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/xgodev/quality-gate/contract-v1.schema.json",
-  "title": "Quality Gate Output v1 (cobre schema_version 1.0 e 1.1; single ou array de monorepo)",
+  "title": "Quality Gate Output v1 (covers schema_version 1.0, 1.1 and 1.2; single result or monorepo envelope)",
   "oneOf": [
     { "$ref": "#/$defs/singleResult" },
     { "$ref": "#/$defs/monorepoResult" }
@@ -12,7 +12,8 @@
       "additionalProperties": false,
       "required": ["schema_version", "aggregate_verdict", "results"],
       "properties": {
-        "schema_version": { "enum": ["1.0", "1.1"] },
+        "schema_version": { "enum": ["1.0", "1.1", "1.2"] },
+        "quick": { "const": true },
         "aggregate_verdict": { "enum": ["passed", "regressed", "failed", "bypassed"] },
         "results": {
           "type": "array",
@@ -26,8 +27,10 @@
       "additionalProperties": false,
       "required": ["schema_version", "language", "branch", "base_ref", "started_at", "duration_seconds", "verdict", "bypass_reason", "metrics"],
       "properties": {
-        "schema_version": { "enum": ["1.0", "1.1"] },
+        "schema_version": { "enum": ["1.0", "1.1", "1.2"] },
         "mode": { "enum": ["comparative", "absolute"] },
+        "comment_quick": "Present and true only on a --quick run (schema 1.2): the heaviest metrics were deferred, reported as verdict skipped with null numbers, and excluded from the verdict.",
+        "quick": { "const": true },
         "language": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },
         "branch": { "type": "string" },
         "base_ref": { "type": ["string", "null"] },
@@ -42,13 +45,13 @@
             "additionalProperties": false,
             "properties": {
               "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
-              "base": { "type": "number", "minimum": 0 },
-              "pr": { "type": "number", "minimum": 0 },
-              "delta": { "type": "number" },
-              "margin": { "type": "number", "minimum": 0 },
-              "value": { "type": "number", "minimum": 0 },
+              "base": { "type": ["number", "null"], "minimum": 0 },
+              "pr": { "type": ["number", "null"], "minimum": 0 },
+              "delta": { "type": ["number", "null"] },
+              "margin": { "type": ["number", "null"], "minimum": 0 },
+              "value": { "type": ["number", "null"], "minimum": 0 },
               "threshold": { "type": ["number", "null"], "minimum": 0 },
-              "verdict": { "enum": ["same", "improved", "regressed", "ok", "violated", "reported"] }
+              "verdict": { "enum": ["same", "improved", "regressed", "ok", "violated", "reported", "skipped"] }
             }
           }
         }
@@ -69,7 +72,7 @@
                 "items": {
                   "required": ["name", "base", "pr", "delta", "verdict"],
                   "properties": {
-                    "verdict": { "enum": ["same", "improved", "regressed"] }
+                    "verdict": { "enum": ["same", "improved", "regressed", "skipped"] }
                   }
                 }
               }
@@ -90,11 +93,56 @@
                 "items": {
                   "required": ["name", "value", "threshold", "verdict"],
                   "properties": {
-                    "verdict": { "enum": ["ok", "violated", "reported"] }
+                    "verdict": { "enum": ["ok", "violated", "reported", "skipped"] }
                   }
                 }
               }
             }
+          }
+        },
+        {
+          "comment": "A metric is skipped only on a quick run, and then it carries NO numbers -- it was never measured.",
+          "properties": {
+            "metrics": {
+              "items": {
+                "if": { "properties": { "verdict": { "const": "skipped" } }, "required": ["verdict"] },
+                "then": {
+                  "properties": {
+                    "base": { "type": "null" },
+                    "pr": { "type": "null" },
+                    "delta": { "type": "null" },
+                    "margin": { "type": "null" },
+                    "value": { "type": "null" },
+                    "threshold": { "type": "null" }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "base": { "type": "number" },
+                    "pr": { "type": "number" },
+                    "delta": { "type": "number" },
+                    "margin": { "type": "number" },
+                    "value": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "comment": "A skipped metric requires schema 1.2 + quick: true -- a non-quick document may not report one.",
+          "if": {
+            "properties": {
+              "metrics": { "contains": { "properties": { "verdict": { "const": "skipped" } }, "required": ["verdict"] } }
+            },
+            "required": ["metrics"]
+          },
+          "then": {
+            "properties": {
+              "schema_version": { "const": "1.2" },
+              "quick": { "const": true }
+            },
+            "required": ["quick"]
           }
         },
         {

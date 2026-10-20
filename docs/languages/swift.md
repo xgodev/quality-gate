@@ -148,6 +148,14 @@ The base ref does not exist locally. Fix:
 git fetch origin
 ```
 
+## Quick mode (`--quick`)
+
+Defers `coverage` only. Quick mode also drops `--enable-code-coverage` from the test run, so the instrumented build never happens. `complexity` is omitted by this gate entirely (see below).
+
+A deferred metric is reported as `skipped` with no numbers and cannot fail the
+run; the JSON carries `"quick": true` and `schema_version: "1.2"`. Never in CI
+-- see [`../contract.md`](../contract.md#quick-mode---quick).
+
 ## Omitted metrics
 
 - `complexity`: Swift has no stable canonical tool (see the section above). Documented, literally omitted from the JSON and the text table -- NOT emitted as a 0/null sentinel.

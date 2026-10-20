@@ -68,6 +68,14 @@ sudo apt install -y nodejs npm jq
 `fmt`/`lint` follow the contract's standard regression rule: the PR fails if
 `pr > base`.
 
+## Quick mode (`--quick`)
+
+Defers nothing. This gate measures only `fmt` and `lint`, neither of which is expensive. `--quick` is accepted (so the same command works across languages) and the run is COMPLETE: no metric is reported as skipped.
+
+A deferred metric is reported as `skipped` with no numbers and cannot fail the
+run; the JSON carries `"quick": true` and `schema_version: "1.2"`. Never in CI
+-- see [`../contract.md`](../contract.md#quick-mode---quick).
+
 ## Omitted metrics (and why)
 
 | Metric | Why omitted |

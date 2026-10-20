@@ -201,6 +201,26 @@ EOF
   rm -rf "$logdir"
 }
 
+@test "web/qg.sh --quick: accepted, but this gate defers nothing (#18)" {
+  local logdir
+  logdir=$(qg_tmp_dir)
+  cd "$(qg_fixture_path web baseline)"
+  run --separate-stderr "$(qg_script_path web)" \
+    --base origin/main \
+    --baseline-dir "$(qg_fixture_path web baseline)" \
+    --log-dir "$logdir" \
+    --format json \
+    --force-full \
+    --quick
+  [ "$status" -eq 0 ]
+  # The web gate measures neither coverage nor complexity, so a quick run is a
+  # COMPLETE run: no metric may come back skipped.
+  echo "$output" | jq -e '[.metrics[] | select(.verdict == "skipped")] == []'
+  printf '%s' "$stderr" | grep -q 'measures no deferrable metric'
+  cd "$QG_REPO_ROOT"
+  rm -rf "$logdir"
+}
+
 @test "web Bug build/: fmt/lint ignore generated dirs (measures source, not artifact)" {
   source "$QG_REPO_ROOT/web/lib/measure.sh"
   local tmp logdir

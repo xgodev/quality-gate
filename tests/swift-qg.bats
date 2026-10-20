@@ -16,6 +16,30 @@ setup() {
   [[ "$output" == *"--help"* ]]
 }
 
+@test "--quick: swift defers coverage and drops the instrumented build (#18)" {
+  run bash -c "grep -E '^QG_QUICK_DEFERRED=' '$(qg_script_path swift)'"
+  [ "$status" -eq 0 ]
+  [ "$output" = 'QG_QUICK_DEFERRED="coverage"' ]
+  # count_test_failures keeps --enable-code-coverage only when coverage will be
+  # read: in quick mode that instrumented rebuild is pure cost.
+  source "$QG_REPO_ROOT/swift/lib/measure.sh"
+  local stubdir logdir
+  stubdir=$(qg_tmp_dir); logdir=$(qg_tmp_dir)
+  cat > "$stubdir/swift" <<'STUB'
+#!/usr/bin/env bash
+echo "$@" >> "$QG_STUB_CALLS"
+exit 0
+STUB
+  chmod +x "$stubdir/swift"
+  QG_QUICK=1 QG_STUB_CALLS="$logdir/calls.txt" PATH="$stubdir:$PATH" \
+    count_test_failures "$(qg_fixture_path swift baseline)" "$logdir/test.log" >/dev/null
+  ! grep -q 'enable-code-coverage' "$logdir/calls.txt"
+  QG_STUB_CALLS="$logdir/calls2.txt" PATH="$stubdir:$PATH" \
+    count_test_failures "$(qg_fixture_path swift baseline)" "$logdir/test2.log" >/dev/null
+  grep -q 'enable-code-coverage' "$logdir/calls2.txt"
+  rm -rf "$stubdir" "$logdir"
+}
+
 @test "swift/qg.sh -h equivalent to --help" {
   run "$(qg_script_path swift)" -h
   [ "$status" -eq 0 ]

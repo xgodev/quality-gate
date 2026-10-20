@@ -10,7 +10,7 @@ For the canonical specification, see [`contract.md`](contract.md). This document
 
 ```
 ═══ Quality Gate -- rust ═══
-  branch:        feature/INT-1234
+  branch:        feature/new-endpoint
   base ref:      origin/main
   baseline:      /tmp/qg-baseline-rust/<project>-<base-sha>
   cov margin:    1.0pp
@@ -56,14 +56,53 @@ Exit code: 1.
 
 ```
 ═══ Quality Gate -- rust ═══
-  branch:        hotfix/INT-9999
+  branch:        hotfix/prod-down
   base ref:      origin/main
 
-::warning::QG bypass active -- reason: INT-9999 hotfix prod down, corrupted baseline
+::warning::QG bypass active -- reason: hotfix prod down, corrupted baseline
 ::warning::This run did not validate metrics. Audit log: target/qg-logs/bypass.log
 ```
 
 Exit code: 0. Metrics not measured.
+
+### Quick mode (`--quick`)
+
+Same run with the heaviest metrics deferred (the set is per-language -- see
+[`contract.md`](contract.md#quick-mode---quick); the example below is a gate
+that defers both). A deferred metric prints `-` in both number columns -- there
+is no number because nothing was measured.
+
+```
+═══ Quality Gate -- rust ═══
+  branch:        feature/new-endpoint
+  base ref:      origin/main
+  baseline:      /tmp/qg-baseline-rust/<project>-<base-sha>
+  cov margin:    1.0pp
+  logs:          target/qg-logs/
+
+── measuring base ──
+── measuring PR ──
+
+metric        base       pr     verdict
+─────────────────────────────────────────
+fmt              0       0    ✅ same
+lint             0       0    ✅ same
+build            0       0    ✅ same
+test fails       0       0    ✅ same
+complexity       -       -    ⏭ skipped (quick)
+coverage         -       -    ⏭ skipped (quick)
+
+::notice::PR did not regress any metric.
+```
+
+Exit code: 0. On stderr, before the table:
+
+```
+::warning::quick mode: complexity and coverage NOT measured (deferred) -- a fast pre-PR check, never a substitute for the full gate in CI
+```
+
+A skipped metric can never regress, so a quick run's `passed` means "nothing
+regressed **among what it measured**".
 
 ### Verdict: fast-path
 
@@ -91,7 +130,7 @@ Exit code: 0.
 {
   "schema_version": "1.0",
   "language": "rust",
-  "branch": "feature/INT-1234",
+  "branch": "feature/new-endpoint",
   "base_ref": "origin/main",
   "started_at": "2026-05-14T10:30:12Z",
   "duration_seconds": 1142,
@@ -120,12 +159,12 @@ Identical to "passed", but global `verdict: "regressed"` and metrics with `verdi
 {
   "schema_version": "1.0",
   "language": "rust",
-  "branch": "hotfix/INT-9999",
+  "branch": "hotfix/prod-down",
   "base_ref": "origin/main",
   "started_at": "2026-05-14T10:30:12Z",
   "duration_seconds": 0,
   "verdict": "bypassed",
-  "bypass_reason": "INT-9999 hotfix prod down, corrupted baseline",
+  "bypass_reason": "hotfix prod down, corrupted baseline",
   "metrics": []
 }
 ```
@@ -149,6 +188,35 @@ Exit code: 0. `metrics` empty (the gate did not measure).
 ```
 
 Exit code: 0. `metrics` empty (fast-path).
+
+### Quick mode (`--quick`)
+
+```json
+{
+  "schema_version": "1.2",
+  "mode": "comparative",
+  "quick": true,
+  "language": "rust",
+  "branch": "feature/new-endpoint",
+  "base_ref": "origin/main",
+  "started_at": "2026-10-20T10:00:00Z",
+  "duration_seconds": 95,
+  "verdict": "passed",
+  "bypass_reason": null,
+  "metrics": [
+    { "name": "fmt", "base": 0, "pr": 0, "delta": 0, "verdict": "same" },
+    { "name": "lint", "base": 3, "pr": 3, "delta": 0, "verdict": "same" },
+    { "name": "build", "base": 0, "pr": 0, "delta": 0, "verdict": "same" },
+    { "name": "test", "base": 0, "pr": 0, "delta": 0, "verdict": "same" },
+    { "name": "complexity", "base": null, "pr": null, "delta": null, "verdict": "skipped" },
+    { "name": "coverage", "base": null, "pr": null, "delta": null, "margin": null, "verdict": "skipped" }
+  ]
+}
+```
+
+Exit code: 0. `schema_version` is `1.2` and `quick` is `true` -- a consumer that
+requires a complete run rejects the report on that field alone. In absolute mode
+a deferred metric is `{ "name": "coverage", "value": null, "threshold": null, "verdict": "skipped" }`.
 
 ## Absolute mode (`--base` absent)
 
@@ -267,7 +335,7 @@ emits an enveloped array:
       "schema_version": "1.1",
       "mode": "comparative",
       "language": "go",
-      "branch": "feature/INT-1234",
+      "branch": "feature/new-endpoint",
       "base_ref": "origin/main",
       "started_at": "2026-05-15T10:00:00Z",
       "duration_seconds": 88,
@@ -281,7 +349,7 @@ emits an enveloped array:
       "schema_version": "1.1",
       "mode": "comparative",
       "language": "nodejs",
-      "branch": "feature/INT-1234",
+      "branch": "feature/new-endpoint",
       "base_ref": "origin/main",
       "started_at": "2026-05-15T10:01:28Z",
       "duration_seconds": 142,

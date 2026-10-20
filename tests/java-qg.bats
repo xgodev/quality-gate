@@ -16,6 +16,15 @@ setup() {
   [[ "$output" == *"--help"* ]]
 }
 
+@test "--quick: java defers complexity only -- coverage rides the test run (#18)" {
+  # jacoco is bound to the very `mvn test` the gate runs for `test`, so
+  # deferring coverage would cost the number and save no work.
+  run bash -c "grep -E '^QG_QUICK_DEFERRED=' '$(qg_script_path java)'"
+  [ "$status" -eq 0 ]
+  [ "$output" = 'QG_QUICK_DEFERRED="complexity"' ]
+  ! grep -q 'qg_quick_defers coverage' "$(qg_script_path java)"
+}
+
 @test "java/qg.sh -h equivalent to --help" {
   run "$(qg_script_path java)" -h
   [ "$status" -eq 0 ]

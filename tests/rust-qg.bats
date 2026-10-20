@@ -538,6 +538,87 @@ STUB
   rm -rf "$logdir"
 }
 
+@test "--quick: coverage is reported as skipped, not measured (#18)" {
+  local logdir
+  logdir=$(qg_tmp_dir)
+  cd "$(qg_fixture_path rust baseline)"
+  run --separate-stderr bash "$(qg_script_path rust)" \
+    --base origin/main \
+    --baseline-dir "$(qg_fixture_path rust baseline)" \
+    --log-dir "$logdir" \
+    --format json \
+    --force-full \
+    --quick
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.quick == true'
+  echo "$output" | jq -e '.schema_version == "1.2"'
+  # Rust defers coverage ONLY: complexity rides the lint clippy pass, so
+  # deferring it would discard a number the gate measured anyway.
+  echo "$output" | jq -e '[.metrics[] | select(.verdict == "skipped") | .name] == ["coverage"]'
+  echo "$output" | jq -e '.metrics[] | select(.name == "complexity") | .verdict != "skipped" and (.pr | type) == "number"'
+  # A skipped metric carries NO numbers -- it was never measured.
+  echo "$output" | jq -e '.metrics[] | select(.name == "coverage") | .base == null and .pr == null and .delta == null and .margin == null'
+  cd "$QG_REPO_ROOT"
+  rm -rf "$logdir"
+}
+
+@test "--quick: a regression in a measured metric still fails (#18)" {
+  local logdir
+  logdir=$(qg_tmp_dir)
+  cd "$(qg_fixture_path rust regressed)"
+  run --separate-stderr bash "$(qg_script_path rust)" \
+    --base origin/main \
+    --baseline-dir "$(qg_fixture_path rust baseline)" \
+    --log-dir "$logdir" \
+    --format json \
+    --force-full \
+    --quick
+  [ "$status" -eq 1 ]
+  echo "$output" | jq -e '.verdict == "regressed"'
+  echo "$output" | jq -e '[.metrics[] | select(.verdict == "regressed") | .name] | index("lint") != null'
+  cd "$QG_REPO_ROOT"
+  rm -rf "$logdir"
+}
+
+@test "--quick: no instrumented coverage run (#18)" {
+  source "$QG_REPO_ROOT/lib/quick.sh"
+  source "$QG_REPO_ROOT/rust/lib/measure.sh"
+  local logdir stubdir
+  logdir=$(qg_tmp_dir)
+  stubdir=$(qg_tmp_dir)
+  cat > "$stubdir/cargo" <<'STUB'
+#!/usr/bin/env bash
+echo "$@" >> "$QG_STUB_CALLS"
+exit 0
+STUB
+  chmod +x "$stubdir/cargo"
+  QG_STUB_CALLS="$logdir/calls.txt" PATH="$stubdir:$PATH" \
+    count_test_failures "$(qg_fixture_path rust baseline)" "$logdir/test.log" >/dev/null
+  # The whole point of deferring coverage: no `cargo llvm-cov`, which is a
+  # second instrumented build plus a second test run.
+  ! grep -q 'llvm-cov' "$logdir/calls.txt"
+  grep -q 'test' "$logdir/calls.txt"
+  rm -rf "$logdir" "$stubdir"
+}
+
+@test "--quick never writes the base-metrics cache (it would fake a baseline) (#18)" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  repo=$(qg_tmp_dir)
+  cp -R "$(qg_fixture_path rust baseline)/." "$repo/"
+  cd "$repo"
+  git -c init.defaultBranch=main init -q . && git config user.email t@t && git config user.name t
+  git add -A && git commit -qm base
+  git checkout -qb feature
+  echo '// touch' >> src/lib.rs && git add -A && git commit -qm change
+  cache_root="$repo/.qg-cache"
+  QG_BASELINE_CACHE_DIR="$cache_root" run bash "$QG_REPO_ROOT/rust/qg.sh" --base main --force-full --quick --log-dir "$repo/logs1"
+  # The second run is a FULL one: it must measure the base itself, not inherit
+  # the quick run's zeros for complexity/coverage.
+  QG_BASELINE_CACHE_DIR="$cache_root" run bash "$QG_REPO_ROOT/rust/qg.sh" --base main --force-full --log-dir "$repo/logs2"
+  ! printf '%s' "$output" | grep -q 'base metrics: cached'
+  cd / && rm -rf "$repo"
+}
+
 @test "e2e: running regressed against baseline -> exit 1, JSON with verdict regressed" {
   local logdir
   logdir=$(qg_tmp_dir)

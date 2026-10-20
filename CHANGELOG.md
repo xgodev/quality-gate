@@ -2,6 +2,56 @@
 
 ## [Unreleased]
 
+Added: `--quick` / `QG_QUICK=1`, a sanctioned fast pre-PR mode. A full
+comparative run on a compiled language costs enough wall-clock that developers
+reach for `QG_BYPASS_REASON` instead -- a bypass that carries no information at
+all. Quick mode keeps the cheap blocking metrics (fmt, lint, build, test) and
+defers the expensive ones: they are NOT measured, NOT compared, reported with
+verdict `skipped` and `null` numbers, and excluded from the exit code. The
+document declares `schema_version: "1.2"` plus a top-level `"quick": true` so a
+consumer can reject a partial report, and every quick run warns on stderr that
+it is never a substitute for the full gate in CI. A quick run never writes the
+base-metrics cache, which later runs read -- caching its numbers would hand a
+full run a fabricated baseline. Non-quick output is byte-identical to 1.1.1.
+
+The deferred set is per-language (`QG_QUICK_DEFERRED` in each `<lang>/qg.sh`),
+because a metric is only deferrable when not measuring it actually saves work: a
+metric that comes out of an invocation the gate performs anyway is a byproduct,
+and deferring it would discard a number already in hand. go/python/nodejs/kotlin
+defer `complexity` + `coverage`; rust defers `coverage` only (`complexity` rides
+the `lint` clippy pass); java defers `complexity` only (`coverage` rides the
+jacoco-bound `mvn test`); swift defers `coverage` and additionally drops
+`--enable-code-coverage` from its test run, so the instrumented build never
+happens; `web` defers nothing and says so. (#18)
+
+Docs: `skip_metrics` in `.qg.yaml` is now documented for what it is --
+**accepted, shape-validated and then ignored by every gate**. It was specified
+with behavior no gate implements (expiry warnings, dropping a metric), and a
+metric a project file can switch off is a tamper surface by the same law that
+keeps project lint configs out. The governed ways to measure less belong to
+whoever runs the gate: `--quick` and `QG_BYPASS_REASON`.
+
+Tests: removed `tests/hook-pr.bats` and the `qg_hook_path`/`qg_make_stub_plugin`
+helpers. The PR hook lives in the `xgodev` plugin, not here; the suite resolved
+its path through `QG_REPO_ROOT/../..` (the pre-extraction `tools/quality-gate/`
+layout) and all 20 tests had been failing with exit 127 on a path outside the
+repo. `tests/README.md` also described a `.github/workflows/tests.yml` that does
+not exist and `bats tools/quality-gate/tests/` paths that do not resolve.
+
+Docs: `CONTRIBUTING.md` pointed at `skills/add-quality-gate/` for the
+new-language checklist and listed it in the repo structure -- that skill ships
+with the plugin, not with this repo. The structure listing also omitted `lib/`,
+`hygiene/`, `tests/`, `gate.yml`, `CHANGELOG.md` and `CLAUDE.md`.
+
+Docs: example branches and bypass reasons used an internal ticket prefix
+(`INT-1234`, `INT-9999`); replaced with generic names, and the one Portuguese
+comment left in `.gitignore` is now English.
+
+Docs: `docs/consume.md` still told the reader to clone `xgodev/claude-plugin`
+and run `~/.claude-plugin/tools/quality-gate/<lang>/qg.sh`, a layout that stopped
+existing when the gate was extracted into this repo and shipped as images.
+Rewritten around `docker run`, with the quick-mode options and smoke test.
+
 Performance (rust): `lint` and `complexity` now come from ONE `cargo clippy`
 invocation per side instead of two. The two passes differed only in lint flags,
 and clippy receives those through the `CLIPPY_ARGS` environment variable, which

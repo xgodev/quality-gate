@@ -1,6 +1,6 @@
 # Quality Gate Contract (v1)
 
-Contract version: **1.x** (`QG_CONTRACT_VERSION=1`). JSON `schema_version`: `1.1`.
+Contract version: **1.x** (`QG_CONTRACT_VERSION=1`). JSON `schema_version`: `1.1` (`1.2` on a `--quick` run -- see [Quick mode](#quick-mode---quick)).
 
 This document defines what **every** `<lang>/qg.sh` must comply with. Changes here require updating ALL existing scripts.
 
@@ -22,6 +22,9 @@ Options:
   --log-dir <dir>       Where to write per-step logs. Default: target/qg-logs
   --refresh-baseline    Re-extract baseline even if a cache exists.
   --force-full          Skip fast-path; measure everything even if nothing changed.
+  --quick               Fast pre-PR mode: DEFERS the heaviest metrics (coverage,
+                        complexity). They are reported as `skipped` and cannot
+                        fail the run. Never for CI.
   --format text|json    Output format on stdout. Default: text.
   -h, --help            Show help.
 ```
@@ -63,6 +66,53 @@ If `--base` AND `QG_BASE_REF` are both absent -> **absolute mode** (not an error
 
 `absolute_thresholds` is ignored in comparative mode (there the base/PR comparison + `cov_margin` is what rules).
 
+## Quick mode (`--quick`)
+
+`--quick` (or `QG_QUICK=1`) is the **sanctioned fast pre-PR path**. The gate is
+meant to be run before opening a PR, but a full comparative run on a compiled
+language costs enough wall-clock that developers reach for `QG_BYPASS_REASON`
+instead -- a bypass that carries no information. Quick mode keeps the cheap
+blocking metrics and defers the two heaviest ones.
+
+**Which metrics a gate defers is per-language**, declared as
+`QG_QUICK_DEFERRED` in `<lang>/qg.sh`. The rule: a metric is deferrable only
+when not measuring it actually saves work. A metric that comes out of an
+invocation the gate performs anyway is a **byproduct** -- deferring it would
+discard a number already in hand and save nothing, so it stays out of the set.
+
+| Gate | Defers | Why not the rest |
+|---|---|---|
+| go, python, nodejs, kotlin | `complexity`, `coverage` | -- |
+| rust | `coverage` | `complexity` rides the `lint` clippy pass |
+| java | `complexity` | `coverage` rides the jacoco-bound `mvn test` |
+| swift | `coverage` | `complexity` is omitted by this gate |
+| web | nothing | measures only `fmt`/`lint`; a quick run is complete |
+
+`coverage` is the expensive one wherever it is deferred: an instrumented build
+plus a second test run (and in Swift quick mode even
+`swift test --enable-code-coverage` drops the instrumentation).
+
+A deferred metric is **not measured, not compared, and cannot produce a
+verdict**:
+
+- Per-metric `verdict` is `"skipped"`; `base`/`pr`/`delta`/`margin` (comparative)
+  and `value`/`threshold` (absolute) are **`null`** -- there is no number,
+  and `0` would read as a measurement.
+- It is excluded from the exit code: a quick run cannot fail *or pass* on it.
+- Text output prints `-` in the number columns.
+
+Works in both modes (comparative and absolute) and composes with every other
+flag.
+
+**Quick mode never writes the base-metrics cache.** The cache is keyed by base
+SHA and reused by later runs; a quick run has no complexity/coverage numbers to
+store, so caching it would hand the next full run a fabricated baseline.
+
+**CI must never use `--quick`.** Every quick run emits
+`::warning::quick mode: <metrics> NOT measured (deferred) -- a fast pre-PR
+check, never a substitute for the full gate in CI` on stderr, and the JSON
+carries `"quick": true` so a consumer can reject the report.
+
 ## Exit codes
 
 | Code | Meaning |
@@ -87,6 +137,7 @@ If `--base` AND `QG_BASE_REF` are both absent -> **absolute mode** (not an error
 | `QG_REFRESH_BASELINE` | `0` | `1` equivalent to `--refresh-baseline`. |
 | `QG_FORCE_FULL` | `0` | `1` equivalent to `--force-full`. |
 | `QG_FORMAT` | `text` | Equivalent to `--format`. |
+| `QG_QUICK` | `0` | `1` equivalent to `--quick`. Defers coverage + complexity (reported `skipped`). Never in CI. |
 | `QG_RULESET_DIR` | (empty) | Override of the bundled `rules/` (tamper-resistance). Only honored if it comes from the ENVIRONMENT of whoever runs the gate -- NEVER from `.qg.yaml`/a project file. Empty -> uses `<QG>/<lang>/rules/`. |
 
 ## Text output (default)
@@ -125,9 +176,11 @@ Output in **English**. Identifiers (`improved`, `same`, `regressed`) in EN ASCII
 
 Stdout receives ONLY the JSON. Progress messages go to stderr; detailed logs stay in `--log-dir`.
 
-Schema validated against [`contract-v1.schema.json`](contract-v1.schema.json) (accepts `schema_version` `"1.0"` and `"1.1"`).
+Schema validated against [`contract-v1.schema.json`](contract-v1.schema.json) (accepts `schema_version` `"1.0"`, `"1.1"` and `"1.2"`).
 
 Top-level field **`"mode"`**: `"comparative"` | `"absolute"`. Absent => treat as legacy 1.0 `comparative`.
+
+Top-level field **`"quick"`**: present and `true` only on a `--quick` run (absent otherwise). Such a document declares `schema_version: "1.2"` and may carry metrics with verdict `"skipped"` and `null` numbers.
 
 ### Comparative mode
 
@@ -136,7 +189,7 @@ Top-level field **`"mode"`**: `"comparative"` | `"absolute"`. Absent => treat as
   "schema_version": "1.1",
   "mode": "comparative",
   "language": "rust",
-  "branch": "feature/INT-1234",
+  "branch": "feature/new-endpoint",
   "base_ref": "origin/main",
   "started_at": "2026-05-14T10:30:12Z",
   "duration_seconds": 1234,
@@ -189,7 +242,36 @@ Global schema v1.1 `verdict`: **`passed | regressed | failed | bypassed`**.
 - `failed` only in absolute mode.
 - `passed`/`bypassed` in both modes.
 
-Metric `verdict`: comparative uses `same|improved|regressed`; absolute uses `ok|violated|reported`. The schema discriminates via `if mode`.
+Metric `verdict`: comparative uses `same|improved|regressed`; absolute uses `ok|violated|reported`. The schema discriminates via `if mode`. Both modes additionally allow **`skipped`** -- a metric deferred by quick mode (schema 1.2).
+
+### Quick mode (schema 1.2)
+
+```json
+{
+  "schema_version": "1.2",
+  "mode": "comparative",
+  "quick": true,
+  "language": "rust",
+  "branch": "feature/x",
+  "base_ref": "origin/main",
+  "started_at": "2026-10-20T10:00:00Z",
+  "duration_seconds": 95,
+  "verdict": "passed",
+  "bypass_reason": null,
+  "metrics": [
+    { "name": "fmt", "base": 0, "pr": 0, "delta": 0, "verdict": "same" },
+    { "name": "lint", "base": 3, "pr": 3, "delta": 0, "verdict": "same" },
+    { "name": "build", "base": 0, "pr": 0, "delta": 0, "verdict": "same" },
+    { "name": "test", "base": 0, "pr": 0, "delta": 0, "verdict": "same" },
+    { "name": "complexity", "base": null, "pr": null, "delta": null, "verdict": "skipped" },
+    { "name": "coverage", "base": null, "pr": null, "delta": null, "margin": null, "verdict": "skipped" }
+  ]
+}
+```
+
+In absolute mode a skipped metric is `{ "name": "coverage", "value": null, "threshold": null, "verdict": "skipped" }`.
+
+A `"skipped"` metric never influences the global `verdict`.
 
 General rules:
 
@@ -386,9 +468,9 @@ Read from the target project root if it exists. **Closed** schema -- unknown key
 
 ```yaml
 cov_margin: 2.0                       # override of the default 1.0
-skip_metrics:
+skip_metrics:                         # DEPRECATED + INERT -- see below
   - metric: complexity
-    reason: "legacy crate, plan in INT-1234"
+    reason: "legacy crate, refactor planned"
     until: "2026-09-01"               # ISO 8601
 extra_fast_path_paths:
   - "^vendor/"
@@ -447,10 +529,25 @@ system_packages:
   `::warning::` -- the host is assumed to already provide the libraries.
 - A failed install is a tool/setup error -> exit 2, never a code verdict.
 
+### `skip_metrics` block -- DEPRECATED and INERT
+
+`skip_metrics` is **accepted and shape-validated, and then ignored**: no gate
+drops a metric because of it. That is deliberate, not an omission -- a metric a
+project file can switch off is a tamper surface, exactly like a project lint
+config, and the dev owns that file. The key is still parsed so that an existing
+`.qg.yaml` carrying it does not start exiting 2.
+
+The governed ways to measure less belong to whoever RUNS the gate, never to the
+project:
+
+- `--quick` / `QG_QUICK=1` -- defers the heaviest metrics, reports them as
+  `skipped`, warns on every run. See [Quick mode](#quick-mode---quick).
+- `QG_BYPASS_REASON` -- passes the whole run, audited. See the Bypass section.
+
 Rules:
 
-- `until` in the past -> script ignores the skip and resumes measuring/blocking (logs `::warning::skip of <metric> expired on <date>`).
-- `skip_metrics` without `reason` or without `until` -> exit 2.
+- `skip_metrics` without `reason` or without `until` -> exit 2 (the shape is
+  still validated).
 - The same schema applies to EVERY language.
 
 ### `absolute_thresholds` block (absolute mode)

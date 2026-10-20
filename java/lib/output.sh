@@ -14,6 +14,11 @@ _num() {
 # --- Absolute mode -----------------------------------------------------------
 _abs_metric_verdict() {
   local value="$1" threshold="$2" kind="$3"
+  # quick mode deferred this metric: there is no value to judge.
+  if [ "$kind" = "skip" ]; then
+    echo "skipped"
+    return
+  fi
   if [ -z "$threshold" ]; then
     echo "reported"
     return
@@ -33,6 +38,7 @@ _abs_emoji() {
     violated) echo "X violated" ;;
     ok)       echo "= ok" ;;
     reported) echo "i  reported" ;;
+    skipped)  echo "- skipped (quick)" ;;
   esac
 }
 
@@ -65,14 +71,23 @@ verdict_emoji() {
     regressed) echo "X regressed" ;;
     improved)  echo "+ improved" ;;
     same)      echo "= same" ;;
+    skipped)  echo "- skipped (quick)" ;;
   esac
 }
 
 print_count_row() {
+  if [ "$4" = "skipped" ]; then
+    printf '%-12s %5s   %5s    %s\n' "$1" "-" "-" "$(verdict_emoji skipped)"
+    return
+  fi
   printf '%-12s %5s   %5s    %s\n' "$1" "$2" "$3" "$(verdict_emoji "$4")"
 }
 
 print_cov_row() {
+  if [ "$4" = "skipped" ]; then
+    printf '%-12s %5s   %5s    %s\n' "coverage" "-" "-" "$(verdict_emoji skipped)"
+    return
+  fi
   local extra=""
   if [ "$4" = "regressed" ]; then
     local drop
@@ -115,6 +130,9 @@ EOF
   v_test=$(verdict_count "$base_test" "$pr_test")
   v_complex=$(verdict_count "$base_complex" "$pr_complex")
   v_cov=$(verdict_coverage "$base_cov" "$pr_cov" "$cov_margin")
+  # Deferred by quick mode: never measured, never compared, never blocking.
+  qg_quick_defers complexity && v_complex=skipped
+  qg_quick_defers coverage && v_cov=skipped
 
   print_count_row "fmt"        "$base_fmt"     "$pr_fmt"     "$v_fmt"
   print_count_row "lint"       "$base_lint"    "$pr_lint"    "$v_lint"
@@ -160,12 +178,17 @@ render_json() {
   v_test=$(verdict_count "$base_test" "$pr_test")
   v_complex=$(verdict_count "$base_complex" "$pr_complex")
   v_cov=$(verdict_coverage "$base_cov" "$pr_cov" "$cov_margin")
+  # Deferred by quick mode: never measured, never compared, never blocking.
+  qg_quick_defers complexity && v_complex=skipped
+  qg_quick_defers coverage && v_cov=skipped
 
   for v in "$v_fmt" "$v_lint" "$v_build" "$v_test" "$v_complex" "$v_cov"; do
     [ "$v" = "regressed" ] && global_verdict=regressed
   done
 
   jq -n \
+    --arg schema_version "$(qg_schema_version)" \
+    --argjson quick "$([ "${QG_QUICK:-0}" = "1" ] && echo true || echo false)" \
     --arg branch "$branch" \
     --arg base_ref "$base_ref" \
     --arg started "$started_at" \
@@ -178,7 +201,7 @@ render_json() {
     --argjson base_complex "$base_complex" --argjson pr_complex "$pr_complex" --arg v_complex "$v_complex" \
     --argjson base_cov "$base_cov" --argjson pr_cov "$pr_cov" --arg v_cov "$v_cov" --argjson margin "$cov_margin" \
     '{
-      schema_version: "1.1",
+      schema_version: $schema_version,
       mode: "comparative",
       language: "java",
       branch: $branch,
@@ -195,7 +218,13 @@ render_json() {
         { name: "complexity", base: $base_complex, pr: $pr_complex, delta: ($pr_complex - $base_complex), verdict: $v_complex },
         { name: "coverage", base: $base_cov, pr: $pr_cov, delta: ($pr_cov - $base_cov), margin: $margin, verdict: $v_cov }
       ]
-    }'
+    }
+    | (if $quick then .quick = true else . end)
+    | .metrics |= map(
+        if .verdict == "skipped"
+        then .base = null | .pr = null | .delta = null
+             | (if has("margin") then .margin = null else . end)
+        else . end)'
 
   if [ "$global_verdict" = "regressed" ]; then
     return 1
@@ -225,6 +254,10 @@ EOF
     shift 4
     local verdict
     verdict=$(_abs_metric_verdict "$value" "$thr" "$kind")
+    if [ "$verdict" = "skipped" ]; then
+      printf '%-12s %5s %6s   %s\n' "$name" "-" "-" "$(_abs_emoji skipped)"
+      continue
+    fi
     [ -n "$thr" ] && has_threshold=1
     local thr_disp="$thr"
     [ -z "$thr_disp" ] && thr_disp="-"
@@ -261,6 +294,11 @@ render_absolute_json() {
     shift 4
     local verdict
     verdict=$(_abs_metric_verdict "$value" "$thr" "$kind")
+    if [ "$verdict" = "skipped" ]; then
+      metrics_json="${metrics_json}${metrics_json:+,}$(jq -n --arg n "$name" \
+        '{name:$n, value:null, threshold:null, verdict:"skipped"}')"
+      continue
+    fi
     [ "$verdict" = "violated" ] && global=failed
     local obj
     if [ -z "$thr" ]; then
@@ -273,13 +311,15 @@ render_absolute_json() {
     metrics_json="${metrics_json}${metrics_json:+,}${obj}"
   done
   jq -n \
+    --arg schema_version "$(qg_schema_version)" \
+    --argjson quick "$([ "${QG_QUICK:-0}" = "1" ] && echo true || echo false)" \
     --arg branch "$branch" \
     --arg started "$started_at" \
     --argjson duration "$(_num "$duration")" \
     --arg verdict "$global" \
     --argjson metrics "[$metrics_json]" \
     '{
-      schema_version: "1.1",
+      schema_version: $schema_version,
       mode: "absolute",
       language: "java",
       branch: $branch,
@@ -289,7 +329,8 @@ render_absolute_json() {
       verdict: $verdict,
       bypass_reason: null,
       metrics: $metrics
-    }'
+    }
+    | (if $quick then .quick = true else . end)'
   [ "$global" = "failed" ] && return 1
   return 0
 }
