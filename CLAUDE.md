@@ -69,6 +69,17 @@ anything so a future session does not repeat past mistakes.
 - **Tool-error (exit 2) ≠ regression (exit 1).** A segfault/ICE/OOM/missing
   dep is exit 2, never a `build` regression. Never mask an infra failure as a
   code problem.
+- **Two metrics may share one tool invocation; the numbers may not change.**
+  A metric pair measured by the same tool is fused into a single pass when a
+  second pass would recompile (Rust: `test`+`coverage` via `cargo llvm-cov`,
+  `lint`+`complexity` via one `cargo clippy` -- clippy's lint flags travel in
+  `CLIPPY_ARGS`, which is part of cargo's fingerprint, so a second pass is a
+  full rebuild of the scope). The single-metric functions stay in
+  `<lang>/lib/measure.sh` as test oracles, and the bats suite asserts BOTH the
+  invocation count (PATH stub) and numeric parity with them on the baseline and
+  the regressed fixture. In Rust, keeping a lint at warn level under
+  `-D warnings` requires `--force-warn`: a per-lint `-W` loses to the
+  `warnings` group whatever the flag order (#18).
 - **Numeric sanitization before `jq --argjson`/arithmetic.** Every metric
   value passes through `_num` (non-numeric/empty/"Unknown" → `0`). A raw
   non-number into `jq --argjson` crashes the whole gate.

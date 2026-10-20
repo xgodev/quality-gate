@@ -200,6 +200,65 @@ count_complexity() {
   _grep_count 'cognitive complexity|too many lines|too many arguments|type complexity' "$log"
 }
 
+# Perf fusion (issue #18): `lint` and `complexity` are both clippy passes over
+# the same crates, differing ONLY in the lint flags after `--`. Those flags
+# reach the driver through the CLIPPY_ARGS env var, which is part of cargo's
+# fingerprint -- cargo itself says
+# "Dirty <crate>: the environment variable CLIPPY_ARGS changed" -- so the second
+# pass recompiled the whole workspace: a full extra clippy build per side, on
+# the critical path a developer waits on before opening a PR.
+#
+# ONE invocation now yields both counts. `-D warnings` keeps the lint
+# semantics identical (every lint diagnostic is still an `error:` line), and
+# the four complexity lints are reported through `--force-warn`, which pins
+# them at warn level even under `-D warnings` -- a plain `-W` does NOT work
+# here, because the `warnings` group outranks a per-lint level whatever the
+# flag order, and the complexity violations would be counted as lint errors
+# too. So the split the two passes had is preserved exactly.
+# Echoes "<lint_errors> <complexity_violations>".
+#
+# Caveat, deliberate: when the lint side is already red, `-D warnings` aborts
+# the crates that depend on a failing one, so a complexity violation living in
+# a downstream crate may go uncounted -- in a state that is `regressed`/failed
+# on lint anyway. The alternative (dropping `-D warnings`) would change the
+# lint number itself, which must stay comparable to cached baselines.
+_QG_RUST_CX_RE='cognitive complexity|too many lines|too many arguments|type complexity'
+
+measure_lint_and_complexity() {
+  local dir="$1" log="$2" cx_log="$3"
+  : > "$log"
+  : > "$cx_log"
+  local rules ex cx n
+  rules=$(qg_ruleset_dir)
+  # Tamper-resistance: clippy reads clippy.toml from CLIPPY_CONF_DIR -> QG's
+  # ruleset (lint selection AND complexity thresholds), never the project's.
+  (
+    cd "$dir" && CLIPPY_CONF_DIR="$rules" cargo clippy $(_qg_scope_main_flags) -- \
+      -D warnings \
+      --force-warn clippy::cognitive_complexity \
+      --force-warn clippy::too_many_lines \
+      --force-warn clippy::too_many_arguments \
+      --force-warn clippy::type_complexity
+  ) > "$log" 2>&1 || true
+  # complexity is measured over the MAIN scope only (examples carry no
+  # complexity signal), so it is counted -- and its own log written -- BEFORE
+  # the examples pass appends to the shared log.
+  grep -E "$_QG_RUST_CX_RE" "$log" > "$cx_log" 2>/dev/null || true
+  cx=$(_grep_count "$_QG_RUST_CX_RE" "$log")
+  if ex=$(_qg_scope_examples_flags) && [ -n "$ex" ]; then
+    (
+      cd "$dir" && CLIPPY_CONF_DIR="$rules" cargo clippy $ex -- \
+        -D warnings \
+        --force-warn clippy::cognitive_complexity \
+        --force-warn clippy::too_many_lines \
+        --force-warn clippy::too_many_arguments \
+        --force-warn clippy::type_complexity
+    ) >> "$log" 2>&1 || true
+  fi
+  n=$(_grep_count '^error(\[|:)' "$log")
+  printf '%d %d\n' "$(_num "${n:-0}")" "$(_num "${cx:-0}")"
+}
+
 measure_coverage() {
   local dir="$1" out="$2"
   ( cd "$dir" && cargo llvm-cov --json --output-path "$out" ) >/dev/null 2>&1 || true

@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+Performance (rust): `lint` and `complexity` now come from ONE `cargo clippy`
+invocation per side instead of two. The two passes differed only in lint flags,
+and clippy receives those through the `CLIPPY_ARGS` environment variable, which
+is part of cargo's fingerprint -- so the second pass reported
+`Dirty <crate>: the environment variable CLIPPY_ARGS changed` and recompiled the
+whole measured scope, one of four full builds per side. The fused pass keeps
+`-D warnings` (lint semantics unchanged) and pins the 4 complexity lints at warn
+level with `--force-warn`, which overrides the `warnings` group -- a plain `-W`
+does not, whatever the flag order, and the complexity violations would then be
+counted as lint errors too. `tests/rust-qg.bats` asserts a single clippy
+invocation (PATH stub) and numeric parity with the two old passes on both the
+baseline and the regressed fixture, which are kept as oracles. Same shape as the
+existing `test`+`coverage` fusion. (#18)
+
 ## [1.1.1]
 
 Fix (go): `coverage` counted generated code. `go test -coverprofile` counts

@@ -349,9 +349,9 @@ if [ "$QG_ABSOLUTE_MODE" = "1" ]; then
   fi
   echo "── measuring (no baseline) ──" >&2
   abs_fmt=$(count_fmt_errors "." "$QG_LOG_DIR_ARG/abs-fmt.log")
-  abs_lint=$(count_lint_errors "." "$QG_LOG_DIR_ARG/abs-lint.log")
+  set -- $(measure_lint_and_complexity "." "$QG_LOG_DIR_ARG/abs-lint.log" "$QG_LOG_DIR_ARG/abs-complex.log")
+  abs_lint="$1"; abs_complex="$2"
   abs_build=$(count_build_errors "." "$QG_LOG_DIR_ARG/abs-build.log")
-  abs_complex=$(count_complexity "." "$QG_LOG_DIR_ARG/abs-complex.log")
   set -- $(measure_test_and_coverage "." "$QG_LOG_DIR_ARG/abs-test.log" "$QG_LOG_DIR_ARG/abs-cov.json")
   abs_test="$1"; abs_cov="$2"
 
@@ -593,9 +593,9 @@ else
     base_fmt=0; base_lint=0; base_build=0; base_complex=0; base_test=0; base_cov=0
   else
     base_fmt=$(count_fmt_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-fmt.log")
-    base_lint=$(count_lint_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-lint.log")
+    set -- $(measure_lint_and_complexity "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-lint.log" "$QG_LOG_DIR_ARG/base-complex.log")
+    base_lint="$1"; base_complex="$2"
     base_build=$(count_build_errors "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-build.log")
-    base_complex=$(count_complexity "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-complex.log")
     set -- $(measure_test_and_coverage "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-test.log" "$QG_LOG_DIR_ARG/base-cov.json")
     base_test="$1"; base_cov="$2"
   fi
@@ -608,9 +608,9 @@ fi
 
 echo "── measuring PR ($QG_SCOPE_DESC) ──" >&2
 pr_fmt=$(count_fmt_errors "." "$QG_LOG_DIR_ARG/pr-fmt.log")
-pr_lint=$(count_lint_errors "." "$QG_LOG_DIR_ARG/pr-lint.log")
+set -- $(measure_lint_and_complexity "." "$QG_LOG_DIR_ARG/pr-lint.log" "$QG_LOG_DIR_ARG/pr-complex.log")
+pr_lint="$1"; pr_complex="$2"
 pr_build=$(count_build_errors "." "$QG_LOG_DIR_ARG/pr-build.log")
-pr_complex=$(count_complexity "." "$QG_LOG_DIR_ARG/pr-complex.log")
 set -- $(measure_test_and_coverage "." "$QG_LOG_DIR_ARG/pr-test.log" "$QG_LOG_DIR_ARG/pr-cov.json")
 pr_test="$1"; pr_cov="$2"
 

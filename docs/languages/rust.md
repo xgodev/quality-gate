@@ -82,9 +82,9 @@ Runs `cargo fmt --all -- --check --config-path <QG>/rust/rules/rustfmt.toml` (fu
 
 ### `lint` -- clippy
 
-Runs `cargo clippy <scope> -- -D warnings -A clippy::cognitive_complexity -A clippy::too_many_lines -A clippy::too_many_arguments -A clippy::type_complexity` (`<scope>` = `--all-targets` full, or `-p <pkg> ... --lib --bins --tests` narrowed, with a separate `--examples` pass for touched packages only). Counts `^error[E0XXX]:` and `^error:` lines.
+Runs `cargo clippy <scope> -- -D warnings --force-warn clippy::cognitive_complexity --force-warn clippy::too_many_lines --force-warn clippy::too_many_arguments --force-warn clippy::type_complexity` (`<scope>` = `--all-targets` full, or `-p <pkg> ... --lib --bins --tests` narrowed, with a separate `--examples` pass for touched packages only). Counts `^error[E0XXX]:` and `^error:` lines.
 
-The 4 complexity lints are silenced here (measured separately in `complexity`).
+The 4 complexity lints stay at **warn** level here, so they are reported without being counted as lint errors -- the same invocation yields the `complexity` count (one clippy run per side instead of two; see `complexity`). `--force-warn` is what keeps them warnings: a plain `-W` does not, because the `warnings` group of `-D warnings` outranks a per-lint level whatever the flag order.
 
 **How to interpret a regression:** the PR introduced a new warning (with `-D warnings`, a warning becomes an error). Fix: read `target/qg-logs/pr-lint.log`, identify the lint, decide between a code fix or `#[allow(...)]` with a documented root cause.
 
@@ -104,7 +104,7 @@ Runs `cargo test --all-targets --no-fail-fast`. Sum of `failed: N` across all te
 
 ### `complexity` -- cyclomatic/cognitive complexity
 
-Runs `cargo clippy <scope> -- -A clippy::all -W clippy::cognitive_complexity -W clippy::too_many_lines -W clippy::too_many_arguments -W clippy::type_complexity` (`<scope>` as in `lint`). Counts matches of the 4 lints.
+Counts matches of the 4 lints in the **same** `cargo clippy` invocation that measures `lint` (see `lint` for the exact flags and scope); the matching lines are also written to `target/qg-logs/<side>-complex.log`. One clippy run per side measures both metrics: a second pass with different lint flags changes `CLIPPY_ARGS`, which is part of cargo's fingerprint, so it would recompile the whole scope.
 
 **Thresholds (clippy community defaults, NOT custom):**
 - `cognitive_complexity`: 25
