@@ -63,3 +63,7 @@ node_modules/
 __pycache__/
 .coverage
 */test-fixtures/*/package-lock.json
+
+# Local tool droppings
+.dev-rules/
+.playwright-mcp/

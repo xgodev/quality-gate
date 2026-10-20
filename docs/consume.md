@@ -53,7 +53,51 @@ qg --base origin/main --force-full
 
 # JSON output for parsing
 qg --base origin/main --format json > result.json
+
+# Measure baseline and PR one after the other (default: concurrent from 4 cores)
+qg --base origin/main --no-parallel
 ```
+
+## Keep the toolchain cache warm (containerized runs)
+
+`docker run --rm` throws the container away, and with it everything the build
+downloaded and compiled: a fresh image resolves dependencies from scratch on
+every run, which is most of the wall-clock on the first measurement of each
+side. Mount a **named volume** for the toolchain's cache and the gate reuses it
+across runs, exactly as it would on a developer machine. The project mount
+(`-v "$PWD:/src"`) stays as it is -- only cache paths are added.
+
+```bash
+# Rust: crates registry + a persistent target dir (the gate gives each side its
+# own subdir under it, so base and PR never share artifacts)
+docker run --rm -v "$PWD:/src" -w /src \
+  -v qg-cargo-registry:/usr/local/cargo/registry \
+  -v qg-rust-target:/qg-cache/target -e CARGO_TARGET_DIR=/qg-cache/target \
+  ghcr.io/xgodev/quality-gate/rust:v1 --base origin/main
+
+# Go: module cache + build cache
+docker run --rm -v "$PWD:/src" -w /src \
+  -v qg-go:/qg-cache -e GOMODCACHE=/qg-cache/mod -e GOCACHE=/qg-cache/build \
+  ghcr.io/xgodev/quality-gate/go:v1 --base origin/main
+```
+
+Same idea for the others -- one volume, one env var:
+
+| Language | Mount | Env var |
+|---|---|---|
+| rust | `-v qg-cargo-registry:/usr/local/cargo/registry` + `-v qg-rust-target:/qg-cache/target` | `CARGO_TARGET_DIR=/qg-cache/target` |
+| go | `-v qg-go:/qg-cache` | `GOMODCACHE=/qg-cache/mod`, `GOCACHE=/qg-cache/build` |
+| java | `-v qg-m2:/qg-cache/m2` | `MAVEN_OPTS=-Dmaven.repo.local=/qg-cache/m2` |
+| kotlin | `-v qg-gradle:/qg-cache/gradle` | `GRADLE_USER_HOME=/qg-cache/gradle` |
+| nodejs, web | `-v qg-npm:/qg-cache/npm` | `npm_config_cache=/qg-cache/npm` |
+| python | `-v qg-pip:/qg-cache/pip` | `PIP_CACHE_DIR=/qg-cache/pip` |
+| swift | `-v qg-swiftpm:/root/.cache/org.swift.swiftpm` | -- (SwiftPM has no cache env var; mount its default path) |
+
+Two warnings. The cache is **build input, never measurement input**: it only
+changes how long a tool takes, never what it reports, and the gate keeps
+enforcing its own rulesets regardless. And a volume shared by two gate runs at
+once is a lock fight -- give each concurrent job its own volume name (in CI,
+prefer the runner's own cache action over a volume).
 
 ## Local git pre-push hook (optional, your choice)
 
@@ -109,6 +153,8 @@ first: it measures less, but it measures it for real.
 | `::error::cargo-llvm-cov not found` | Running from a clone without the prereq | `cargo install cargo-llvm-cov`, or use the Docker image |
 | Green gate on a PR that did not touch Rust | Fast-path triggered (by design) | Nothing: no Rust changed. `--force-full` measures anyway |
 | `complexity`/`coverage` reported as `skipped` | The run used `--quick`/`QG_QUICK=1` | Drop `--quick` for a complete run |
+| Both sides seem to run at once and the machine swaps | Parallel sides on a small or memory-tight machine | `--no-parallel` (or `QG_PARALLEL=0`) |
+| `::error::the PR measurement died` | A side was killed -- usually OOM | Re-run with `--no-parallel`; it is a tool-error (exit 2), not a regression |
 | Stale baseline cache | Divergent cache (when the gate's own staleness check is bypassed via `--baseline-dir`) | `--refresh-baseline` or `rm -rf /tmp/qg-baseline-*`. For default-cache runs the baseline dir is keyed by project and base SHA, so a new base automatically gets a fresh extraction. |
 | `git archive` failed | The `::error::` quotes git's own message -- read it. Usually the ref does not exist locally | `git fetch origin` |
 | `::notice::baseline: git-lfs filters bypassed` | The repo tracks paths through git-lfs | Nothing to do: LFS paths are measured as pointer files, source is unaffected |

@@ -130,6 +130,24 @@ nothing at all. See [`docs/contract.md`](docs/contract.md#quick-mode---quick).
 **Never use `--quick` in CI.** It is a partial run by construction, and the
 gate warns on every quick run.
 
+## Two sides at once
+
+A comparative run measures two independent trees -- the extracted baseline and
+your working copy -- so the gate measures them **concurrently** by default
+(whenever the machine reports at least 4 usable cores). Wall-clock becomes
+roughly the slower side instead of the sum, and not a single number changes:
+neither side can see the other's sources, build cache or logs.
+
+```bash
+--no-parallel   # force one side after the other (small machine, tight memory)
+--parallel      # force concurrent even below 4 cores
+```
+
+If either side dies (OOM, compiler ICE), that is a tool-error -- exit `2`, never
+a regression. Metrics *within* a side are not parallelised on purpose: they
+share one build cache and the build systems just serialise on its lock. See
+[`docs/contract.md`](docs/contract.md#parallel-sides---parallel----no-parallel).
+
 ## Exit codes
 
 | Code | Meaning |
@@ -146,6 +164,7 @@ gate warns on every quick run.
 --format json       # machine-readable output (default: text table)
 --detect            # print the detected language slug(s) and exit
 --quick             # fast pre-PR mode: defers coverage + complexity (never in CI)
+--no-parallel       # measure baseline and PR one after the other (default: concurrent)
 --cov-margin <pp>   # coverage tolerance in percentage points (default 1.0)
 --log-dir <path>    # where to write the per-metric tool logs
 ```
@@ -154,6 +173,7 @@ gate warns on every quick run.
 QG_BYPASS_REASON="incident hotfix"   # forces a pass, recorded in the output
 QG_BASE_REF=origin/main              # same as --base
 QG_QUICK=1                           # same as --quick
+QG_PARALLEL=0                        # same as --no-parallel (auto = on from 4 cores)
 QG_RULESET_DIR=/custom/rules         # override the shipped ruleset (operator only)
 QG_ALLOW_SYSTEM_PACKAGES=1           # authorize .qg.yaml system_packages (operator only)
 ```

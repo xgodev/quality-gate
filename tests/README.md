@@ -19,6 +19,9 @@ bats tests/rust-qg.bats
 - `tests/<lang>-qg.bats` -- tests for each language's script.
 - `tests/dispatcher.bats` -- dispatcher (`qg`) routing tests.
 - `tests/hygiene.bats` -- repo-level hygiene scan tests.
+- `tests/parallel.bats` -- `lib/parallel.sh`: the two sides overlap in time,
+  the numbers do not change, a dead side is exit 2, overlapping trees stay
+  sequential.
 - `tests/helpers/setup.bash` -- shared helpers.
 
 ## Fixtures
@@ -39,5 +42,6 @@ This repository's workflows build and publish the per-language images
 (`.github/workflows/build-publish.yml`) and expose the reusable gate
 (`.github/workflows/gate.yml`). The bats suites are **not** run in CI yet:
 run them locally before a gate change ships. `dispatcher`, `hygiene`,
-`baseline-archive` and `web` need no language toolchain; `go`, `python`,
+`baseline-archive`, `parallel` (except its two end-to-end cases) and `web` need
+no language toolchain; `go`, `python`,
 `nodejs`, `java`, `kotlin`, `rust` and `swift` each need theirs.
