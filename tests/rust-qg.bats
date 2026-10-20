@@ -460,6 +460,66 @@ EOF
   rm -rf "$logdir"
 }
 
+@test "measure_lint_and_complexity: ONE clippy pass, not two (#18)" {
+  source "$QG_REPO_ROOT/rust/lib/measure.sh"
+  local logdir stubdir
+  logdir=$(qg_tmp_dir)
+  stubdir=$(qg_tmp_dir)
+  # A cargo stub that records every invocation: the whole point of the fusion
+  # is that lint+complexity cost a SINGLE clippy pass (a second one recompiles
+  # the workspace -- cargo's fingerprint includes CLIPPY_ARGS).
+  cat > "$stubdir/cargo" <<'STUB'
+#!/usr/bin/env bash
+echo "$@" >> "$QG_STUB_CALLS"
+exit 0
+STUB
+  chmod +x "$stubdir/cargo"
+  QG_STUB_CALLS="$logdir/calls.txt" PATH="$stubdir:$PATH" \
+    measure_lint_and_complexity "$(qg_fixture_path rust baseline)" \
+      "$logdir/lint.log" "$logdir/cx.log" >/dev/null
+  [ "$(grep -c clippy "$logdir/calls.txt")" = "1" ]
+  rm -rf "$logdir" "$stubdir"
+}
+
+@test "measure_lint_and_complexity: same numbers as the two separate passes, baseline (#18)" {
+  source "$QG_REPO_ROOT/rust/lib/measure.sh"
+  local logdir fixture
+  logdir=$(qg_tmp_dir)
+  fixture=$(qg_fixture_path rust baseline)
+  expected_lint=$(count_lint_errors "$fixture" "$logdir/old-lint.log")
+  expected_cx=$(count_complexity "$fixture" "$logdir/old-cx.log")
+  result=$(measure_lint_and_complexity "$fixture" "$logdir/lint.log" "$logdir/cx.log")
+  [ "$(echo "$result" | awk '{print $1}')" = "$expected_lint" ]
+  [ "$(echo "$result" | awk '{print $2}')" = "$expected_cx" ]
+  rm -rf "$logdir"
+}
+
+@test "measure_lint_and_complexity: same numbers as the two separate passes, regressed (#18)" {
+  source "$QG_REPO_ROOT/rust/lib/measure.sh"
+  local logdir fixture
+  logdir=$(qg_tmp_dir)
+  fixture=$(qg_fixture_path rust regressed)
+  expected_lint=$(count_lint_errors "$fixture" "$logdir/old-lint.log")
+  expected_cx=$(count_complexity "$fixture" "$logdir/old-cx.log")
+  result=$(measure_lint_and_complexity "$fixture" "$logdir/lint.log" "$logdir/cx.log")
+  [ "$expected_lint" -gt 0 ]
+  [ "$expected_cx" -gt 0 ]
+  [ "$(echo "$result" | awk '{print $1}')" = "$expected_lint" ]
+  [ "$(echo "$result" | awk '{print $2}')" = "$expected_cx" ]
+  rm -rf "$logdir"
+}
+
+@test "measure_lint_and_complexity: writes the complexity log the docs point at (#18)" {
+  source "$QG_REPO_ROOT/rust/lib/measure.sh"
+  local logdir
+  logdir=$(qg_tmp_dir)
+  measure_lint_and_complexity "$(qg_fixture_path rust regressed)" \
+    "$logdir/lint.log" "$logdir/cx.log" >/dev/null
+  [ -s "$logdir/cx.log" ]
+  grep -qE 'cognitive complexity|too many lines|too many arguments|type complexity' "$logdir/cx.log"
+  rm -rf "$logdir"
+}
+
 @test "measure_coverage: ~100% in baseline" {
   source "$QG_REPO_ROOT/rust/lib/measure.sh"
   local logdir

@@ -69,6 +69,17 @@ anything so a future session does not repeat past mistakes.
 - **Tool-error (exit 2) ≠ regression (exit 1).** A segfault/ICE/OOM/missing
   dep is exit 2, never a `build` regression. Never mask an infra failure as a
   code problem.
+- **Two metrics may share one tool invocation; the numbers may not change.**
+  A metric pair measured by the same tool is fused into a single pass when a
+  second pass would recompile (Rust: `test`+`coverage` via `cargo llvm-cov`,
+  `lint`+`complexity` via one `cargo clippy` -- clippy's lint flags travel in
+  `CLIPPY_ARGS`, which is part of cargo's fingerprint, so a second pass is a
+  full rebuild of the scope). The single-metric functions stay in
+  `<lang>/lib/measure.sh` as test oracles, and the bats suite asserts BOTH the
+  invocation count (PATH stub) and numeric parity with them on the baseline and
+  the regressed fixture. In Rust, keeping a lint at warn level under
+  `-D warnings` requires `--force-warn`: a per-lint `-W` loses to the
+  `warnings` group whatever the flag order (#18).
 - **Numeric sanitization before `jq --argjson`/arithmetic.** Every metric
   value passes through `_num` (non-numeric/empty/"Unknown" → `0`). A raw
   non-number into `jq --argjson` crashes the whole gate.
@@ -123,6 +134,12 @@ anything so a future session does not repeat past mistakes.
   tells the user to run must point at the QG ruleset (`--config
   <quality-gate>/<lang>/rules/...`, `--no-config-lookup`, ...). Until #19 the
   per-language docs even claimed the project config was respected.
+- Giving two test fixtures of the same language the same package name --
+  `rust/test-fixtures/{baseline,regressed}` were both `qg-baseline-fixture`,
+  so on any machine with a shared `CARGO_TARGET_DIR` (cargo's metadata hash
+  uses the relative manifest path) they overwrote each other's artifacts and
+  three measurement tests flipped between pass and fail depending on which
+  fixture compiled last. Fixture package names must be unique per fixture.
 - Merging to `main` and calling it released — a merge refreshes only
   `:latest`; consumers pinning `:v1` stay on the previous release until a
   `vX.Y.Z` tag is pushed. Before cutting, check `[Unreleased]` for
