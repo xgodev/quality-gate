@@ -1,0 +1,29 @@
+# Canonical Quality Gate ruleset -- Rust crate layout (#26).
+#
+# Owned and enforced by QG. The target project's files NEVER weaken these
+# numbers: there is no `.qg.yaml` key for them, because the developer controls
+# that file and a raised threshold would switch the check off. The only
+# override is QG_RULESET_DIR, supplied by whoever RUNS the gate.
+#
+# A crate is Rust's unit of incremental compilation: editing one `.rs` file
+# recompiles the whole crate. Two layouts make every edit slow -- a crate that
+# mixes `build.rs` codegen with hand-written modules (every edit recompiles the
+# generated code too), and a crate with too many hand-written lines.
+
+# Hand-written Rust lines one crate may hold before `crate_size` starts
+# counting the excess. Only the EXCESS enters the metric, so a crate already
+# over the line does not fail a PR that leaves it alone.
+max_hand_written_lines = 5000
+
+# Build-script contents that mean "this crate generates Rust at build time".
+# Each entry is an ERE matched against the crate's build script.
+codegen_entry_points = [
+  "slint_build::",
+  "tonic_build",
+  "tonic_prost_build",
+  "prost_build",
+  "bindgen::",
+  "cxx_build::",
+  "capnpc::",
+  "lalrpop",
+]

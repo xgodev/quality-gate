@@ -106,6 +106,8 @@ render_text() {
   local base_test="${12}" pr_test="${13}"
   local base_complex="${14}" pr_complex="${15}"
   local base_cov="${16}" pr_cov="${17}"
+  local base_mix="${18}" pr_mix="${19}"
+  local base_size="${20}" pr_size="${21}"
 
   cat <<EOF
 
@@ -123,13 +125,16 @@ metric        base       pr     verdict
 ─────────────────────────────────────────
 EOF
 
-  local v_fmt v_lint v_build v_test v_complex v_cov regressed=0 reglist=()
+  local v_fmt v_lint v_build v_test v_complex v_cov v_mix v_size regressed=0 reglist=()
   v_fmt=$(verdict_count "$base_fmt" "$pr_fmt")
   v_lint=$(verdict_count "$base_lint" "$pr_lint")
   v_build=$(verdict_count "$base_build" "$pr_build")
   v_test=$(verdict_count "$base_test" "$pr_test")
   v_complex=$(verdict_count "$base_complex" "$pr_complex")
   v_cov=$(verdict_coverage "$base_cov" "$pr_cov" "$cov_margin")
+  # Crate layout (#26) is a file scan, never deferred -- see rust/lib/layout.sh.
+  v_mix=$(verdict_count "$base_mix" "$pr_mix")
+  v_size=$(verdict_count "$base_size" "$pr_size")
   # Deferred by quick mode: never measured, never compared, never blocking.
   qg_quick_defers complexity && v_complex=skipped
   qg_quick_defers coverage && v_cov=skipped
@@ -140,10 +145,12 @@ EOF
   print_count_row "test fails" "$base_test"    "$pr_test"    "$v_test"
   print_count_row "complexity" "$base_complex" "$pr_complex" "$v_complex"
   print_cov_row   ""           "$base_cov"     "$pr_cov"     "$v_cov" "$cov_margin"
+  print_count_row "codegen mix" "$base_mix"    "$pr_mix"     "$v_mix"
+  print_count_row "crate size"  "$base_size"   "$pr_size"    "$v_size"
 
   echo
 
-  for v_pair in "fmt:$v_fmt" "lint:$v_lint" "build:$v_build" "test fails:$v_test" "complexity:$v_complex" "coverage:$v_cov"; do
+  for v_pair in "fmt:$v_fmt" "lint:$v_lint" "build:$v_build" "test fails:$v_test" "complexity:$v_complex" "coverage:$v_cov" "codegen mix:$v_mix" "crate size:$v_size"; do
     name="${v_pair%:*}"
     verdict="${v_pair#*:}"
     if [ "$verdict" = "regressed" ]; then
@@ -170,19 +177,24 @@ render_json() {
   local base_test="${11}" pr_test="${12}"
   local base_complex="${13}" pr_complex="${14}"
   local base_cov="${15}" pr_cov="${16}" cov_margin="${17}"
+  local base_mix="${18}" pr_mix="${19}"
+  local base_size="${20}" pr_size="${21}"
 
-  local v_fmt v_lint v_build v_test v_complex v_cov global_verdict=passed
+  local v_fmt v_lint v_build v_test v_complex v_cov v_mix v_size global_verdict=passed
   v_fmt=$(verdict_count "$base_fmt" "$pr_fmt")
   v_lint=$(verdict_count "$base_lint" "$pr_lint")
   v_build=$(verdict_count "$base_build" "$pr_build")
   v_test=$(verdict_count "$base_test" "$pr_test")
   v_complex=$(verdict_count "$base_complex" "$pr_complex")
   v_cov=$(verdict_coverage "$base_cov" "$pr_cov" "$cov_margin")
+  # Crate layout (#26) is a file scan, never deferred -- see rust/lib/layout.sh.
+  v_mix=$(verdict_count "$base_mix" "$pr_mix")
+  v_size=$(verdict_count "$base_size" "$pr_size")
   # Deferred by quick mode: never measured, never compared, never blocking.
   qg_quick_defers complexity && v_complex=skipped
   qg_quick_defers coverage && v_cov=skipped
 
-  for v in "$v_fmt" "$v_lint" "$v_build" "$v_test" "$v_complex" "$v_cov"; do
+  for v in "$v_fmt" "$v_lint" "$v_build" "$v_test" "$v_complex" "$v_cov" "$v_mix" "$v_size"; do
     [ "$v" = "regressed" ] && global_verdict=regressed
   done
 
@@ -200,6 +212,8 @@ render_json() {
     --argjson base_test "$base_test" --argjson pr_test "$pr_test" --arg v_test "$v_test" \
     --argjson base_complex "$base_complex" --argjson pr_complex "$pr_complex" --arg v_complex "$v_complex" \
     --argjson base_cov "$base_cov" --argjson pr_cov "$pr_cov" --arg v_cov "$v_cov" --argjson margin "$cov_margin" \
+    --argjson base_mix "$(_num "$base_mix")" --argjson pr_mix "$(_num "$pr_mix")" --arg v_mix "$v_mix" \
+    --argjson base_size "$(_num "$base_size")" --argjson pr_size "$(_num "$pr_size")" --arg v_size "$v_size" \
     '{
       schema_version: $schema_version,
       mode: "comparative",
@@ -216,7 +230,9 @@ render_json() {
         { name: "build", base: $base_build, pr: $pr_build, delta: ($pr_build - $base_build), verdict: $v_build },
         { name: "test", base: $base_test, pr: $pr_test, delta: ($pr_test - $base_test), verdict: $v_test },
         { name: "complexity", base: $base_complex, pr: $pr_complex, delta: ($pr_complex - $base_complex), verdict: $v_complex },
-        { name: "coverage", base: $base_cov, pr: $pr_cov, delta: ($pr_cov - $base_cov), margin: $margin, verdict: $v_cov }
+        { name: "coverage", base: $base_cov, pr: $pr_cov, delta: ($pr_cov - $base_cov), margin: $margin, verdict: $v_cov },
+        { name: "codegen_mix", base: $base_mix, pr: $pr_mix, delta: ($pr_mix - $base_mix), verdict: $v_mix },
+        { name: "crate_size", base: $base_size, pr: $pr_size, delta: ($pr_size - $base_size), verdict: $v_size }
       ]
     }
     | (if $quick then .quick = true else . end)

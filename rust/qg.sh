@@ -25,6 +25,8 @@ source "$QG_SCRIPT_DIR/../lib/baseline-archive.sh"
 source "$QG_SCRIPT_DIR/lib/measure.sh"
 # shellcheck source=lib/scope.sh
 source "$QG_SCRIPT_DIR/lib/scope.sh"
+# shellcheck source=lib/layout.sh
+source "$QG_SCRIPT_DIR/lib/layout.sh"
 # shellcheck source=lib/output.sh
 source "$QG_SCRIPT_DIR/lib/output.sh"
 
@@ -267,7 +269,7 @@ if [ -f "$QG_YAML_FILE" ]; then
           akey=$(echo "$line" | sed -E 's/^[[:space:]]+([a-zA-Z_]+):.*/\1/')
           aval=$(echo "$line" | sed -E 's/^[[:space:]]+[a-zA-Z_]+:[[:space:]]*([^#[:space:]]+).*/\1/')
           case "$akey" in
-            fmt|lint|build|test|complexity|coverage) ;;
+            fmt|lint|build|test|complexity|coverage|codegen_mix|crate_size) ;;
             *)
               echo "::error::.qg.yaml: absolute_thresholds unknown key: $akey" >&2
               exit 2
@@ -380,6 +382,13 @@ if [ "$QG_ABSOLUTE_MODE" = "1" ]; then
   set -- $(measure_lint_and_complexity "." "$QG_LOG_DIR_ARG/abs-lint.log" "$QG_LOG_DIR_ARG/abs-complex.log")
   abs_lint="$1"; abs_complex="$2"
   abs_build=$(count_build_errors "." "$QG_LOG_DIR_ARG/abs-build.log")
+  # Crate layout (#26): a file scan, not a build -- measured in every mode.
+  if ! abs_layout=$(measure_layout "." "$QG_LOG_DIR_ARG/abs-layout.log"); then
+    echo "::error::cannot enumerate workspace members ('cargo metadata --no-deps' failed in .) -- fix the manifest or run it by hand to see why (without the member list the crate-layout metrics cannot be measured)" >&2
+    exit 2
+  fi
+  set -- $abs_layout
+  abs_codegen_mix="$1"; abs_crate_size="$2"
   if qg_quick_defers coverage; then
     # No instrumented build and no second test run: plain test count.
     abs_test=$(count_test_failures "." "$QG_LOG_DIR_ARG/abs-test.log")
@@ -399,6 +408,8 @@ if [ "$QG_ABSOLUTE_MODE" = "1" ]; then
   t_test=$(qg_abs_threshold test)
   t_complex=$(qg_abs_threshold complexity)
   t_cov=$(qg_abs_threshold coverage)
+  t_codegen_mix=$(qg_abs_threshold codegen_mix)
+  t_crate_size=$(qg_abs_threshold crate_size)
   # A metric deferred by quick mode was not measured: kind "skip" makes the
   # renderers report it as skipped instead of checking it against a threshold.
   k_cov=cov; qg_quick_defers coverage && k_cov=skip
@@ -410,7 +421,9 @@ if [ "$QG_ABSOLUTE_MODE" = "1" ]; then
       build "$abs_build" "$t_build" count \
       test "$abs_test" "$t_test" count \
       complexity "$abs_complex" "$t_complex" count \
-      coverage "$abs_cov" "$t_cov" "$k_cov"
+      coverage "$abs_cov" "$t_cov" "$k_cov" \
+      codegen_mix "$abs_codegen_mix" "$t_codegen_mix" count \
+      crate_size "$abs_crate_size" "$t_crate_size" count
     exit $?
   else
     render_absolute_text "$branch" "$started_at" "$duration" "$QG_LOG_DIR_ARG" \
@@ -419,7 +432,9 @@ if [ "$QG_ABSOLUTE_MODE" = "1" ]; then
       "build" "$abs_build" "$t_build" count \
       "test fails" "$abs_test" "$t_test" count \
       "complexity" "$abs_complex" "$t_complex" count \
-      "coverage" "$abs_cov" "$t_cov" "$k_cov"
+      "coverage" "$abs_cov" "$t_cov" "$k_cov" \
+      "codegen mix" "$abs_codegen_mix" "$t_codegen_mix" count \
+      "crate size" "$abs_crate_size" "$t_crate_size" count
     exit $?
   fi
 fi
@@ -625,7 +640,17 @@ qg_measure_base_side() {
   local TSV="$QG_BASE_TSV"
   qg_isolate_cargo_target base
   echo "── measuring base ($QG_SCOPE_DESC) ──" >&2
-  local fmt lint build tests complex cov
+  local fmt lint build tests complex cov mix size layout
+  # Crate layout (#26) scans FILES over the whole workspace -- it is neither
+  # scoped by the diff nor deferred by --quick, and it is measured before the
+  # all-packages-new short-circuit below: zeroing it on the base side only
+  # would read as a regression for every crate the PR did not touch.
+  if ! layout=$(measure_layout "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-layout.log"); then
+    echo "::error::cannot enumerate workspace members ('cargo metadata --no-deps' failed in $QG_BASELINE_DIR_ARG) -- fix the manifest or run it by hand to see why (without the member list the crate-layout metrics would read 0 on the base side only and fake a regression)" >&2
+    return 2
+  fi
+  set -- $layout
+  mix="$1"; size="$2"
   # The baseline predates the PR: a package the PR ADDS does not exist there and
   # `cargo -p` on it is a hard error. Measure the intersection; an added package
   # legitimately reads base=0 because it did not exist.
@@ -646,7 +671,7 @@ qg_measure_base_side() {
     # the base, and measuring the full workspace instead would compare unrelated
     # trees. Zero is the honest baseline: the code did not exist.
     echo "::warning::all affected packages are new in this PR -- base metrics are 0 (nothing to compare against)" >&2
-    printf '%s\t%s\t%s\t%s\t%s\t%s\n' 0 0 0 0 0 0 > "$TSV"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' 0 0 0 0 0 0 "$mix" "$size" > "$TSV"
     QG_SCOPE_PKGS="$_pr_scope_pkgs"
     QG_SCOPE_SEED_PKGS="$_pr_scope_seed"
     return 0
@@ -665,7 +690,7 @@ qg_measure_base_side() {
     set -- $(measure_test_and_coverage "$QG_BASELINE_DIR_ARG" "$QG_LOG_DIR_ARG/base-test.log" "$QG_LOG_DIR_ARG/base-cov.json")
     tests="$1"; cov="$2"
   fi
-  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$fmt" "$lint" "$build" "$tests" "$complex" "$cov" > "$TSV"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$fmt" "$lint" "$build" "$tests" "$complex" "$cov" "$mix" "$size" > "$TSV"
   # Sequential mode runs this in the gate's own shell: hand the PR scope back.
   QG_SCOPE_PKGS="$_pr_scope_pkgs"
   QG_SCOPE_SEED_PKGS="$_pr_scope_seed"
@@ -675,7 +700,13 @@ qg_measure_pr_side() {
   local TSV="$QG_PR_TSV"
   qg_isolate_cargo_target pr
   echo "── measuring PR ($QG_SCOPE_DESC) ──" >&2
-  local fmt lint build tests complex cov
+  local fmt lint build tests complex cov mix size layout
+  if ! layout=$(measure_layout "." "$QG_LOG_DIR_ARG/pr-layout.log"); then
+    echo "::error::cannot enumerate workspace members ('cargo metadata --no-deps' failed in the working copy) -- fix the manifest or run it by hand to see why (without the member list the crate-layout metrics cannot be measured)" >&2
+    return 2
+  fi
+  set -- $layout
+  mix="$1"; size="$2"
   fmt=$(count_fmt_errors "." "$QG_LOG_DIR_ARG/pr-fmt.log")
   # One clippy pass yields BOTH lint and complexity: a second one would be a
   # full rebuild of the scope (CLIPPY_ARGS is part of cargo's fingerprint).
@@ -690,7 +721,7 @@ qg_measure_pr_side() {
     set -- $(measure_test_and_coverage "." "$QG_LOG_DIR_ARG/pr-test.log" "$QG_LOG_DIR_ARG/pr-cov.json")
     tests="$1"; cov="$2"
   fi
-  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$fmt" "$lint" "$build" "$tests" "$complex" "$cov" > "$TSV"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$fmt" "$lint" "$build" "$tests" "$complex" "$cov" "$mix" "$size" > "$TSV"
 }
 
 if [ -n "$QG_BASE_METRICS_CACHE" ] && [ -s "$QG_BASE_METRICS_CACHE" ]; then
@@ -706,8 +737,8 @@ else
   fi
 fi
 
-IFS=$'\t' read -r base_fmt base_lint base_build base_test base_complex base_cov < "$QG_BASE_TSV"
-IFS=$'\t' read -r pr_fmt pr_lint pr_build pr_test pr_complex pr_cov < "$QG_PR_TSV"
+IFS=$'\t' read -r base_fmt base_lint base_build base_test base_complex base_cov base_mix base_size < "$QG_BASE_TSV"
+IFS=$'\t' read -r pr_fmt pr_lint pr_build pr_test pr_complex pr_cov pr_mix pr_size < "$QG_PR_TSV"
 
 branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "<detached>")
 started_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -720,7 +751,9 @@ if [ "$QG_FORMAT_ARG" = "json" ]; then
     "$base_build" "$pr_build" \
     "$base_test" "$pr_test" \
     "$base_complex" "$pr_complex" \
-    "$base_cov" "$pr_cov" "$QG_COV_MARGIN_ARG"
+    "$base_cov" "$pr_cov" "$QG_COV_MARGIN_ARG" \
+    "$base_mix" "$pr_mix" \
+    "$base_size" "$pr_size"
   exit $?
 else
   render_text "$branch" "$QG_BASE_REF_ARG" "$QG_BASELINE_DIR_ARG" "$QG_COV_MARGIN_ARG" "$QG_LOG_DIR_ARG" \
@@ -729,6 +762,8 @@ else
     "$base_build" "$pr_build" \
     "$base_test" "$pr_test" \
     "$base_complex" "$pr_complex" \
-    "$base_cov" "$pr_cov"
+    "$base_cov" "$pr_cov" \
+    "$base_mix" "$pr_mix" \
+    "$base_size" "$pr_size"
   exit $?
 fi
