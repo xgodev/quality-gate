@@ -1,0 +1,12 @@
+# Fixture workspace for the crate-layout metrics (#26). Never compiled: the two
+# metrics only scan files, so the build scripts may name codegen crates that are
+# not declared as build-dependencies.
+[workspace]
+resolver = "2"
+members = [
+  "crates/codegen-only",
+  "crates/codegen-mixed",
+  "crates/small",
+  "crates/grown",
+  "crates/grown/nested",
+]

@@ -27,8 +27,15 @@ See [`docs/consume.md`](../docs/consume.md) for full usage.
 | `test` | `cargo test --all-targets --no-fail-fast` | sum of `failed: N` |
 | `complexity` | `cargo clippy -W cognitive_complexity/too_many_lines/too_many_arguments/type_complexity` | matches |
 | `coverage` | `cargo llvm-cov --json` | `lines.percent` |
+| `codegen_mix` | file scan (`cargo metadata` + the crates' `.rs`) | crates whose `build.rs` generates Rust AND that also hold hand-written modules |
+| `crate_size` | the same file scan | hand-written lines ABOVE the per-crate limit, summed |
 
 Complexity thresholds: clippy community defaults (cognitive 25, lines 100, args 7, type 250).
+
+`codegen_mix` and `crate_size` are rust extras (beyond the 6 reserved metrics).
+Their limit and the codegen signatures live in
+[`rules/crate-layout.toml`](rules/crate-layout.toml) -- QG-owned, overridable
+only through `QG_RULESET_DIR`, never from a project file.
 
 ## Diff scoping
 
@@ -46,10 +53,12 @@ packages. A diff to a root-level file (`Cargo.lock`, root `Cargo.toml`,
 - [`qg.sh`](qg.sh) -- main script.
 - [`lib/measure.sh`](lib/measure.sh) -- `count_*` functions and `measure_coverage`.
 - [`lib/scope.sh`](lib/scope.sh) -- diff-to-package resolution and reverse-dep closure.
+- [`lib/layout.sh`](lib/layout.sh) -- `codegen_mix` + `crate_size` (one file scan).
 - [`lib/output.sh`](lib/output.sh) -- text and JSON render.
 - [`../lib/changed-files.sh`](../lib/changed-files.sh) -- shared changed-file union (all gates).
 - [`test-fixtures/baseline/`](test-fixtures/baseline/) -- a clean Rust project.
 - [`test-fixtures/regressed/`](test-fixtures/regressed/) -- a project with deliberate regressions.
+- [`test-fixtures/layout/`](test-fixtures/layout/) -- a workspace covering the crate-layout cases (codegen-only, codegen + hand-written, small, oversized, nested).
 
 ## Details and troubleshooting
 

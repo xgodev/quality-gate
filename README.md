@@ -15,7 +15,7 @@ Public on GHCR (no login needed), multi-arch (`linux/amd64` + `linux/arm64`):
 
 | Image | Language detected by | Metrics |
 |---|---|---|
-| `ghcr.io/xgodev/quality-gate/rust:v1` | `Cargo.toml` | fmt, lint, build, test, complexity, coverage |
+| `ghcr.io/xgodev/quality-gate/rust:v1` | `Cargo.toml` | fmt, lint, build, test, complexity, coverage, codegen_mix, crate_size |
 | `ghcr.io/xgodev/quality-gate/go:v1` | `go.mod` | fmt, lint, build, test, complexity, coverage |
 | `ghcr.io/xgodev/quality-gate/python:v1` | `pyproject.toml`, `setup.py`, `requirements*.txt` | fmt, lint, build, test, complexity, coverage |
 | `ghcr.io/xgodev/quality-gate/nodejs:v1` | `package.json` | fmt, lint, build, test, complexity, coverage |
