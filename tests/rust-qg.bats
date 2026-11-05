@@ -910,3 +910,254 @@ _scope_ws() { echo "$QG_REPO_ROOT/rust/test-fixtures/workspace"; }
   ! grep -rq 'qgfix-unrelated' "$ws/logs" 2>/dev/null
   cd "$QG_REPO_ROOT"; rm -rf "$ws"
 }
+
+# --- crate layout: codegen_mix + crate_size (#26) -----------------------------
+
+_layout_ws() { echo "$QG_REPO_ROOT/rust/test-fixtures/layout"; }
+
+_layout_libs() {
+  source "$QG_REPO_ROOT/rust/lib/measure.sh"
+  source "$QG_REPO_ROOT/rust/lib/scope.sh"
+  source "$QG_REPO_ROOT/rust/lib/layout.sh"
+}
+
+# A ruleset copy with a tiny threshold, so the fixtures stay small. This is the
+# ONLY supported override (QG_RULESET_DIR, set by whoever runs the gate).
+_layout_rules_max() {
+  local dir
+  dir=$(qg_tmp_dir)
+  cp "$QG_REPO_ROOT/rust/rules/"*.toml "$dir/" 2>/dev/null || true
+  sed -i.bak -E "s/^max_hand_written_lines = .*/max_hand_written_lines = $1/" "$dir/crate-layout.toml"
+  rm -f "$dir/crate-layout.toml.bak"
+  echo "$dir"
+}
+
+@test "layout: a codegen-only crate (lib.rs just includes the output) is not a mix (#26)" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  _layout_libs
+  run qg_rust_layout_table "$(_layout_ws)"
+  [ "$status" -eq 0 ]
+  # codegen = 1, non-include-only lines = 0 -> not counted
+  echo "$output" | grep -qE '^qglayout-codegen-only\tcrates/codegen-only\t[0-9]+\t0\t1$'
+}
+
+@test "layout: a crate mixing build.rs codegen with hand-written modules is counted (#26)" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  _layout_libs
+  local logdir
+  logdir=$(qg_tmp_dir)
+  run count_codegen_mix "$(_layout_ws)" "$logdir/mix.log"
+  [ "$status" -eq 0 ]
+  [ "$output" = "1" ]
+  # and the fused scan names the offending crate, so the dev knows what to split
+  measure_layout "$(_layout_ws)" "$logdir/layout.log" >/dev/null
+  grep -q 'codegen_mix: crate qglayout-codegen-mixed' "$logdir/layout.log"
+  rm -rf "$logdir"
+}
+
+@test "layout: crate_size counts only the lines ABOVE the threshold (#26)" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  _layout_libs
+  local rules
+  rules=$(_layout_rules_max 20)
+  # grown holds 30 hand-written lines -> 10 over; every other crate is under.
+  QG_RULESET_DIR="$rules" run count_crate_size "$(_layout_ws)"
+  [ "$output" = "10" ]
+  # at the shipped threshold nothing is over the line
+  run count_crate_size "$(_layout_ws)"
+  [ "$output" = "0" ]
+  rm -rf "$rules"
+}
+
+@test "layout: a crate already over the threshold that does not grow does NOT regress (#26)" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  _layout_libs
+  source "$QG_REPO_ROOT/rust/lib/output.sh"
+  local rules base pr
+  rules=$(_layout_rules_max 20)
+  base=$(qg_tmp_dir); pr=$(qg_tmp_dir)
+  cp -R "$(_layout_ws)/." "$base/"
+  cp -R "$(_layout_ws)/." "$pr/"
+  local b p
+  b=$(QG_RULESET_DIR="$rules" count_crate_size "$base")
+  p=$(QG_RULESET_DIR="$rules" count_crate_size "$pr")
+  [ "$(verdict_count "$b" "$p")" = "same" ]
+  # growing the crate that is ALREADY over the line regresses it
+  printf '\npub fn extra() -> u32 {\n    1\n}\n' >> "$pr/crates/grown/src/lib.rs"
+  p=$(QG_RULESET_DIR="$rules" count_crate_size "$pr")
+  [ "$(verdict_count "$b" "$p")" = "regressed" ]
+  rm -rf "$rules" "$base" "$pr"
+}
+
+@test "layout: a crate CROSSING the threshold regresses (#26)" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  _layout_libs
+  source "$QG_REPO_ROOT/rust/lib/output.sh"
+  local rules base pr b p
+  # 8 lines: `small` (6 lines) is under, and crosses once the PR adds to it.
+  rules=$(_layout_rules_max 8)
+  base=$(qg_tmp_dir); pr=$(qg_tmp_dir)
+  cp -R "$(_layout_ws)/." "$base/"
+  cp -R "$(_layout_ws)/." "$pr/"
+  printf '\npub fn three() -> u32 {\n    3\n}\n' >> "$pr/crates/small/src/lib.rs"
+  b=$(QG_RULESET_DIR="$rules" qg_rust_layout_table "$base" | awk -F'\t' '$1 == "qglayout-small" { print $3 }')
+  p=$(QG_RULESET_DIR="$rules" qg_rust_layout_table "$pr" | awk -F'\t' '$1 == "qglayout-small" { print $3 }')
+  [ "$b" -le 8 ]
+  [ "$p" -gt 8 ]
+  b=$(QG_RULESET_DIR="$rules" count_crate_size "$base")
+  p=$(QG_RULESET_DIR="$rules" count_crate_size "$pr")
+  [ "$(verdict_count "$b" "$p")" = "regressed" ]
+  rm -rf "$rules" "$base" "$pr"
+}
+
+@test "layout: tests/, benches/, examples/, build.rs and #[cfg(test)] mods are not crate weight (#26)" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  _layout_libs
+  local n
+  # `grown` holds 10 three-line fns = 30 lines, plus a #[cfg(test)] module, a
+  # @generated src/api.rs, tests/it.rs, benches/bench.rs and examples/demo.rs --
+  # each of which is its OWN compilation unit, so none of them is crate weight.
+  n=$(qg_rust_layout_table "$(_layout_ws)" | awk -F'\t' '$1 == "qglayout-grown" { print $3 }')
+  [ "$n" -eq 30 ]
+}
+
+@test "layout: a file the language marks as generated is not hand-written (#26)" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  _layout_libs
+  local tmp n
+  tmp=$(qg_tmp_dir)
+  cp -R "$(_layout_ws)/." "$tmp/"
+  n=$(qg_rust_layout_table "$tmp" | awk -F'\t' '$1 == "qglayout-grown" { print $3 }')
+  # dropping the @generated marker makes the same file count
+  sed -i.bak '1d' "$tmp/crates/grown/src/api.rs" && rm -f "$tmp/crates/grown/src/api.rs.bak"
+  local n2
+  n2=$(qg_rust_layout_table "$tmp" | awk -F'\t' '$1 == "qglayout-grown" { print $3 }')
+  [ "$n2" -gt "$n" ]
+  rm -rf "$tmp"
+}
+
+@test "layout: a nested member owns its own lines, the parent crate never inherits them (#26)" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  _layout_libs
+  local table
+  table=$(qg_rust_layout_table "$(_layout_ws)")
+  # crates/grown/nested is a member inside crates/grown: longest-prefix wins.
+  [ "$(printf '%s\n' "$table" | awk -F'\t' '$1 == "qglayout-nested" { print $3 }')" -eq 3 ]
+  [ "$(printf '%s\n' "$table" | awk -F'\t' '$1 == "qglayout-grown" { print $3 }')" -eq 30 ]
+}
+
+@test "layout LAW tamper: a project file cannot raise the crate-size threshold (#26)" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  _layout_libs
+  local tmp
+  tmp=$(qg_tmp_dir)
+  cp -R "$(_layout_ws)/." "$tmp/"
+  # The dev controls these; a raised threshold would switch the check off.
+  cat > "$tmp/.qg.yaml" <<EOF
+max_hand_written_lines: 999999
+EOF
+  cat > "$tmp/crate-layout.toml" <<EOF
+max_hand_written_lines = 999999
+EOF
+  mkdir -p "$tmp/rules"
+  cp "$tmp/crate-layout.toml" "$tmp/rules/crate-layout.toml"
+  cd "$tmp"
+  run qg_layout_max_lines
+  [ "$output" = "5000" ]
+  cd "$QG_REPO_ROOT"
+  # the ONLY override is the env var supplied by whoever RUNS the gate
+  local rules
+  rules=$(_layout_rules_max 20)
+  QG_RULESET_DIR="$rules" run qg_layout_max_lines
+  [ "$output" = "20" ]
+  rm -rf "$tmp" "$rules"
+}
+
+@test "layout LAW tamper: the codegen signatures come from the QG ruleset, not the project (#26)" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  _layout_libs
+  run qg_layout_codegen_re
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"slint_build::"* ]]
+  [[ "$output" == *"prost_build"* ]]
+  [[ "$output" == *"bindgen::"* ]]
+}
+
+@test "layout: the fused scan reports exactly what the single-metric oracles report (#26)" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  _layout_libs
+  local rules logdir fused mix size
+  rules=$(_layout_rules_max 20)
+  logdir=$(qg_tmp_dir)
+  fused=$(QG_RULESET_DIR="$rules" measure_layout "$(_layout_ws)" "$logdir/fused.log")
+  mix=$(QG_RULESET_DIR="$rules" count_codegen_mix "$(_layout_ws)")
+  size=$(QG_RULESET_DIR="$rules" count_crate_size "$(_layout_ws)")
+  [ "$fused" = "$mix $size" ]
+  rm -rf "$rules" "$logdir"
+}
+
+@test "layout: an unenumerable workspace is a tool-error, never a metric of 0 (#26)" {
+  _layout_libs
+  local tmp
+  tmp=$(qg_tmp_dir)
+  # No Cargo.toml at all: `cargo metadata` fails, the member list is empty. A 0
+  # on one side only would read as a regression, so the caller must exit 2.
+  run qg_rust_layout_table "$tmp"
+  [ "$status" -eq 1 ]
+  run measure_layout "$tmp" "$tmp/layout.log"
+  [ "$status" -eq 1 ]
+  rm -rf "$tmp"
+}
+
+@test "layout: both metrics reach the comparative JSON with numbers (#26)" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  local logdir
+  logdir=$(qg_tmp_dir)
+  cd "$(qg_fixture_path rust baseline)"
+  run --separate-stderr bash "$(qg_script_path rust)" \
+    --base origin/main \
+    --baseline-dir "$(qg_fixture_path rust baseline)" \
+    --log-dir "$logdir" \
+    --format json \
+    --force-full
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.metrics[] | select(.name == "codegen_mix") | (.base|type) == "number" and (.pr|type) == "number"'
+  echo "$output" | jq -e '.metrics[] | select(.name == "crate_size") | (.base|type) == "number" and (.pr|type) == "number"'
+  cd "$QG_REPO_ROOT"
+  rm -rf "$logdir"
+}
+
+@test "layout: --quick still measures both metrics -- a file scan saves nothing by deferring (#26)" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  local logdir
+  logdir=$(qg_tmp_dir)
+  cd "$(qg_fixture_path rust baseline)"
+  run --separate-stderr bash "$(qg_script_path rust)" \
+    --base origin/main \
+    --baseline-dir "$(qg_fixture_path rust baseline)" \
+    --log-dir "$logdir" \
+    --format json \
+    --force-full \
+    --quick
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '[.metrics[] | select(.verdict == "skipped") | .name] == ["coverage"]'
+  echo "$output" | jq -e '.metrics[] | select(.name == "codegen_mix") | .verdict != "skipped" and (.pr|type) == "number"'
+  echo "$output" | jq -e '.metrics[] | select(.name == "crate_size") | .verdict != "skipped" and (.pr|type) == "number"'
+  cd "$QG_REPO_ROOT"
+  rm -rf "$logdir"
+}
+
+@test "layout: both metrics reach the absolute JSON and honor absolute_thresholds (#26)" {
+  command -v cargo >/dev/null || skip "cargo not available"
+  local logdir tmp
+  logdir=$(qg_tmp_dir)
+  tmp=$(qg_tmp_dir)
+  cp -R "$(qg_fixture_path rust baseline)/." "$tmp/"
+  cd "$tmp"
+  run --separate-stderr bash "$(qg_script_path rust)" --log-dir "$logdir" --format json
+  echo "$output" | jq -e '.mode == "absolute"'
+  echo "$output" | jq -e '.metrics[] | select(.name == "codegen_mix") | (.value|type) == "number"'
+  echo "$output" | jq -e '.metrics[] | select(.name == "crate_size") | (.value|type) == "number"'
+  cd "$QG_REPO_ROOT"
+  rm -rf "$logdir" "$tmp"
+}

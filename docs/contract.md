@@ -634,7 +634,7 @@ These 6 names are reserved -- if the language measures the metric, **use this ex
 
 **Omitting:** the language documents in `docs/languages/<lang>.md` why it has no tool. Does not print a text line, omits it in the JSON.
 
-**Extending:** an extra metric with a unique snake_case ASCII name, same regression rule.
+**Extending:** an extra metric with a unique snake_case ASCII name, same regression rule. Extras shipped today: rust `codegen_mix` and `crate_size` (see [`languages/rust.md`](languages/rust.md#extra-metrics)).
 
 ## Fast-path
 

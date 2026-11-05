@@ -57,6 +57,12 @@ anything so a future session does not repeat past mistakes.
   (Go: `^// Code generated .* DO NOT EDIT\.$`) from the profile before the
   total -- a repo that commits its `gen/` could otherwise never reach an
   absolute coverage threshold (#21).
+- **A ratchet over pre-existing debt counts the EXCESS, not the offenders.** A
+  metric that must not brick repos already in violation (rust `crate_size`)
+  sums how far each unit is PAST the limit, so an untouched offender reads the
+  same number on both sides and passes, while crossing the limit (0 -> N) or
+  growing past it (N -> N+k) regresses. Counting offending units instead makes
+  "already over, not touched" indistinguishable from "just crossed".
 - **The project's declared toolchain/build-system is authoritative.** If the
   declared package manager / build system / pinned toolchain cannot be
   honored exactly (tool absent, unsupported build system, pinned version not
@@ -173,6 +179,12 @@ anything so a future session does not repeat past mistakes.
   validates and then ignores it). A spec with no implementation is a lie with a
   schema. Either implement it or document the inertness -- and for anything a
   project file could use to weaken the gate, the answer is the latter.
+- Naming an awk variable `log` (`awk -v log="$f" ... >> log`) -- `log` is an awk
+  BUILT-IN FUNCTION, so BWK/onetrue awk reads the redirection target as
+  `log(0)` and silently writes every line to a file named `-inf` while the real
+  log stays empty. Same class as passing a regex through `awk -v`, which loses
+  its backslashes to awk's string-escape processing ("illegal primary"): a
+  pattern belongs in the program as a literal, not in a `-v`.
 - Merging to `main` and calling it released — a merge refreshes only
   `:latest`; consumers pinning `:v1` stay on the previous release until a
   `vX.Y.Z` tag is pushed. Before cutting, check `[Unreleased]` for
