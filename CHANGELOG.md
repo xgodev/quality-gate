@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.4.0] -- 2026-11-06
 
 Fixed:
 - Dispatcher (`qg` and all `<lang>/qg.sh`): `--detect` now checks that the language's primary runtime binary is present on `PATH` before reporting detected, and resolves sentinels from the current directory before falling back to the git toplevel. In polyglot monorepos running under single-language container images (such as `quality-gate/java` or `quality-gate/nodejs`), this prevents images from attempting to run gates for languages whose compilers or interpreters are not installed, avoiding false tool errors (exit 2).
