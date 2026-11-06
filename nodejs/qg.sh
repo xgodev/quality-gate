@@ -126,7 +126,11 @@ done
 
 # --detect: short-circuits BEFORE any validation/prereq.
 if [ "$QG_DETECT_ARG" = "1" ]; then
-  qg_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+  command -v node >/dev/null 2>&1 || exit 1
+  qg_root="."
+  if ! qg_lang_present "$qg_root"; then
+    qg_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+  fi
   if qg_lang_present "$qg_root"; then
     echo "nodejs"
     exit 0

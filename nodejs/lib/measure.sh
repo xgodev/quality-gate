@@ -46,7 +46,8 @@ qg_lang_present() {
 qg_resolve_deps() {
   local dir="$1" log="$2"
   : > "$log"
-  # Only resolve if node_modules is absent OR a lockfile is newer than node_modules.
+  # Only resolve if node_modules is absent OR a lockfile is newer than node_modules
+  # OR dependencies in node_modules are incomplete/unsatisfied.
   local need=0
   if [ ! -d "$dir/node_modules" ]; then
     need=1
@@ -58,6 +59,15 @@ qg_resolve_deps() {
         break
       fi
     done
+    if [ "$need" -eq 0 ]; then
+      if [ -f "$dir/pnpm-lock.yaml" ] && command -v pnpm >/dev/null 2>&1; then
+        ( cd "$dir" && pnpm ls >/dev/null 2>&1 ) || need=1
+      elif [ -f "$dir/yarn.lock" ] && command -v yarn >/dev/null 2>&1; then
+        ( cd "$dir" && yarn check --verify-tree >/dev/null 2>&1 ) || need=1
+      elif command -v npm >/dev/null 2>&1; then
+        ( cd "$dir" && npm ls --depth=0 >/dev/null 2>&1 ) || need=1
+      fi
+    fi
   fi
   [ "$need" -eq 0 ] && return 0
 

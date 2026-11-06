@@ -36,8 +36,9 @@ Options:
 
 `<lang>/qg.sh --detect` short-circuits BEFORE any other validation (it is the first thing after arg parsing, before the `--base`/`--format`/prerequisite checks):
 
-- Checks whether the language sentinel exists at the project root (`git rev-parse --show-toplevel 2>/dev/null || pwd`).
-- Sentinel present -> prints the language slug to stdout (e.g. `rust`) and **exit 0**.
+- Checks whether the language runtime binary is installed on `PATH` (e.g. `node` for Node.js, `java` for Java, `go` for Go); if missing -> nothing on stdout, **exit 1**.
+- Checks whether the language sentinel exists in the current directory (`.`), falling back to the project root (`git rev-parse --show-toplevel 2>/dev/null || pwd`) for subdirectories of single-project repos.
+- Sentinel present and runtime available -> prints the language slug to stdout (e.g. `rust`) and **exit 0**.
 - Absent -> nothing on stdout, **exit 1**.
 - Reuses the SAME sentinel used in the "language absent in baseline" / fast-path check. Does not duplicate the regex.
 

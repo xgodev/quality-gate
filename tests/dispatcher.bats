@@ -449,3 +449,42 @@ EOF
   printf '%s' "$output" | grep -q 'apt-get is absent' || return 1
   cd "$QG_REPO_ROOT"; rm -rf "$root" "$proj" "$bin"
 }
+
+@test "dispatcher: polyglot monorepo ignores projects whose language runtime is absent" {
+  local root proj
+  root=$(qg_tmp_dir); proj=$(qg_tmp_dir)
+  # Simulated image: java is runnable, nodejs script exists but runtime is missing (--detect exits 1)
+  mkdir -p "$root/java" "$root/nodejs"
+  cp "$QG_REPO_ROOT/qg" "$root/qg"; chmod +x "$root/qg"
+  cat > "$root/java/qg.sh" <<'EOF'
+#!/usr/bin/env bash
+for a in "$@"; do [ "$a" = "--detect" ] && { [ -f ./pom.xml ] && { echo java; exit 0; }; exit 1; }; done
+echo '{"schema_version":"1.1","mode":"comparative","language":"java","branch":"x","base_ref":"origin/main","started_at":"2026-05-15T10:00:00Z","duration_seconds":1,"verdict":"passed","bypass_reason":null,"metrics":[]}'
+exit 0
+EOF
+  cat > "$root/nodejs/qg.sh" <<'EOF'
+#!/usr/bin/env bash
+for a in "$@"; do [ "$a" = "--detect" ] && { exit 1; }; done
+echo "::error::missing tool: node" >&2
+exit 2
+EOF
+  chmod +x "$root/java/qg.sh" "$root/nodejs/qg.sh"
+
+  mkdir -p "$proj/backend" "$proj/mobile"
+  touch "$proj/backend/pom.xml" "$proj/mobile/package.json"
+  cat > "$proj/.qg.yaml" <<'EOF'
+projects:
+  - path: backend
+    lang: java
+  - path: mobile
+    lang: nodejs
+EOF
+
+  cd "$proj"
+  run "$root/qg" --base origin/main --format json
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.verdict == "passed"'
+  echo "$output" | jq -e '.language == "java"'
+  cd "$QG_REPO_ROOT"; rm -rf "$root" "$proj"
+}
+
