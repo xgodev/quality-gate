@@ -78,9 +78,9 @@ Runs `mvn -q -B -DskipTests compile`. Counts `[ERROR] /path/Foo.java:[L,C]` line
 
 ### `test` -- failing tests
 
-Runs `mvn -q -B -Dmaven.test.failure.ignore=true test`. Counts `Failures + Errors` from the FINAL SUMMARY ("Tests run: T, Failures: F, Errors: E, Skipped: S"). The gate discards intermediate per-class lines and uses only the last occurrence (total summary).
+Runs `mvn -q -B -Dmaven.test.failure.ignore=true -Dquarkus.http.test-port=0 -Dserver.port=0 test`. Counts `Failures + Errors` from the FINAL SUMMARY ("Tests run: T, Failures: F, Errors: E, Skipped: S"). The gate discards intermediate per-class lines and uses only the last occurrence (total summary).
 
-`-Dmaven.test.failure.ignore=true` is essential so the build does not abort when a test fails (we want the full report).
+`-Dmaven.test.failure.ignore=true` is essential so the build does not abort when a test fails (we want the full report). `-Dquarkus.http.test-port=0 -Dserver.port=0` binds embedded test servers (Quarkus or Spring Boot) to ephemeral ports to prevent TCP port collision during concurrent side measurement.
 
 **Tool error vs regression:** if surefire hangs (OOM, JVM crash), it does not produce a final "Tests run" line -- it does not count as a test failure. These cases are a tool error and the user must investigate.
 

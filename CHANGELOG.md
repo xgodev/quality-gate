@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+Fixed:
+- Dispatcher (`qg` and all `<lang>/qg.sh`): `--detect` now checks that the language's primary runtime binary is present on `PATH` before reporting detected, and resolves sentinels from the current directory before falling back to the git toplevel. In polyglot monorepos running under single-language container images (such as `quality-gate/java` or `quality-gate/nodejs`), this prevents images from attempting to run gates for languages whose compilers or interpreters are not installed, avoiding false tool errors (exit 2).
+- Java (`java/lib/measure.sh`): Maven test and coverage invocations now include `-Dquarkus.http.test-port=0 -Dserver.port=0` to ensure embedded test servers in Quarkus and Spring Boot bind to ephemeral ports. This prevents TCP port collisions when `--parallel` measures baseline and PR test suites concurrently in the same container.
+- Node.js (`nodejs/lib/measure.sh`): `qg_resolve_deps` now validates the dependency tree (`npm ls --depth=0`, `pnpm ls`, `yarn check`) instead of relying solely on directory existence and lockfile timestamps. Pre-existing incomplete or damaged `node_modules` are re-resolved rather than skipped, eliminating false TypeScript compilation failures.
+
 Added (rust): two extra metrics that flag crate layouts no cargo tool reports,
 both measured by ONE file scan (`cargo metadata --no-deps` plus a read of the
 members' `.rs` files) and both ratchets like every other metric. (#26)

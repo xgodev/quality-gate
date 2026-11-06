@@ -169,6 +169,8 @@ count_test_failures() {
   mvn_cmd=$(qg_maven_cmd "$dir" "$log") || { printf '0\n'; return; }
   ( cd "$dir" && "$mvn_cmd" -q -B \
       -Dmaven.test.failure.ignore=true \
+      -Dquarkus.http.test-port=0 \
+      -Dserver.port=0 \
       test ) > "$log" 2>&1 || true
   # surefire prints ONE line "Tests run: N, Failures: F, Errors: E, Skipped: S" per test class.
   # The final summary is "Tests run: <total>, Failures: <total>, Errors: <total>, Skipped: <total>",
@@ -216,6 +218,8 @@ measure_coverage() {
   mvn_cmd=$(qg_maven_cmd "$dir" /dev/null) || { printf '0\n'; return; }
   ( cd "$dir" && "$mvn_cmd" -q -B \
       -Dmaven.test.failure.ignore=true \
+      -Dquarkus.http.test-port=0 \
+      -Dserver.port=0 \
       test ) >/dev/null 2>&1 || true
   local xml="$dir/target/site/jacoco/jacoco.xml"
   local pct=0
@@ -257,6 +261,8 @@ measure_test_and_coverage() {
   mvn_cmd=$(qg_maven_cmd "$dir" "$log") || { printf '0 0\n'; return; }
   ( cd "$dir" && "$mvn_cmd" -q -B \
       -Dmaven.test.failure.ignore=true \
+      -Dquarkus.http.test-port=0 \
+      -Dserver.port=0 \
       test ) > "$log" 2>&1 || true
   local n
   n=$(awk '

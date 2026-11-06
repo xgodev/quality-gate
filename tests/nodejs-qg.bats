@@ -751,3 +751,70 @@ EOF
   grep -qE -- 'fail' "$logdir/test.log"
   rm -rf "$logdir"
 }
+
+@test "nodejs/qg.sh --detect without node on PATH exits 1" {
+  local tmp bindir
+  tmp=$(qg_tmp_dir); bindir=$(qg_tmp_dir)
+  touch "$tmp/package.json"
+  for cmd in bash sh git jq awk gawk sed grep find tar java mvn coreutils env dirname basename cat tr cut sort uniq head tail date; do
+    p=$(which $cmd 2>/dev/null || true)
+    [ -n "$p" ] && ln -sf "$p" "$bindir/"
+  done
+  cd "$tmp"
+  PATH="$bindir" run "$(qg_script_path nodejs)" --detect
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+  cd "$QG_REPO_ROOT"
+  rm -rf "$tmp" "$bindir"
+}
+
+@test "nodejs/qg.sh --detect in a git monorepo subproject checks cwd, not git toplevel" {
+  local tmp
+  tmp=$(qg_tmp_dir)
+  cd "$tmp"
+  git init -q
+  mkdir -p subproject
+  cat > subproject/package.json <<'EOF'
+{ "name": "sub", "version": "1.0.0" }
+EOF
+  cd "$tmp/subproject"
+  run "$(qg_script_path nodejs)" --detect
+  [ "$status" -eq 0 ]
+  [ "$output" = "nodejs" ]
+  cd "$QG_REPO_ROOT"
+  rm -rf "$tmp"
+}
+
+@test "qg_resolve_deps re-resolves when dependencies are unmet even if node_modules exists" {
+  source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
+  local tmp logdir bindir
+  tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir); bindir=$(qg_tmp_dir)
+  cat > "$tmp/package.json" <<'EOF'
+{ "name": "my-app", "version": "1.0.0", "dependencies": { "lodash": "^4.17.21" } }
+EOF
+  cat > "$tmp/package-lock.json" <<'EOF'
+{ "name": "my-app", "version": "1.0.0", "lockfileVersion": 3, "requires": true, "packages": { "": { "name": "my-app", "version": "1.0.0", "dependencies": { "lodash": "^4.17.21" } } } }
+EOF
+  mkdir -p "$tmp/node_modules"
+  touch "$tmp/package-lock.json"
+  sleep 0.05
+  touch "$tmp/node_modules"
+
+  cat > "$bindir/npm" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "ls" ]; then
+  [ -d "node_modules/lodash" ] && exit 0
+  exit 1
+fi
+echo "NPM_ARGS: $*" > "$TEST_NPM_ARGS_LOG"
+mkdir -p node_modules/lodash
+exit 0
+EOF
+  chmod +x "$bindir/npm"
+  export TEST_NPM_ARGS_LOG="$logdir/npm-args.log"
+  PATH="$bindir:$PATH" run qg_resolve_deps "$tmp" "$logdir/deps.log"
+  [ "$status" -eq 0 ]
+  [ -f "$logdir/npm-args.log" ]
+  grep -q "ci" "$logdir/npm-args.log"
+  rm -rf "$tmp" "$logdir" "$bindir"
+}

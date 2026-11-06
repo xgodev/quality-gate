@@ -628,3 +628,39 @@ EOF
   grep -qE -- 'Tests run:' "$logdir/test.log"
   rm -rf "$logdir"
 }
+
+@test "java/qg.sh --detect without java on PATH exits 1" {
+  local tmp bindir
+  tmp=$(qg_tmp_dir); bindir=$(qg_tmp_dir)
+  touch "$tmp/pom.xml"
+  for cmd in bash sh git jq awk gawk sed grep find tar node npm npx coreutils env dirname basename cat tr cut sort uniq head tail date; do
+    p=$(which $cmd 2>/dev/null || true)
+    [ -n "$p" ] && ln -sf "$p" "$bindir/"
+  done
+  cd "$tmp"
+  PATH="$bindir" run "$(qg_script_path java)" --detect
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+  cd "$QG_REPO_ROOT"
+  rm -rf "$tmp" "$bindir"
+}
+
+@test "measure_test_and_coverage passes dynamic test port flags to prevent port collision" {
+  source "$QG_REPO_ROOT/java/lib/measure.sh"
+  local tmp logdir bindir
+  tmp=$(qg_tmp_dir); logdir=$(qg_tmp_dir); bindir=$(qg_tmp_dir)
+  touch "$tmp/pom.xml"
+  cat > "$bindir/mvn" <<'EOF'
+#!/usr/bin/env bash
+echo "MVN_ARGS: $*" > "$TEST_MVN_ARGS_LOG"
+echo "Tests run: 1, Failures: 0, Errors: 0, Skipped: 0"
+exit 0
+EOF
+  chmod +x "$bindir/mvn"
+  export TEST_MVN_ARGS_LOG="$logdir/mvn-args.log"
+  PATH="$bindir:$PATH" measure_test_and_coverage "$tmp" "$logdir/test.log" "$logdir/cov.json"
+  [ -f "$logdir/mvn-args.log" ]
+  grep -q -- '-Dquarkus.http.test-port=0' "$logdir/mvn-args.log"
+  grep -q -- '-Dserver.port=0' "$logdir/mvn-args.log"
+  rm -rf "$tmp" "$logdir" "$bindir"
+}
