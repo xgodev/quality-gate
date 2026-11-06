@@ -435,6 +435,62 @@ EOF
   rm -rf "$logdir"
 }
 
+@test "measure_coverage: wraps npm test when package.json declares scripts.test" {
+  source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
+  local tmp logdir
+  tmp=$(qg_tmp_dir)
+  logdir=$(qg_tmp_dir)
+  cat > "$tmp/package.json" <<'EOF'
+{
+  "name": "pkg-with-test-script",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node runner.js"
+  }
+}
+EOF
+  cat > "$tmp/calc.js" <<'EOF'
+function mul(a, b) {
+  return a * b;
+}
+module.exports = { mul };
+EOF
+  cat > "$tmp/runner.js" <<'EOF'
+const { mul } = require("./calc");
+if (mul(3, 4) !== 12) process.exit(1);
+EOF
+
+  result=$(measure_coverage "$tmp" "$logdir/cov.json")
+  awk -v r="$result" 'BEGIN { exit !(r >= 90) }'
+  [ -f "$logdir/cov.json" ]
+  rm -rf "$tmp" "$logdir"
+}
+
+@test "measure_coverage: falls back to native coverage/coverage-summary.json if present" {
+  source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
+  local tmp logdir
+  tmp=$(qg_tmp_dir)
+  logdir=$(qg_tmp_dir)
+  cat > "$tmp/package.json" <<'EOF'
+{
+  "name": "pkg-with-native-cov",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "sh runner.sh"
+  }
+}
+EOF
+  cat > "$tmp/runner.sh" <<'EOF'
+mkdir -p coverage
+echo '{"total": {"lines": {"pct": 85.5}}}' > coverage/coverage-summary.json
+EOF
+
+  result=$(measure_coverage "$tmp" "$logdir/cov.json")
+  [ "$result" = "85.5" ]
+  [ -f "$logdir/cov.json" ]
+  rm -rf "$tmp" "$logdir"
+}
+
 @test "e2e: running regressed against baseline -> exit 1, JSON with verdict regressed" {
   local logdir
   logdir=$(qg_tmp_dir)

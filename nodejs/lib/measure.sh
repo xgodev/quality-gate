@@ -272,12 +272,35 @@ measure_coverage() {
   local dir="$1" out="$2"
   local cov_dir
   cov_dir=$(dirname "$out")/coverage-tmp-$$
-  ( cd "$dir" && npx --yes c8 --reports-dir="$cov_dir" --reporter=json-summary node --test ) >/dev/null 2>&1 || true
+
+  local test_cmd="node --test"
+  if [ -f "$dir/package.json" ] && jq -e '.scripts.test' "$dir/package.json" >/dev/null 2>&1; then
+    test_cmd="npm test --silent"
+  fi
+
+  ( cd "$dir" && npx --yes c8 --reports-dir="$cov_dir" --reporter=json-summary $test_cmd ) >/dev/null 2>&1 || true
+
   local pct=0
   if [ -f "$cov_dir/coverage-summary.json" ]; then
     pct=$(jq -r '.total.lines.pct // 0' "$cov_dir/coverage-summary.json" 2>/dev/null || echo 0)
-    cp "$cov_dir/coverage-summary.json" "$out" 2>/dev/null || true
-  else
+    if [ "$pct" != "Unknown" ] && printf '%s' "$pct" | grep -qE '^[0-9]+(\.[0-9]+)?$'; then
+      cp "$cov_dir/coverage-summary.json" "$out" 2>/dev/null || true
+    else
+      pct=0
+    fi
+  fi
+
+  # Fallback: if c8 produced 0 or empty but the runner created a native coverage summary (e.g. Jest with --coverage)
+  if [ "$pct" = "0" ] && [ -f "$dir/coverage/coverage-summary.json" ]; then
+    local native_pct
+    native_pct=$(jq -r '.total.lines.pct // 0' "$dir/coverage/coverage-summary.json" 2>/dev/null || echo 0)
+    if [ "$native_pct" != "Unknown" ] && printf '%s' "$native_pct" | grep -qE '^[0-9]+(\.[0-9]+)?$'; then
+      pct="$native_pct"
+      cp "$dir/coverage/coverage-summary.json" "$out" 2>/dev/null || true
+    fi
+  fi
+
+  if [ ! -f "$out" ]; then
     printf '{"coverage_percent": 0}\n' > "$out"
   fi
   rm -rf "$cov_dir"
@@ -288,7 +311,7 @@ measure_coverage() {
 # Perf fusion: for the node --test path, ONE c8-wrapped run yields both the
 # failure count and the coverage percentage. Projects with a package.json
 # "test" script keep the two separate runs (their script drives the suite;
-# c8 only wraps node --test), matching the previous behavior exactly.
+# c8 wraps npm test in measure_coverage).
 measure_test_and_coverage() {
   local dir="$1" log="$2" out="$3"
   : > "$log"
