@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.4.1] -- 2026-11-06
 
 Fixed:
 - Node.js (`nodejs/lib/measure.sh`): `measure_coverage` now wraps `npm test --silent` with `c8` when `package.json` declares a `scripts.test` (supporting Jest, Vitest, Mocha and custom runners via V8 coverage), with fallback to native `coverage/coverage-summary.json` if produced by the runner. Previously, `measure_coverage` was hardcoded to `node --test`, which failed to discover tests in projects using Jest or Vitest, resulting in false 0% coverage reports.
