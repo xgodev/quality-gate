@@ -271,7 +271,7 @@ count_complexity() {
 measure_coverage() {
   local dir="$1" out="$2"
   local cov_dir
-  cov_dir=$(dirname "$out")/coverage-tmp-$$
+  cov_dir=$(mktemp -d "$(dirname "$out")/qg-cov-XXXXXX" 2>/dev/null || mktemp -d -t qg-cov-XXXXXX)
 
   local test_cmd="node --test"
   if [ -f "$dir/package.json" ] && jq -e '.scripts.test' "$dir/package.json" >/dev/null 2>&1; then
@@ -323,7 +323,7 @@ measure_test_and_coverage() {
     return
   fi
   local cov_dir
-  cov_dir=$(dirname "$out")/coverage-tmp-$$
+  cov_dir=$(mktemp -d "$(dirname "$out")/qg-cov-XXXXXX" 2>/dev/null || mktemp -d -t qg-cov-XXXXXX)
   ( cd "$dir" && npx --yes c8 --reports-dir="$cov_dir" --reporter=json-summary node --test ) > "$log" 2>&1 || true
   local n pct=0
   n=$(awk '
