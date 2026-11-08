@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+Fixed:
+- Node.js (`nodejs/lib/measure.sh`): replaced predictable, non-subshell-unique temporary coverage directory generation (`coverage-tmp-$$`) with atomic `mktemp -d` in `measure_coverage` and `measure_test_and_coverage`. When measuring baseline and PR sides concurrently (`--parallel`), `$$` remains identical across background subshells (and is PID 1 in container images), causing both sides to target the same directory. The faster side previously deleted the directory (`rm -rf`) before the slower side read its summary, causing false 0% coverage reports.
+
 ## [1.4.1] -- 2026-11-06
 
 Fixed:

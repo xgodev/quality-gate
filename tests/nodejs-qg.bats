@@ -491,6 +491,120 @@ EOF
   rm -rf "$tmp" "$logdir"
 }
 
+@test "measure_coverage: concurrent runs in the same logdir do not collide or race" {
+  source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
+  local iter
+  for iter in 1 2 3; do
+    local dir1 dir2 logdir out1 out2
+    dir1=$(qg_tmp_dir)
+    dir2=$(qg_tmp_dir)
+    logdir=$(qg_tmp_dir)
+
+    cat > "$dir1/package.json" <<'EOF'
+{ "name": "app1", "scripts": { "test": "node runner.js" } }
+EOF
+    cat > "$dir1/lib.js" <<'EOF'
+function add(a, b) { return a + b; }
+module.exports = { add };
+EOF
+    cat > "$dir1/runner.js" <<'EOF'
+const { add } = require("./lib");
+const start = Date.now();
+while (Date.now() - start < 20) {}
+if (add(1, 2) !== 3) process.exit(1);
+EOF
+
+    cat > "$dir2/package.json" <<'EOF'
+{ "name": "app2", "scripts": { "test": "node runner.js" } }
+EOF
+    cat > "$dir2/lib.js" <<'EOF'
+function sub(a, b) { return a - b; }
+module.exports = { sub };
+EOF
+    cat > "$dir2/runner.js" <<'EOF'
+const { sub } = require("./lib");
+const start = Date.now();
+while (Date.now() - start < 60) {}
+if (sub(5, 2) !== 3) process.exit(1);
+EOF
+
+    out1="$logdir/base-cov.json"
+    out2="$logdir/pr-cov.json"
+
+    ( measure_coverage "$dir1" "$out1" >/dev/null 2>&1 ) &
+    local p1=$!
+    ( measure_coverage "$dir2" "$out2" >/dev/null 2>&1 ) &
+    local p2=$!
+    wait "$p1"
+    wait "$p2"
+
+    local c1 c2
+    c1=$(jq -r '.total.lines.pct // .coverage_percent // 0' "$out1" 2>/dev/null || echo 0)
+    c2=$(jq -r '.total.lines.pct // .coverage_percent // 0' "$out2" 2>/dev/null || echo 0)
+
+    rm -rf "$dir1" "$dir2" "$logdir"
+    awk -v r="$c1" 'BEGIN { exit !(r >= 90) }'
+    awk -v r="$c2" 'BEGIN { exit !(r >= 90) }'
+  done
+}
+
+@test "measure_test_and_coverage: concurrent runs in the same logdir do not collide or race" {
+  source "$QG_REPO_ROOT/nodejs/lib/measure.sh"
+  local iter
+  for iter in 1 2 3; do
+    local dir1 dir2 logdir out1 out2 log1 log2
+    dir1=$(qg_tmp_dir)
+    dir2=$(qg_tmp_dir)
+    logdir=$(qg_tmp_dir)
+
+    cat > "$dir1/package.json" <<'EOF'
+{ "name": "app1" }
+EOF
+    cat > "$dir1/test.js" <<'EOF'
+const test = require("node:test");
+const assert = require("node:assert");
+test("t1", () => {
+  const start = Date.now();
+  while (Date.now() - start < 20) {}
+  assert.strictEqual(1 + 1, 2);
+});
+EOF
+
+    cat > "$dir2/package.json" <<'EOF'
+{ "name": "app2" }
+EOF
+    cat > "$dir2/test.js" <<'EOF'
+const test = require("node:test");
+const assert = require("node:assert");
+test("t2", () => {
+  const start = Date.now();
+  while (Date.now() - start < 60) {}
+  assert.strictEqual(2 + 2, 4);
+});
+EOF
+
+    log1="$logdir/base-test.log"
+    log2="$logdir/pr-test.log"
+    out1="$logdir/base-cov.json"
+    out2="$logdir/pr-cov.json"
+
+    ( measure_test_and_coverage "$dir1" "$log1" "$out1" >/dev/null 2>&1 ) &
+    local p1=$!
+    ( measure_test_and_coverage "$dir2" "$log2" "$out2" >/dev/null 2>&1 ) &
+    local p2=$!
+    wait "$p1"
+    wait "$p2"
+
+    local c1 c2
+    c1=$(jq -r '.total.lines.pct // .coverage_percent // 0' "$out1" 2>/dev/null || echo 0)
+    c2=$(jq -r '.total.lines.pct // .coverage_percent // 0' "$out2" 2>/dev/null || echo 0)
+
+    rm -rf "$dir1" "$dir2" "$logdir"
+    awk -v r="$c1" 'BEGIN { exit !(r >= 90) }'
+    awk -v r="$c2" 'BEGIN { exit !(r >= 90) }'
+  done
+}
+
 @test "e2e: running regressed against baseline -> exit 1, JSON with verdict regressed" {
   local logdir
   logdir=$(qg_tmp_dir)
